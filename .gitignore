@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+.venv/
+venv/
+env/
+
+# Django
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.vite/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Project generated data
+card_benefit_db/raw/
+card_benefit_db/output/*.sqlite
+card_benefit_db/output/*.json
+card_benefit_db/output/*.jsonl
+card_benefit_db/output/*.csv
