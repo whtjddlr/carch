@@ -6,10 +6,20 @@
         <h1>카드 소비 분석</h1>
         <p>최근 소비 흐름을 정리하고 더 나은 카드 선택 기준을 제안합니다.</p>
       </div>
-      <div class="header-actions">
-        <span v-if="aiAnalysis" class="ai-pill">{{ aiBadgeLabel }}</span>
-        <button class="refresh-analysis-button" type="button" :disabled="isRefreshing" @click="refreshAnalysis">
-          {{ analysisButtonLabel }}
+      <div class="insight-control">
+        <span v-if="aiAnalysis" class="ai-pill">
+          <Sparkles :size="13" :stroke-width="2.2" />
+          {{ aiBadgeLabel }}
+        </span>
+        <button
+          class="refresh-analysis-button"
+          type="button"
+          :disabled="isRefreshing"
+          :aria-label="analysisButtonLabel"
+          :title="analysisButtonLabel"
+          @click="refreshAnalysis"
+        >
+          <RefreshCw :size="15" :stroke-width="2.2" :class="{ spinning: isRefreshing }" />
         </button>
       </div>
     </header>
@@ -122,11 +132,15 @@
 
       <article v-if="aiAnalysis?.categoryInsights?.length" class="app-card insight-card">
         <div class="section-title">
-          <span>AI 카테고리 해석</span>
+          <span>카테고리별 해석</span>
+          <small>주요 지출 기준</small>
         </div>
         <ul class="compact-list">
           <li v-for="item in aiAnalysis.categoryInsights" :key="`${item.category}-${item.amount}`">
-            <strong>{{ item.category }}</strong>
+            <div>
+              <strong>{{ item.category }}</strong>
+              <small>{{ krw(item.amount) }}</small>
+            </div>
             <span>{{ item.insight }}</span>
           </li>
         </ul>
@@ -134,7 +148,7 @@
 
       <article v-if="nextActionItems.length" class="app-card next-summary-card">
         <div class="section-title">
-          <span>우선 점검 항목</span>
+          <span>우선 검토 항목</span>
           <small>권장 순서</small>
         </div>
         <ul class="next-summary-list">
@@ -150,6 +164,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { RefreshCw, Sparkles } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { krw, transactions as mockTransactions } from '@/data/mockData'
 import { fetchCardRecommendationBundle, fetchSpendingSummary } from '@/services/api'
@@ -327,39 +342,63 @@ onMounted(loadSummary)
   line-height: 1.45;
 }
 
-.header-actions {
-  display: flex;
+.insight-control {
+  display: inline-flex;
+  min-height: 40px;
   flex: 0 0 auto;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px);
 }
 
 .ai-pill {
-  flex: 0 0 auto;
-  border-radius: 999px;
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.18);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px 0 10px;
   color: #fff;
   font-size: 11px;
   font-weight: 900;
+  white-space: nowrap;
 }
 
 .refresh-analysis-button {
-  min-height: 38px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 999px;
-  padding: 9px 12px;
-  background: rgba(255, 255, 255, 0.16);
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.18);
   color: #fff;
-  font-size: 12px;
-  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(7, 15, 28, 0.14);
   touch-action: manipulation;
+}
+
+.refresh-analysis-button:hover {
+  background: rgba(255, 255, 255, 0.24);
 }
 
 .refresh-analysis-button:disabled {
   cursor: progress;
   opacity: 0.58;
+}
+
+.refresh-analysis-button .spinning {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .page-padding {
@@ -829,14 +868,13 @@ h2 {
     align-items: stretch;
   }
 
-  .header-actions {
-    align-items: flex-end;
+  .insight-control {
+    min-height: 38px;
   }
 
   .refresh-analysis-button {
-    min-height: 36px;
-    padding-inline: 10px;
-    font-size: 11px;
+    width: 30px;
+    height: 30px;
   }
 }
 </style>
