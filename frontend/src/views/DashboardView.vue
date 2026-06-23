@@ -657,17 +657,17 @@ onMounted(async () => {
   width: 42px;
   height: 42px;
   border: 1px solid rgba(36, 54, 79, 0.11) !important;
-  background: rgba(248, 251, 253, 0.58) !important;
+  background: transparent !important;
   color: #24364f !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58), 0 10px 24px rgba(36, 54, 79, 0.06) !important;
+  box-shadow: none !important;
   backdrop-filter: blur(16px) saturate(1.08);
 }
 
 :global(.app-backdrop .phone-shell .dashboard-header .header-actions .icon-button) {
   border: 1px solid rgba(36, 54, 79, 0.11) !important;
-  background: rgba(248, 251, 253, 0.58) !important;
+  background: transparent !important;
   color: #24364f !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58), 0 10px 24px rgba(36, 54, 79, 0.06) !important;
+  box-shadow: none !important;
   backdrop-filter: blur(16px) saturate(1.08);
 }
 
@@ -1618,14 +1618,14 @@ onMounted(async () => {
 
 .quick-action.app-card-sm {
   border-color: rgba(36, 54, 79, 0.1) !important;
-  background: rgba(248, 251, 253, 0.55) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58), 0 12px 26px rgba(36, 54, 79, 0.055) !important;
+  background: transparent !important;
+  box-shadow: none !important;
   backdrop-filter: blur(16px) saturate(1.08);
 }
 
 .quick-action.app-card-sm:hover {
-  background: rgba(248, 251, 253, 0.68) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68), 0 15px 30px rgba(36, 54, 79, 0.07) !important;
+  background: rgba(248, 251, 253, 0.34) !important;
+  box-shadow: none !important;
 }
 
 .quick-action svg {

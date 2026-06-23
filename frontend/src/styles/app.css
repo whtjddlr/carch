@@ -22,6 +22,10 @@
   --carch-panel: rgba(250, 252, 255, 0.72);
   --carch-panel-strong: rgba(250, 252, 255, 0.84);
   --carch-panel-soft: rgba(250, 252, 255, 0.52);
+  --carch-surface-bg: rgba(248, 251, 253, 0.42);
+  --carch-surface-bg-strong: rgba(248, 251, 253, 0.56);
+  --carch-surface-border: rgba(36, 54, 79, 0.1);
+  --carch-surface-shadow: none;
   --carch-glass: rgba(248, 251, 253, 0.58);
   --carch-glass-strong: rgba(248, 251, 253, 0.74);
   --carch-glass-border: rgba(36, 54, 79, 0.11);
@@ -177,9 +181,10 @@ a {
 }
 
 .app-backdrop .phone-shell :is(.blue-gradient, .purple-gradient, .teal-gradient) .icon-button {
-  background: var(--carch-glass);
+  border: 1px solid var(--carch-control-border);
+  background: transparent;
   color: var(--carch-ink);
-  box-shadow: inset 0 0 0 1px var(--carch-glass-border), inset 0 1px 0 var(--carch-glass-highlight), var(--carch-shadow-soft);
+  box-shadow: none;
   backdrop-filter: blur(16px) saturate(1.1);
 }
 
@@ -247,10 +252,10 @@ a {
   .detail-header,
   .editor-header
 ) :is(a, button, .back-link, .back-button) {
-  border: 1px solid var(--carch-glass-border) !important;
-  background: var(--carch-glass) !important;
+  border: 1px solid var(--carch-control-border) !important;
+  background: transparent !important;
   color: var(--carch-ink) !important;
-  box-shadow: inset 0 1px 0 var(--carch-glass-highlight), var(--carch-shadow-soft) !important;
+  box-shadow: none !important;
   backdrop-filter: blur(16px) saturate(1.1);
 }
 
@@ -269,29 +274,29 @@ a {
 }
 
 .app-card {
-  border: 1px solid var(--carch-glass-border);
+  border: 1px solid var(--carch-surface-border);
   border-radius: 16px;
-  background: var(--carch-panel);
-  box-shadow: var(--carch-shadow);
+  background: var(--carch-surface-bg);
+  box-shadow: var(--carch-surface-shadow);
   animation: card-enter 260ms ease both;
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
   backdrop-filter: blur(18px) saturate(1.08);
 }
 
 .app-card-sm {
-  border: 1px solid var(--carch-glass-border);
+  border: 1px solid var(--carch-surface-border);
   border-radius: 16px;
-  background: var(--carch-panel);
-  box-shadow: var(--carch-shadow);
+  background: var(--carch-surface-bg);
+  box-shadow: var(--carch-surface-shadow);
   animation: card-enter 240ms ease both;
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
   backdrop-filter: blur(18px) saturate(1.08);
 }
 
 .app-backdrop .phone-shell :is(.app-card, .app-card-sm) {
-  border-color: var(--carch-glass-border) !important;
-  background: var(--carch-panel) !important;
-  box-shadow: var(--carch-shadow) !important;
+  border-color: var(--carch-surface-border) !important;
+  background: var(--carch-surface-bg) !important;
+  box-shadow: var(--carch-surface-shadow) !important;
 }
 
 .app-backdrop .phone-shell :is(
@@ -322,9 +327,9 @@ a {
   .warning-card,
   .role-card
 ) {
-  border: 1px solid var(--carch-glass-border) !important;
-  background: var(--carch-panel) !important;
-  box-shadow: var(--carch-shadow) !important;
+  border: 1px solid var(--carch-surface-border) !important;
+  background: var(--carch-surface-bg) !important;
+  box-shadow: var(--carch-surface-shadow) !important;
   color: var(--carch-ink) !important;
   backdrop-filter: blur(18px) saturate(1.08);
 }
@@ -356,12 +361,24 @@ a {
   .tag-row span,
   .example-chip,
   .quick-chip,
-  .benefit-chip
+  .benefit-chip,
+  .action-chips span,
+  .ai-pill
 ) {
-  border: 1px solid var(--carch-glass-border) !important;
+  border: 1px solid var(--carch-control-border) !important;
   border-radius: 999px;
-  background: var(--carch-panel-soft) !important;
+  background: transparent !important;
   color: var(--carch-ink) !important;
+  box-shadow: none !important;
+}
+
+.app-backdrop .phone-shell :is(
+  .insight-list li,
+  .compact-list li,
+  .record-list li
+) {
+  border: 1px solid var(--carch-surface-border) !important;
+  background: rgba(248, 251, 253, 0.28) !important;
   box-shadow: none !important;
 }
 
@@ -370,10 +387,10 @@ a {
   .mode-card,
   .metric-panel
 ) {
-  border-color: var(--carch-glass-border) !important;
+  border-color: var(--carch-control-border) !important;
   border-radius: 14px !important;
-  background: var(--carch-glass) !important;
-  box-shadow: inset 0 1px 0 var(--carch-glass-highlight), var(--carch-shadow-soft) !important;
+  background: transparent !important;
+  box-shadow: none !important;
   backdrop-filter: blur(18px) saturate(1.08);
 }
 
@@ -390,10 +407,10 @@ a {
   .insight-card,
   .action-card
 ) {
-  border-color: var(--carch-glass-border) !important;
+  border-color: var(--carch-surface-border) !important;
   border-radius: 14px !important;
-  background: var(--carch-panel) !important;
-  box-shadow: var(--carch-shadow) !important;
+  background: var(--carch-surface-bg) !important;
+  box-shadow: var(--carch-surface-shadow) !important;
   backdrop-filter: blur(18px) saturate(1.08);
 }
 
