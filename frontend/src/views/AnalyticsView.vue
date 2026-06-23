@@ -24,12 +24,36 @@
         </article>
       </div>
 
+      <div v-if="aiAnalysis?.summaryCards?.length" class="ai-summary-grid">
+        <article
+          v-for="card in aiAnalysis.summaryCards"
+          :key="`${card.label}-${card.value}`"
+          class="app-card ai-summary-card"
+          :class="`tone-${card.tone || 'gray'}`"
+        >
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small v-if="card.caption">{{ card.caption }}</small>
+        </article>
+      </div>
+
       <article v-if="aiAnalysis" class="app-card ai-card">
         <div class="section-title">
           <span>{{ aiAnalysis.summaryTitle }}</span>
           <small>신뢰도 {{ Math.round(Number(aiAnalysis.confidence || 0) * 100) }}%</small>
         </div>
+        <div v-if="aiAnalysis.primaryInsight" class="primary-insight" :class="`severity-${aiAnalysis.primaryInsight.severity || 'info'}`">
+          <div>
+            <span>{{ aiAnalysis.primaryInsight.label }}</span>
+            <strong>{{ aiAnalysis.primaryInsight.title }}</strong>
+            <p>{{ aiAnalysis.primaryInsight.body }}</p>
+          </div>
+          <em v-if="aiAnalysis.primaryInsight.metricValue">
+            {{ krw(aiAnalysis.primaryInsight.metricValue) }}
+          </em>
+        </div>
         <h2>{{ aiAnalysis.headline }}</h2>
+        <p v-if="aiAnalysis.narrative" class="ai-narrative">{{ aiAnalysis.narrative }}</p>
         <ul class="insight-list">
           <li v-for="item in aiAnalysis.savingOpportunities" :key="item.title">
             <strong>{{ item.title }}</strong>
@@ -63,12 +87,17 @@
         </ul>
       </article>
 
-      <article v-if="aiAnalysis?.nextActions?.length" class="app-card action-card">
+      <article v-if="aiAnalysis?.nextActions?.length || aiAnalysis?.actionButtons?.length" class="app-card action-card">
         <div class="section-title">
           <span>다음 행동</span>
         </div>
         <div class="action-chips">
           <span v-for="action in aiAnalysis.nextActions" :key="action">{{ action }}</span>
+        </div>
+        <div v-if="aiAnalysis.actionButtons?.length" class="action-buttons">
+          <RouterLink v-for="button in aiAnalysis.actionButtons" :key="`${button.label}-${button.route}`" :to="button.route">
+            {{ button.label }}
+          </RouterLink>
         </div>
       </article>
 
@@ -274,6 +303,104 @@ onMounted(loadSummary)
   color: #008c95 !important;
 }
 
+.ai-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.ai-summary-card {
+  padding: 14px;
+  border-color: rgba(36, 54, 79, 0.09);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.ai-summary-card span {
+  display: block;
+  color: #6e6e73;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ai-summary-card strong {
+  display: block;
+  margin-top: 4px;
+  color: #17202b;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.ai-summary-card small {
+  display: block;
+  margin-top: 3px;
+  color: #8a9aad;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.ai-summary-card.tone-teal strong {
+  color: #008c95;
+}
+
+.ai-summary-card.tone-gold strong {
+  color: #a66f00;
+}
+
+.primary-insight {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 12px;
+  border: 1px solid rgba(15, 95, 174, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(232, 241, 255, 0.62);
+}
+
+.primary-insight span {
+  color: #0f5fae;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.primary-insight strong {
+  display: block;
+  margin-top: 3px;
+  color: #17202b;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.primary-insight p,
+.ai-narrative {
+  margin: 4px 0 0;
+  color: #5f6b77;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  word-break: keep-all;
+}
+
+.primary-insight em {
+  color: #0f5fae;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.primary-insight.severity-warning {
+  border-color: rgba(220, 38, 38, 0.15);
+  background: rgba(254, 242, 242, 0.72);
+}
+
+.primary-insight.severity-warning span,
+.primary-insight.severity-warning em {
+  color: #dc2626;
+}
+
 .section-title {
   display: flex;
   align-items: center;
@@ -397,6 +524,24 @@ h2 {
   color: #0f5fae;
   font-size: 12px;
   font-weight: 900;
+}
+
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.action-buttons a {
+  min-height: 38px;
+  border-radius: 999px;
+  padding: 10px 12px;
+  background: #17202b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
 }
 
 .record-list {

@@ -16,10 +16,21 @@
       <div v-for="message in messages" :key="message.id" class="message-row" :class="message.role">
         <div class="message-bubble">
           <p>{{ message.content }}</p>
+          <div v-if="message.summaryChips?.length" class="message-chips">
+            <span v-for="chip in message.summaryChips" :key="`${chip.label}-${chip.value}`" :class="`tone-${chip.tone || 'gray'}`">
+              <small>{{ chip.label }}</small>
+              <strong>{{ chip.value }}</strong>
+            </span>
+          </div>
           <RouterLink v-if="message.relatedRoute" class="related-link" :to="message.relatedRoute">
             관련 화면 보기
             <ArrowRight :size="13" />
           </RouterLink>
+          <div v-if="message.actionButtons?.length" class="message-actions">
+            <RouterLink v-for="button in message.actionButtons" :key="`${button.label}-${button.route}`" :to="button.route">
+              {{ button.label }}
+            </RouterLink>
+          </div>
           <div v-if="message.quickReplies?.length" class="quick-replies">
             <button
               v-for="reply in message.quickReplies"
@@ -117,6 +128,10 @@ async function sendMessage(text = draft.value) {
       makeMessage('assistant', response.reply || '답변을 만들지 못했습니다. 다시 질문해 주세요.', {
         quickReplies: response.quickReplies || [],
         relatedRoute: response.relatedRoute || '',
+        summaryChips: response.summaryChips || [],
+        actionButtons: response.actionButtons || [],
+        messageType: response.messageType || 'general',
+        confidence: response.confidence,
         aiMode: response.aiMode,
       }),
     )
@@ -126,6 +141,9 @@ async function sendMessage(text = draft.value) {
       makeMessage('assistant', '지금은 챗봇 API 연결이 불안정합니다. 결제내역 추가나 소비 분석 화면에서 먼저 확인해 주세요.', {
         quickReplies: ['소비 분석 보기', '결제내역 추가하기', '카드 추천 보기'],
         relatedRoute: '/analytics/cards',
+        summaryChips: [{ label: '연결 상태', value: 'fallback', tone: 'gray' }],
+        actionButtons: [{ label: '소비 분석 보기', route: '/analytics/cards' }],
+        messageType: 'general',
         aiMode: 'mock',
       }),
     )
@@ -218,6 +236,56 @@ async function sendMessage(text = draft.value) {
   margin-top: 9px;
   color: #0f5fae;
   font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.message-chips,
+.message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.message-chips span {
+  display: inline-flex;
+  min-height: 34px;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid rgba(15, 95, 174, 0.12);
+  border-radius: 12px;
+  padding: 6px 9px;
+  background: rgba(232, 241, 255, 0.7);
+}
+
+.message-chips small {
+  color: #6e6e73;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.message-chips strong {
+  color: #17202b;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.message-chips .tone-teal strong {
+  color: #008c95;
+}
+
+.message-chips .tone-gold strong {
+  color: #a66f00;
+}
+
+.message-actions a {
+  min-height: 36px;
+  border-radius: 999px;
+  padding: 9px 12px;
+  background: #17202b;
+  color: #fff;
+  font-size: 11px;
   font-weight: 900;
   text-decoration: none;
 }

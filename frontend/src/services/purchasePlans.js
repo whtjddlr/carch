@@ -1,9 +1,11 @@
 import axios from 'axios'
 import { clone, mockPlans } from '@/data/mockData'
+import { AI_REQUEST_TIMEOUT_MS, API_BASE_URL, DEFAULT_API_TIMEOUT_MS } from '@/services/api'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000',
+  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
+  timeout: DEFAULT_API_TIMEOUT_MS,
 })
 
 const useMockApi = import.meta.env.VITE_USE_MOCK_API === 'true'
@@ -75,7 +77,7 @@ const buildScenarios = (plan) => {
 
 export async function parsePurchasePlan(payload) {
   try {
-    return await request(api.post('/api/v1/purchase-plans/parse/', payload))
+    return await request(api.post('/api/v1/purchase-plans/parse/', payload, { timeout: AI_REQUEST_TIMEOUT_MS }))
   } catch (error) {
     if (!useMockApi) throw error
   }
