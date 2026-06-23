@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+.vite/
+
+# local logs
+*.log
+.vite-dev.*.log
+
+# environment files
+.env
+.env.*
+!.env.example
+
+# editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# generated reference bundles not used by the Vue app entry
+src/app/
+src/imports/
