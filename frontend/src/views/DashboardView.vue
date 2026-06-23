@@ -859,14 +859,14 @@ onMounted(async () => {
   height: 40px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(36, 54, 79, 0.12);
+  border: 0;
   border-radius: 50%;
   padding: 0;
-  background: rgba(248, 251, 253, 0.56);
+  background: transparent;
   color: #24364f;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62), 0 12px 26px rgba(36, 54, 79, 0.07);
-  backdrop-filter: blur(16px) saturate(1.08);
-  transition: transform 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+  box-shadow: none;
+  backdrop-filter: none;
+  transition: transform 160ms ease, color 160ms ease, opacity 160ms ease;
 }
 
 .wallet-icon-button svg {
@@ -880,25 +880,28 @@ onMounted(async () => {
 }
 
 .wallet-icon-button:hover {
-  background: rgba(248, 251, 253, 0.68);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68), 0 14px 30px rgba(36, 54, 79, 0.085);
+  color: #0f5fae;
 }
 
 .wallet-icon-button.is-add {
-  border-color: rgba(36, 54, 79, 0.17);
-  background: rgba(36, 54, 79, 0.1);
+  border-color: transparent;
+  background: transparent;
   color: #24364f;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62), 0 12px 26px rgba(36, 54, 79, 0.065);
+  box-shadow: none;
 }
 
 .wallet-icon-button.is-add:hover {
-  background: rgba(36, 54, 79, 0.15);
+  color: #0f5fae;
 }
 
 .wallet-icon-button.danger {
-  background: rgba(179, 38, 30, 0.065);
-  border-color: rgba(179, 38, 30, 0.14);
+  background: transparent;
+  border-color: transparent;
   color: #b3261e;
+}
+
+.wallet-icon-button.danger:hover {
+  color: #d92d20;
 }
 
 .wallet-icon-button:disabled {
