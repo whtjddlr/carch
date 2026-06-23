@@ -1,9 +1,18 @@
 import axios from 'axios'
 
+const envNumber = (value, fallback) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+export const DEFAULT_API_TIMEOUT_MS = envNumber(import.meta.env.VITE_API_TIMEOUT_MS, 8000)
+export const AI_REQUEST_TIMEOUT_MS = envNumber(import.meta.env.VITE_AI_TIMEOUT_MS, 50000)
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000',
+  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 1800,
+  timeout: DEFAULT_API_TIMEOUT_MS,
 })
 
 const gradients = ['blue', 'purple', 'teal']
@@ -87,7 +96,7 @@ export async function fetchTransactions(params = {}) {
 }
 
 export async function parseTransaction(rawText) {
-  const response = await api.post('/api/transactions/parse/', { rawText })
+  const response = await api.post('/api/transactions/parse/', { rawText }, { timeout: AI_REQUEST_TIMEOUT_MS })
   return normalizeTransaction(response.data)
 }
 
@@ -104,6 +113,7 @@ export async function fetchCardRecommendations() {
 export async function fetchSpendingSummary({ ai = false } = {}) {
   const response = await api.get('/api/analytics/spending-summary/', {
     params: ai ? { ai: 1 } : {},
+    timeout: ai ? AI_REQUEST_TIMEOUT_MS : DEFAULT_API_TIMEOUT_MS,
   })
   return response.data
 }
@@ -118,8 +128,13 @@ export async function fetchAiContract() {
   return response.data
 }
 
+export async function fetchAiStatus() {
+  const response = await api.get('/api/ai/status/')
+  return response.data
+}
+
 export async function sendChatMessage(payload) {
-  const response = await api.post('/api/chat/', payload)
+  const response = await api.post('/api/chat/', payload, { timeout: AI_REQUEST_TIMEOUT_MS })
   return response.data
 }
 

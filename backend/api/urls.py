@@ -1,0 +1,33 @@
+from django.urls import path
+
+from . import views
+
+
+urlpatterns = [
+    path('health/', views.health, name='health'),
+    path('card-images/<path:filename>', views.card_image, name='card-image'),
+    path('cards/', views.card_list, name='card-list'),
+    path('cards/<int:card_ad_id>/', views.card_detail, name='card-detail'),
+    path('owned-cards/', views.owned_card_list, name='owned-card-list'),
+    path('owned-cards/<str:card_id>/', views.owned_card_detail, name='owned-card-detail'),
+    path('transactions/', views.transaction_list, name='transaction-list'),
+    path('transactions/parse/', views.parse_transaction, name='transaction-parse'),
+    path('transactions/<str:transaction_id>/', views.transaction_detail, name='transaction-detail'),
+    path('analytics/spending-summary/', views.spending_summary, name='spending-summary'),
+    path('analytics/records/', views.analysis_record_list, name='analysis-record-list'),
+    path('recommendations/cards/', views.card_recommendations, name='card-recommendations'),
+    path('chat/', views.chat_message, name='chat-message'),
+    path('community/posts/', views.community_post_list, name='community-post-list'),
+    path('community/posts/<str:post_id>/', views.community_post_detail, name='community-post-detail'),
+    path('community/posts/<str:post_id>/like/', views.community_post_like, name='community-post-like'),
+    path('community/posts/<str:post_id>/comments/', views.community_comment_list, name='community-comment-list'),
+    path('community/comments/<str:comment_id>/', views.community_comment_detail, name='community-comment-detail'),
+    path('ai/contract/', views.ai_contract, name='ai-contract'),
+    path('ai/status/', views.ai_status, name='ai-status'),
+    path('v1/purchase-plans/', views.purchase_plan_list, name='purchase-plan-list'),
+    path('v1/purchase-plans/parse/', views.parse_purchase_plan, name='purchase-plan-parse-v1'),
+    path('v1/purchase-plans/<str:plan_id>/', views.purchase_plan_detail, name='purchase-plan-detail'),
+    path('v1/purchase-plans/<str:plan_id>/scenarios/', views.purchase_plan_scenarios, name='purchase-plan-scenarios'),
+    path('v1/purchase-plans/<str:plan_id>/select/', views.purchase_plan_select, name='purchase-plan-select'),
+    path('purchase-plans/parse/', views.parse_purchase_plan, name='purchase-plan-parse'),
+]
