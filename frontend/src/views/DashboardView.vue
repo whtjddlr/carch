@@ -1824,26 +1824,32 @@ onMounted(async () => {
 
 .candidate-card-row > button {
   display: inline-flex;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
   padding: 0;
-  background: rgba(36, 54, 79, 0.92);
-  color: #fff;
-  box-shadow: 0 12px 22px rgba(36, 54, 79, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.26);
-  backdrop-filter: blur(12px) saturate(1.08);
+  background: transparent;
+  color: #24364f;
+  box-shadow: none;
+  backdrop-filter: none;
+  transition: transform 160ms ease, color 160ms ease, opacity 160ms ease;
 }
 
 .candidate-card-row > button:hover:not(:disabled) {
-  background: rgba(36, 54, 79, 0.98);
+  color: #0f5fae;
+}
+
+.candidate-card-row > button:active {
+  transform: scale(0.96);
 }
 
 .candidate-card-row > button:disabled {
-  background: rgba(230, 236, 242, 0.66);
-  color: #7a8795;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
+  background: transparent;
+  color: rgba(36, 54, 79, 0.42);
+  box-shadow: none;
+  opacity: 1;
 }
 
 @media (max-width: 380px) {
