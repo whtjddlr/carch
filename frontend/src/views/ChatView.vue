@@ -140,9 +140,9 @@ async function sendMessage(text = draft.value) {
     messages.value.push(
       makeMessage('assistant', '지금은 챗봇 API 연결이 불안정합니다. 결제내역 추가나 소비 분석 화면에서 먼저 확인해 주세요.', {
         quickReplies: ['소비 분석 보기', '결제내역 추가하기', '카드 추천 보기'],
-        relatedRoute: '/analytics/cards',
+        relatedRoute: '/analytics',
         summaryChips: [{ label: '연결 상태', value: 'fallback', tone: 'gray' }],
-        actionButtons: [{ label: '소비 분석 보기', route: '/analytics/cards' }],
+        actionButtons: [{ label: '소비 분석 보기', route: '/analytics' }],
         messageType: 'general',
         aiMode: 'mock',
       }),

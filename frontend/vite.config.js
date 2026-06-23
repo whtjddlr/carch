@@ -1,16 +1,17 @@
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
-import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
 
 function figmaAssetResolver() {
   return {
     name: 'figma-asset-resolver',
-    resolveId(id: string) {
+    resolveId(id) {
       if (id.startsWith('figma:asset/')) {
         const filename = id.replace('figma:asset/', '')
-        return path.resolve(__dirname, 'src/assets', filename)
+        return fileURLToPath(new URL(`./src/assets/${filename}`, import.meta.url))
       }
+      return null
     },
   }
 }
@@ -19,7 +20,7 @@ export default defineConfig({
   plugins: [figmaAssetResolver(), vue(), tailwindcss()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   assetsInclude: ['**/*.svg', '**/*.csv'],

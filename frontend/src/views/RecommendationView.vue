@@ -49,6 +49,15 @@
             <p>연간 기준 {{ signedKrw(recommendation.economics.annualDelta) }}</p>
           </div>
 
+          <div v-if="recommendation.performanceFill" class="performance-fill-detail">
+            <span>실적 충족 시</span>
+            <strong>{{ signedKrw(recommendation.performanceFill.monthlyGain) }} / 월</strong>
+            <p>
+              {{ krw(recommendation.performanceFill.remaining) }}을 더 채우면
+              추가 효율 {{ recommendation.performanceFill.efficiency }}%가 예상됩니다.
+            </p>
+          </div>
+
           <div class="tag-row">
             <span v-for="tag in recommendation.spendingFit.styleTags" :key="tag">{{ tag }}</span>
           </div>
@@ -58,7 +67,7 @@
           </ul>
 
           <RouterLink class="primary-button w-100" to="/cards">내 카드와 비교하기</RouterLink>
-          <RouterLink class="outline-button w-100" to="/analytics/cards">소비분석 다시 보기</RouterLink>
+          <RouterLink class="outline-button w-100" to="/analytics">소비분석 다시 보기</RouterLink>
         </article>
       </div>
     </template>
@@ -158,7 +167,21 @@
               <span>{{ item.issuer }}</span>
               <h2>{{ item.name }}</h2>
               <p>{{ item.reason }}</p>
-              <div class="mini-economics">
+              <div v-if="item.performanceFill" class="fill-economics">
+                <span>
+                  <small>실적까지</small>
+                  <b>{{ krw(item.performanceFill.remaining) }}</b>
+                </span>
+                <span>
+                  <small>채우면</small>
+                  <b>{{ signedKrw(item.performanceFill.monthlyGain) }}/월</b>
+                </span>
+                <span>
+                  <small>추가 효율</small>
+                  <b>{{ item.performanceFill.efficiency }}%</b>
+                </span>
+              </div>
+              <div v-else class="mini-economics">
                 <b>{{ signedKrw(item.economics.monthlyDelta) }}</b>
                 <small>월 순혜택 차이</small>
               </div>
@@ -207,13 +230,36 @@ function signedKrw(value) {
   return `${amount > 0 ? '+' : amount < 0 ? '-' : ''}${krw(Math.abs(amount))}`
 }
 
+function buildPerformanceFill(economics = {}) {
+  const remaining = Number(economics.remainingSpendForBenefit || 0)
+  const eligibleRatio = Number(economics.eligibleRatio || 1)
+  const currentNet = Number(economics.monthlyNetBenefit || 0)
+  const currentGross = Number(economics.expectedMonthlyBenefit || 0)
+  const monthlyAnnualFee = Number(economics.monthlyAnnualFee || 0)
+  if (remaining <= 0 || eligibleRatio >= 1 || currentGross <= 0) return null
+
+  const fullGross = Math.round(currentGross / Math.max(eligibleRatio, 0.25))
+  const fullNet = fullGross - monthlyAnnualFee
+  const monthlyGain = Math.max(0, fullNet - currentNet)
+  if (monthlyGain <= 0) return null
+
+  return {
+    remaining,
+    monthlyGain,
+    fullNet,
+    efficiency: Number(((monthlyGain / remaining) * 100).toFixed(1)),
+  }
+}
+
 function normalizeRecommendation(item) {
+  const economics = { ...defaultEconomics, ...(item.economics || {}) }
   return {
     ...item,
     benefit: item.benefit || item.benefitSummary || '소비 패턴에 맞춘 혜택 카드',
     highlights: item.highlights?.length ? item.highlights : item.benefits || item.tags || [],
     reason: item.reason || '소비 스타일과 주요 지출 카테고리를 기준으로 추천했어요.',
-    economics: { ...defaultEconomics, ...(item.economics || {}) },
+    economics,
+    performanceFill: buildPerformanceFill(economics),
     spendingFit: item.spendingFit || { styleTags: item.tags || [] },
     notification: item.notification || {},
   }
@@ -567,6 +613,40 @@ onMounted(async () => {
   font-weight: 900;
 }
 
+.fill-economics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.fill-economics span {
+  display: block;
+  min-width: 0;
+  border-radius: 12px;
+  padding: 8px 9px;
+  background: rgba(237, 247, 246, 0.82);
+}
+
+.fill-economics small {
+  display: block;
+  color: #6e6e73;
+  font-size: 9px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.fill-economics b {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  color: #008c95;
+  font-size: 12px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .result-card {
   display: flex;
   flex-direction: column;
@@ -643,6 +723,35 @@ onMounted(async () => {
   margin-top: 4px;
 }
 
+.performance-fill-detail {
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(237, 247, 246, 0.84);
+}
+
+.performance-fill-detail span {
+  display: block;
+  color: #008c95;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.performance-fill-detail strong {
+  display: block;
+  margin-top: 5px;
+  color: #17202b;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.performance-fill-detail p {
+  margin: 5px 0 0;
+  color: #52606d;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
 ul {
   margin: 0;
   padding-left: 18px;
@@ -665,6 +774,7 @@ ul {
 .recommend-card,
 .recommendation-art,
 .payback-panel,
+.performance-fill-detail,
 .route-card-mini {
   border: 0 !important;
   border-radius: 0 !important;

@@ -14,7 +14,6 @@
         <div v-for="plan in plans" :key="plan.id" class="plan-row">
           <PurchasePlanCard :plan="plan" @open="openPlan" @menu="toggleMenu" />
           <div v-if="menuOpen === plan.id" class="plan-menu">
-            <button type="button" @click="openPlan(plan.id)">계획 보기</button>
             <button type="button" @click="renamePlan(plan)">이름 변경</button>
             <button class="danger" type="button" @click="askDelete(plan)">삭제</button>
           </div>

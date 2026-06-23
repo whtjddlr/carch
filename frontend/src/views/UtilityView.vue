@@ -172,7 +172,7 @@
             </div>
           </div>
         </section>
-        <RouterLink class="primary-button w-100" to="/analytics/cards">AI 분석 보기</RouterLink>
+        <RouterLink class="primary-button w-100" to="/analytics">AI 분석 보기</RouterLink>
       </section>
 
       <section v-else-if="props.type === 'notifications'" class="notification-view">
@@ -293,7 +293,18 @@
             {{ type.label }}
           </button>
         </div>
+        <article v-if="searchLoading" class="app-card empty-card search-status">
+          <Search :size="28" />
+          <strong>검색 중입니다</strong>
+          <p>카드, 거래, 커뮤니티를 함께 확인하고 있어요.</p>
+        </article>
+        <article v-else-if="searchError" class="app-card empty-card search-status">
+          <Search :size="28" />
+          <strong>검색을 불러오지 못했어요</strong>
+          <p>잠시 후 다시 시도해 주세요.</p>
+        </article>
         <RouterLink
+          v-if="!searchLoading && !searchError"
           v-for="result in searchResults"
           :key="`${result.type}-${result.id}`"
           class="app-card search-result"
@@ -303,10 +314,11 @@
           <div>
             <strong>{{ result.title }}</strong>
             <span>{{ result.description }}</span>
+            <small v-if="result.badge">{{ result.badge }}</small>
           </div>
           <ChevronRight :size="17" />
         </RouterLink>
-        <article v-if="searchResults.length === 0" class="app-card empty-card">
+        <article v-if="!searchLoading && !searchError && searchResults.length === 0" class="app-card empty-card">
           <Search :size="28" />
           <strong>검색 결과가 없어요</strong>
           <p>카드명, 가맹점명, 커뮤니티 제목으로 검색해보세요.</p>
@@ -327,7 +339,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   BarChart3,
@@ -353,15 +365,15 @@ import {
 } from 'lucide-vue-next'
 import {
   budgetCategories,
-  cards,
-  communityPosts,
+  cards as mockCards,
+  communityPosts as mockCommunityPosts,
   krw,
   notifications,
   transactions as mockTransactions,
   user,
 } from '@/data/mockData'
 import AppBackButton from '@/components/AppBackButton.vue'
-import { deleteOwnedCard, fetchCard, fetchTransactions, normalizeCard } from '@/services/api'
+import { deleteOwnedCard, fetchCard, fetchOwnedCards, fetchSearchResults, fetchTransactions, normalizeCard } from '@/services/api'
 
 const props = defineProps({
   type: { type: String, default: 'default' },
@@ -375,7 +387,7 @@ const backFallback = computed(() => {
     cardApply: '/cards',
     transaction: '/transactions',
     budgetNew: '/budget',
-    report: '/analytics/cards',
+    report: '/analytics',
     notifications: '/cards',
     settings: '/cards',
     profile: '/settings',
@@ -387,18 +399,25 @@ const backFallback = computed(() => {
 
 const apiCard = ref(null)
 const transactionRows = ref(mockTransactions)
+const cardRows = ref(mockCards)
+const communityRows = ref(mockCommunityPosts)
 const applySubmitted = ref(false)
 const budgetSaved = ref(false)
 const profileSaved = ref(false)
 const searchTerm = ref('')
 const searchType = ref('all')
+const searchRows = ref([])
+const searchLoading = ref(false)
+const searchError = ref('')
+const searchLoaded = ref(false)
+let searchRequestId = 0
 const readNotificationIds = ref(new Set(notifications.filter((notice) => notice.read).map((notice) => notice.id)))
 
 const isCardDetail = computed(() => props.type === 'card')
 const needsCard = computed(() => props.type === 'card' || props.type === 'cardApply')
 const selectedCard = computed(() => {
   if (!needsCard.value) return null
-  return apiCard.value || cards.find((card) => card.id === route.params.id)
+  return apiCard.value || cardRows.value.find((card) => String(card.id) === String(route.params.id))
 })
 
 const isDeletingCard = ref(false)
@@ -421,7 +440,7 @@ const selectedTransaction = computed(() => {
 })
 
 const transactionCardName = computed(() => {
-  const card = cards.find((item) => String(item.id) === String(selectedTransaction.value?.cardId))
+  const card = cardRows.value.find((item) => String(item.id) === String(selectedTransaction.value?.cardId))
   return card?.name || '카드 정보 없음'
 })
 
@@ -519,8 +538,14 @@ const searchTypes = [
   { label: '커뮤니티', value: 'community' },
 ]
 
+const searchIconMap = {
+  card: CreditCard,
+  transaction: Receipt,
+  community: MessageSquare,
+}
+
 const searchableItems = computed(() => [
-  ...cards.map((card) => ({
+  ...cardRows.value.map((card) => ({
     id: card.id,
     type: 'card',
     title: card.name,
@@ -536,7 +561,7 @@ const searchableItems = computed(() => [
     path: `/transactions/${tx.id}`,
     icon: Receipt,
   })),
-  ...communityPosts.map((post) => ({
+  ...communityRows.value.map((post) => ({
     id: post.id,
     type: 'community',
     title: post.title,
@@ -546,12 +571,25 @@ const searchableItems = computed(() => [
   })),
 ])
 
-const searchResults = computed(() => {
+const localSearchResults = computed(() => {
   const term = searchTerm.value.toLowerCase()
   return searchableItems.value
     .filter((item) => searchType.value === 'all' || item.type === searchType.value)
     .filter((item) => !term || `${item.title} ${item.description}`.toLowerCase().includes(term))
     .slice(0, 12)
+})
+
+const searchResults = computed(() => {
+  if (props.type === 'search' && searchLoaded.value) {
+    return searchRows.value.map((item) => ({
+      ...item,
+      id: item.id || `${item.type}-${item.title}`,
+      path: item.path || '/search',
+      description: item.description || item.badge || '',
+      icon: searchIconMap[item.type] || Search,
+    }))
+  }
+  return localSearchResults.value
 })
 
 const content = computed(() => {
@@ -618,6 +656,41 @@ function notificationIcon(type) {
   return map[type] || Bell
 }
 
+async function loadSearchResults() {
+  if (props.type !== 'search') return
+  const requestId = ++searchRequestId
+  searchLoading.value = true
+  searchError.value = ''
+
+  try {
+    const data = await fetchSearchResults({
+      q: searchTerm.value,
+      type: searchType.value,
+      limit: searchType.value === 'card' ? 24 : 12,
+    })
+    if (requestId !== searchRequestId) return
+    searchRows.value = data.results || []
+    searchLoaded.value = true
+  } catch (error) {
+    if (requestId !== searchRequestId) return
+    console.warn('Search API request failed. Falling back to local rows.', error)
+    searchRows.value = []
+    searchLoaded.value = true
+    searchError.value = '검색 결과를 불러오지 못했습니다.'
+  } finally {
+    if (requestId === searchRequestId) {
+      searchLoading.value = false
+    }
+  }
+}
+
+let searchDebounceTimer = null
+watch([searchTerm, searchType], () => {
+  if (props.type !== 'search') return
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(loadSearchResults, 180)
+}, { immediate: true })
+
 onMounted(async () => {
   try {
     if (needsCard.value) {
@@ -628,8 +701,13 @@ onMounted(async () => {
       apiCard.value = normalizeCard(card, 0, transactions)
     }
 
-    if (props.type === 'transaction' || props.type === 'report' || props.type === 'search') {
-      transactionRows.value = await fetchTransactions()
+    if (props.type === 'transaction' || props.type === 'report') {
+      const [transactions, ownedCards] = await Promise.all([
+        fetchTransactions(),
+        fetchOwnedCards(),
+      ])
+      transactionRows.value = transactions
+      cardRows.value = ownedCards.map((card, index) => normalizeCard(card, index, transactions))
     }
   } catch (error) {
     console.warn('상세 화면 API를 불러오지 못해 mock 데이터를 사용합니다.', error)
@@ -1373,6 +1451,22 @@ onMounted(async () => {
   color: #6e6e73;
   font-size: 12px;
   font-weight: 700;
+}
+
+.search-result small {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 8px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(15, 95, 174, 0.08);
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.search-status {
+  min-height: 150px;
 }
 
 .empty-card {
