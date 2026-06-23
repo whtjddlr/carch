@@ -234,7 +234,18 @@ def _pct_change(current, base):
     return round(((current - base) / base) * 100)
 
 
-def _build_spending_trend(transactions):
+def _parse_category_overrides(request):
+    raw_values = request.GET.getlist('recurringCategory')
+    raw_values.extend((request.GET.get('recurringCategories') or '').split(','))
+    return {
+        value.strip()
+        for value in raw_values
+        if value and value.strip()
+    }
+
+
+def _build_spending_trend(transactions, recurring_overrides=None):
+    recurring_overrides = set(recurring_overrides or [])
     expenses = [item for item in transactions if _as_int(item.get('amount')) < 0]
     months = sorted({month for month in (_month_key_from_transaction(item) for item in expenses) if month})
     current_month = months[-1] if months else timezone.localtime().strftime('%Y-%m')
@@ -265,16 +276,20 @@ def _build_spending_trend(transactions):
         baseline_reference = max(baseline_median, baseline_average)
         delta_from_previous = current_amount - previous_amount
         delta_from_baseline = current_amount - baseline_reference
-        one_time = (
+        detected_one_time = (
             current_amount >= 50000
             and (
                 (baseline_reference > 0 and current_amount >= baseline_reference * 1.75 and delta_from_baseline >= 35000)
                 or (baseline_reference == 0 and current_amount >= 80000)
             )
         )
+        one_time = detected_one_time and category not in recurring_overrides
         if one_time:
             adjusted_amount = min(current_amount, round(max(baseline_reference, current_amount * 0.45)))
             status = 'one-time'
+        elif detected_one_time and category in recurring_overrides:
+            adjusted_amount = current_amount
+            status = 'recurring-confirmed'
         elif delta_from_baseline >= 30000 and baseline_reference > 0:
             adjusted_amount = current_amount
             status = 'increase'
@@ -300,6 +315,8 @@ def _build_spending_trend(transactions):
                 'recommendationWeight': round(adjusted_amount / current_amount, 2) if current_amount else 0,
                 'status': status,
                 'oneTimeCandidate': one_time,
+                'detectedOneTimeCandidate': detected_one_time,
+                'userConfirmedRecurring': category in recurring_overrides,
             }
         )
 
@@ -324,6 +341,8 @@ def _build_spending_trend(transactions):
         },
         'categoryChanges': category_changes,
         'oneTimeCandidates': [item for item in category_changes if item['oneTimeCandidate']][:4],
+        'reviewCandidates': [item for item in category_changes if item['detectedOneTimeCandidate']][:4],
+        'recurringOverrides': sorted(recurring_overrides),
         'recurringCategories': [item for item in category_changes if not item['oneTimeCandidate'] and item['currentAmount'] > 0][:5],
     }
 
@@ -925,7 +944,7 @@ def parse_transaction(request):
 
 def spending_summary(request):
     transactions = [serialize_transaction(item) for item in transaction_queryset()]
-    spending_trend = _build_spending_trend(transactions)
+    spending_trend = _build_spending_trend(transactions, _parse_category_overrides(request))
     current_month = spending_trend['currentMonth']
     expense_rows = [
         item
@@ -1079,7 +1098,13 @@ def analysis_record_list(request):
 
 def build_chat_context(request):
     transactions = [serialize_transaction(item) for item in transaction_queryset()]
-    expense_rows = [item for item in transactions if item['amount'] < 0]
+    spending_trend = _build_spending_trend(transactions, _parse_category_overrides(request))
+    current_month = spending_trend['currentMonth']
+    current_transactions = [
+        item for item in transactions if _month_key_from_transaction(item) == current_month
+    ]
+    expense_rows = [item for item in current_transactions if item['amount'] < 0]
+    income_rows = [item for item in current_transactions if item['amount'] > 0]
     by_category = defaultdict(int)
     by_card = defaultdict(int)
     for item in expense_rows:
@@ -1089,9 +1114,15 @@ def build_chat_context(request):
 
     summary = {
         'totalExpense': sum(abs(item['amount']) for item in expense_rows),
-        'totalIncome': sum(item['amount'] for item in transactions if item['amount'] > 0),
+        'totalIncome': sum(item['amount'] for item in income_rows),
         'byCategory': [{'category': key, 'amount': value} for key, value in by_category.items()],
         'byCard': [{'cardId': key, 'amount': value} for key, value in by_card.items()],
+        'period': {
+            'currentMonth': current_month,
+            'previousMonth': spending_trend['previousMonth'],
+            'baselineMonths': spending_trend['baselineMonths'],
+        },
+        'spendingTrend': spending_trend,
     }
 
     cards = []
@@ -1116,7 +1147,7 @@ def build_chat_context(request):
     return {
         'today': timezone.localtime().date().isoformat(),
         'summary': summary,
-        'transactions': transactions,
+        'transactions': current_transactions,
         'cards': cards[:6],
         'communityPosts': community_posts,
     }
@@ -1761,9 +1792,9 @@ def _category_keywords(category):
     return CARD_RECOMMENDATION_CATEGORY_KEYWORDS.get(str(category), [str(category)])
 
 
-def _build_spending_profile(adjusted_for_recommendation=False):
+def _build_spending_profile(adjusted_for_recommendation=False, recurring_overrides=None):
     transactions = [serialize_transaction(item) for item in transaction_queryset()]
-    spending_trend = _build_spending_trend(transactions)
+    spending_trend = _build_spending_trend(transactions, recurring_overrides)
     current_month = spending_trend['currentMonth']
     expenses = [
         item
@@ -2108,7 +2139,10 @@ def _build_routing_suggestions(profile, owned_values, result_cards, owned_ids):
 
 
 def card_recommendations(request):
-    profile = _build_spending_profile(adjusted_for_recommendation=True)
+    profile = _build_spending_profile(
+        adjusted_for_recommendation=True,
+        recurring_overrides=_parse_category_overrides(request),
+    )
     ensure_owned_cards_seeded()
     owned_ids = {str(item.card_id) for item in OwnedCard.objects.all()}
 

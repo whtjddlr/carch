@@ -22,9 +22,22 @@ const networkByCardId = {
   10609: 'VISA',
 }
 
+const transactionMonth = (tx) => String(tx.date || tx.approvedAt || tx.approved_at || '').slice(0, 7)
+
+export const latestTransactionMonth = (transactions = []) =>
+  transactions
+    .map(transactionMonth)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || ''
+
+export const currentMonthTransactions = (transactions = [], month = latestTransactionMonth(transactions)) =>
+  month ? transactions.filter((tx) => transactionMonth(tx) === month) : transactions
+
 export const normalizeCard = (card, index = 0, transactions = []) => {
   const id = String(card.id || card.cardAdId || card.card_ad_id)
-  const spent = transactions
+  const statementTransactions = currentMonthTransactions(transactions)
+  const spent = statementTransactions
     .filter((tx) => String(tx.cardId || tx.card_id) === id && Number(tx.amount ?? tx.amt) < 0)
     .reduce((sum, tx) => sum + Math.abs(Number(tx.amount ?? tx.amt) || 0), 0)
 
@@ -105,8 +118,15 @@ export async function createTransaction(payload) {
   return normalizeTransaction(response.data)
 }
 
-export async function fetchCardRecommendationBundle() {
-  const response = await api.get('/api/recommendations/cards/')
+const applyCategoryOverrides = (params, categories = []) => {
+  const values = Array.isArray(categories) ? categories.filter(Boolean) : []
+  if (values.length) params.recurringCategories = values.join(',')
+  return params
+}
+
+export async function fetchCardRecommendationBundle({ recurringCategories = [] } = {}) {
+  const params = applyCategoryOverrides({}, recurringCategories)
+  const response = await api.get('/api/recommendations/cards/', { params })
   return response.data
 }
 
@@ -115,8 +135,8 @@ export async function fetchCardRecommendations() {
   return data.results || []
 }
 
-export async function fetchSpendingSummary({ ai = false, refresh = false } = {}) {
-  const params = {}
+export async function fetchSpendingSummary({ ai = false, refresh = false, recurringCategories = [] } = {}) {
+  const params = applyCategoryOverrides({}, recurringCategories)
   if (ai) params.ai = 1
   if (refresh) params.refresh = 1
   const response = await api.get('/api/analytics/spending-summary/', {
