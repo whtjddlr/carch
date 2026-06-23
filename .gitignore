@@ -18,6 +18,8 @@ node_modules/
 dist/
 build/
 .vite/
+*.log
+.vite-dev.*.log
 
 # Environment
 .env
