@@ -22,9 +22,22 @@ const networkByCardId = {
   10609: 'VISA',
 }
 
+const transactionMonth = (tx) => String(tx.date || tx.approvedAt || tx.approved_at || '').slice(0, 7)
+
+export const latestTransactionMonth = (transactions = []) =>
+  transactions
+    .map(transactionMonth)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || ''
+
+export const currentMonthTransactions = (transactions = [], month = latestTransactionMonth(transactions)) =>
+  month ? transactions.filter((tx) => transactionMonth(tx) === month) : transactions
+
 export const normalizeCard = (card, index = 0, transactions = []) => {
   const id = String(card.id || card.cardAdId || card.card_ad_id)
-  const spent = transactions
+  const statementTransactions = currentMonthTransactions(transactions)
+  const spent = statementTransactions
     .filter((tx) => String(tx.cardId || tx.card_id) === id && Number(tx.amount ?? tx.amt) < 0)
     .reduce((sum, tx) => sum + Math.abs(Number(tx.amount ?? tx.amt) || 0), 0)
 
