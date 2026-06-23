@@ -52,14 +52,14 @@
             <span>{{ item.caption }}</span>
           </li>
         </ul>
-        <div v-if="reviewCandidates.length" class="spend-review-panel">
+        <div v-if="pendingReviewCandidates.length" class="spend-review-panel">
           <div class="review-copy">
             <span>추천 기준 확인</span>
             <strong>앞으로도 반복될 지출인가요?</strong>
-            <p>반복 지출로 바꾸면 카드 추천에 그대로 반영합니다.</p>
+            <p>한 번 선택하면 같은 항목은 다시 묻지 않습니다.</p>
           </div>
           <div class="review-list">
-            <article v-for="item in reviewCandidates" :key="item.category" class="review-item">
+            <article v-for="item in pendingReviewCandidates" :key="item.category" class="review-item">
               <div>
                 <strong>{{ item.category }}</strong>
                 <small>평소 {{ krw(item.baselineReference) }} · 이번 달 {{ krw(item.currentAmount) }}</small>
@@ -67,14 +67,12 @@
               <div class="review-toggle" role="group" :aria-label="`${item.category} 지출 반영 방식`">
                 <button
                   type="button"
-                  :class="{ active: !isRecurringOverride(item.category) }"
                   @click="setRecurringOverride(item.category, false)"
                 >
                   이번 달만
                 </button>
                 <button
                   type="button"
-                  :class="{ active: isRecurringOverride(item.category) }"
                   @click="setRecurringOverride(item.category, true)"
                 >
                   반복
@@ -218,7 +216,29 @@ const recommendationBundle = ref(null)
 const isLoading = ref(false)
 const isRefreshing = ref(false)
 const error = ref('')
-const recurringOverrides = ref([])
+const REVIEW_HANDLED_STORAGE_KEY = 'carch.analytics.reviewHandled.v1'
+const RECURRING_STORAGE_KEY = 'carch.analytics.recurringOverrides.v1'
+
+function readStoredList(key) {
+  try {
+    const value = window.localStorage.getItem(key)
+    const parsed = JSON.parse(value || '[]')
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : []
+  } catch {
+    return []
+  }
+}
+
+function writeStoredList(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify([...new Set(value.filter(Boolean))]))
+  } catch {
+    // localStorage can be unavailable in privacy modes; the in-memory state still works.
+  }
+}
+
+const recurringOverrides = ref(readStoredList(RECURRING_STORAGE_KEY))
+const handledReviewCategories = ref(readStoredList(REVIEW_HANDLED_STORAGE_KEY))
 
 const safeSummary = computed(() => summary.value || { totalExpense: 0, totalIncome: 0, byCategory: [], byCard: [] })
 const aiAnalysis = computed(() => safeSummary.value.aiAnalysis || null)
@@ -235,6 +255,9 @@ const trendPeriodLabel = computed(() => {
 })
 const oneTimeCandidates = computed(() => spendingTrend.value?.oneTimeCandidates || [])
 const reviewCandidates = computed(() => spendingTrend.value?.reviewCandidates || oneTimeCandidates.value)
+const pendingReviewCandidates = computed(() =>
+  reviewCandidates.value.filter((item) => !handledReviewCategories.value.includes(item.category)),
+)
 const primaryTrendChange = computed(() => {
   const oneTime = oneTimeCandidates.value[0]
   if (oneTime) return oneTime
@@ -427,6 +450,11 @@ async function setRecurringOverride(category, enabled) {
   if (enabled) next.add(category)
   else next.delete(category)
   recurringOverrides.value = [...next]
+  if (!handledReviewCategories.value.includes(category)) {
+    handledReviewCategories.value = [...handledReviewCategories.value, category]
+  }
+  writeStoredList(RECURRING_STORAGE_KEY, recurringOverrides.value)
+  writeStoredList(REVIEW_HANDLED_STORAGE_KEY, handledReviewCategories.value)
   error.value = ''
   try {
     summary.value = await fetchSpendingSummary(trendRequestOptions({ ai: true }))
@@ -434,10 +462,6 @@ async function setRecurringOverride(category, enabled) {
   } catch {
     error.value = '추천 기준을 다시 계산하지 못했습니다.'
   }
-}
-
-function isRecurringOverride(category) {
-  return recurringOverrides.value.includes(category)
 }
 
 function signedKrw(value) {
