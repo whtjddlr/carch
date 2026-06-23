@@ -4,7 +4,7 @@
       <AppBackButton fallback="/cards" />
       <div>
         <h1>카드 소비 분석</h1>
-        <p>최근 결제 내역을 AI가 요약하고 다음 행동을 제안합니다.</p>
+        <p>최근 소비 흐름을 정리하고 더 나은 카드 선택 기준을 제안합니다.</p>
       </div>
       <div class="header-actions">
         <span v-if="aiAnalysis" class="ai-pill">{{ aiBadgeLabel }}</span>
@@ -16,8 +16,8 @@
 
     <div class="screen-scroll scrollbar-hide page-padding">
       <div v-if="error" class="notice-card">{{ error }}</div>
-      <div v-if="isLoading" class="notice-card">저장된 분석을 불러오는 중입니다.</div>
-      <div v-if="isRefreshing" class="notice-card">새 AI 분석을 만들고 DB에 저장하는 중입니다.</div>
+      <div v-if="isLoading" class="notice-card">최신 소비 인사이트를 준비하고 있습니다.</div>
+      <div v-if="isRefreshing" class="notice-card">새로운 소비 인사이트를 정리하고 있습니다.</div>
 
       <div class="metric-grid">
         <article class="app-card">
@@ -25,7 +25,7 @@
           <strong>{{ krw(totalExpense) }}</strong>
         </article>
         <article class="app-card">
-          <span>예상 절감</span>
+          <span>예상 절감액</span>
           <strong class="success">{{ krw(expectedSaving) }}</strong>
         </article>
       </div>
@@ -45,8 +45,8 @@
 
       <article v-if="aiAnalysis" class="app-card ai-card">
         <div class="section-title">
-          <span>이번 달 소비 진단</span>
-          <small>신뢰도 {{ Math.round(Number(aiAnalysis.confidence || 0) * 100) }}%</small>
+          <span>이번 달 소비 인사이트</span>
+          <small>분석 신뢰도 {{ Math.round(Number(aiAnalysis.confidence || 0) * 100) }}%</small>
         </div>
         <div class="primary-insight compact" :class="`severity-${aiAnalysis.primaryInsight?.severity || 'info'}`">
           <div>
@@ -67,8 +67,8 @@
       </article>
       <article v-else class="app-card empty-analysis-card">
         <span>분석 준비 중</span>
-        <strong>잠시만 기다리면 소비 진단을 바로 보여드릴게요.</strong>
-        <p>저장된 결과가 없을 때만 새 분석을 만들고, 이후에는 저장된 결과를 재사용합니다.</p>
+        <strong>소비 인사이트를 준비하고 있습니다.</strong>
+        <p>최초 분석 이후에는 저장된 결과를 바탕으로 안정적으로 제공합니다.</p>
       </article>
 
       <article v-if="recommendationAlert?.show && topRecommendation" class="app-card card-switch-card">
@@ -91,11 +91,11 @@
         </div>
         <div class="switch-metrics">
           <span>
-            <small>월 예상 이득</small>
+            <small>월 예상 개선</small>
             <b>{{ signedKrw(topRecommendation.economics.monthlyDelta) }}</b>
           </span>
           <span>
-            <small>연간 예상 이득</small>
+            <small>연간 예상 개선</small>
             <b>{{ signedKrw(topRecommendation.economics.annualDelta) }}</b>
           </span>
           <span>
@@ -104,7 +104,7 @@
           </span>
         </div>
         <RouterLink class="switch-link" :to="`/recommendations/r1`">
-          추천 카드 자세히 보기
+          추천 카드 살펴보기
         </RouterLink>
       </article>
 
@@ -134,8 +134,8 @@
 
       <article v-if="nextActionItems.length" class="app-card next-summary-card">
         <div class="section-title">
-          <span>한눈에 체크</span>
-          <small>추천 순서</small>
+          <span>우선 점검 항목</span>
+          <small>권장 순서</small>
         </div>
         <ul class="next-summary-list">
           <li v-for="(action, index) in nextActionItems" :key="`${action}-${index}`">
@@ -171,11 +171,11 @@ const topRecommendation = computed(() => recommendationBundle.value?.results?.[0
 const recommendationAlert = computed(() => recommendationBundle.value?.alert || null)
 const analysisButtonLabel = computed(() => {
   if (isRefreshing.value) return '분석 중'
-  return aiAnalysis.value ? '다시 분석' : '분석하기'
+  return aiAnalysis.value ? '인사이트 갱신' : '인사이트 생성'
 })
 const aiBadgeLabel = computed(() => {
   if (!aiAnalysis.value) return ''
-  return aiAnalysis.value.aiMode === 'gms' ? 'AI 분석' : '기본 분석'
+  return aiAnalysis.value.aiMode === 'gms' ? 'AI 인사이트' : '기본 인사이트'
 })
 const nextActionItems = computed(() => (aiAnalysis.value?.nextActions || []).slice(0, 3))
 const categoryRows = computed(() => {
@@ -193,11 +193,11 @@ const conciseDiagnosis = computed(() => {
   const second = categoryRows.value[1]
   const categoryText = [top?.category, second?.category].filter(Boolean).join('·')
   return {
-    label: primary.label || '핵심 진단',
-    title: primary.title || (top ? `${top.category} 지출 집중` : '소비 패턴 점검'),
+    label: primary.label || '핵심 포인트',
+    title: primary.title || (top ? `${top.category} 지출 비중 확대` : '소비 패턴 점검'),
     body: categoryText
-      ? `${categoryText} 지출이 커요. 카드 혜택을 이 항목에 맞추면 더 유리합니다.`
-      : '최근 소비를 기준으로 카드 혜택을 다시 맞춰보세요.',
+      ? `${categoryText} 지출 비중이 높습니다. 해당 영역의 혜택 조건을 우선 검토하는 편이 유리합니다.`
+      : '최근 소비를 기준으로 카드 혜택 조건을 재점검해 보시기 바랍니다.',
     amount: primary.metricValue || top?.amount || 0,
   }
 })
@@ -205,17 +205,17 @@ const conciseInsightItems = computed(() => {
   const items = []
   const top = categoryRows.value[0]
   const second = categoryRows.value[1]
-  if (top) items.push(`${top.category} 혜택이 강한 카드부터 비교하세요.`)
-  if (second) items.push(`${second.category} 지출도 함께 묶어 보면 좋아요.`)
+  if (top) items.push(`${top.category} 혜택 조건이 우수한 카드부터 비교해 보세요.`)
+  if (second) items.push(`${second.category} 지출까지 함께 반영해 비교하는 것을 권장합니다.`)
   if (topRecommendation.value?.economics?.monthlyDelta > 0) {
-    items.push(`${topRecommendation.value.name} 기준 월 ${signedKrw(topRecommendation.value.economics.monthlyDelta)} 예상 이득`)
+    items.push(`${topRecommendation.value.name} 기준 월 ${signedKrw(topRecommendation.value.economics.monthlyDelta)} 개선 여지가 있습니다.`)
   }
   return items.slice(0, 3)
 })
-const cardSwitchTitle = computed(() => `${topRecommendation.value?.name || '추천 카드'}가 더 유리해요`)
+const cardSwitchTitle = computed(() => `${topRecommendation.value?.name || '추천 카드'}의 혜택 조건이 더 적합합니다`)
 const cardSwitchBody = computed(() => {
   const delta = topRecommendation.value?.economics?.monthlyDelta || 0
-  return `연회비까지 반영해도 월 ${signedKrw(delta)} 정도 이득이 예상돼요.`
+  return `연회비를 반영해도 월 ${signedKrw(delta)} 수준의 개선 효과가 예상됩니다.`
 })
 
 function buildMockSummary() {
@@ -238,7 +238,7 @@ function buildMockSummary() {
       aiMode: 'mock',
       summaryTitle: '예시 분석',
       confidence: 0.78,
-      headline: '쇼핑과 마트 지출 비중이 높아 카드 혜택 점검 여지가 있어요.',
+      headline: '쇼핑과 마트 지출 비중이 높아 카드 혜택 조건 점검이 필요합니다.',
       savingOpportunities: [
         {
           title: '쇼핑 결제 카드 재배치',
@@ -276,7 +276,7 @@ async function loadSummary() {
   } catch {
     summary.value = buildMockSummary()
     recommendationBundle.value = null
-    error.value = '백엔드 연결 전이라 예시 소비 데이터로 분석을 보여드려요.'
+    error.value = '백엔드 연결 전이므로 예시 소비 데이터 기반 인사이트를 제공합니다.'
   } finally {
     isLoading.value = false
   }
@@ -289,7 +289,7 @@ async function refreshAnalysis() {
   try {
     summary.value = await fetchSpendingSummary({ ai: true, refresh: true })
   } catch {
-    error.value = 'AI 분석을 새로 저장하지 못했어요. 잠시 후 다시 시도해 주세요.'
+    error.value = '새 인사이트를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
     isRefreshing.value = false
   }

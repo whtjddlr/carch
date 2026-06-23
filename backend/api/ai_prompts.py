@@ -188,17 +188,19 @@ Rules:
 - actionButtons[].route must be one of /cards, /transactions, /transactions/new, /budget, /recommendations/new, /analytics/cards, /plans, /plans/new.
 - nextActions should be short Korean action labels, no more than 16 Korean characters each when possible.
 - Keep Korean copy polished, direct, and suitable for a formal finance app.
+- Use a refined financial-service tone. Avoid casual endings and prefer precise formal phrasing such as "권장합니다", "필요합니다", "예상됩니다", "유리합니다".
+- Keep UI copy concise: one sentence per field when possible.
 
 Return this exact JSON shape:
 {{
   "schemaVersion": "spending-analysis-v2",
-  "summaryTitle": "이번 달 소비 진단",
-  "headline": "쇼핑과 마트 지출 비중이 높아 카드 혜택 점검 여지가 있어요.",
-  "narrative": "최근 거래는 생활형 소비가 중심입니다. 먼저 상위 카테고리와 보유 카드의 전월 실적 충족률을 함께 확인하는 흐름이 좋습니다.",
+  "summaryTitle": "이번 달 소비 인사이트",
+  "headline": "쇼핑과 마트 지출 비중이 높아 카드 혜택 조건 점검이 필요합니다.",
+  "narrative": "최근 거래는 생활형 소비가 중심입니다. 상위 지출 카테고리와 보유 카드의 전월 실적 충족률을 함께 확인하는 것이 유리합니다.",
   "primaryInsight": {{
-    "label": "핵심 진단",
-    "title": "쇼핑 지출 집중",
-    "body": "반복 결제가 특정 카테고리에 모여 있어 카드 혜택을 재배치할 여지가 있습니다.",
+    "label": "핵심 포인트",
+    "title": "쇼핑 지출 비중 확대",
+    "body": "반복 결제가 특정 카테고리에 집중되어 카드 혜택 재배치가 필요합니다.",
     "severity": "attention",
     "metricLabel": "점검 금액",
     "metricValue": 89000
@@ -212,7 +214,7 @@ Return this exact JSON shape:
       "title": "쇼핑 결제 카드 재배치",
       "amount": 20000,
       "reason": "쇼핑 지출이 가장 커서 혜택 조건을 먼저 확인할 가치가 있습니다.",
-      "action": "쇼핑 특화 카드와 현재 카드 실적을 비교하세요.",
+      "action": "쇼핑 특화 카드와 현재 카드 실적을 비교하시기 바랍니다.",
       "severity": "attention",
       "route": "/recommendations/new"
     }}
