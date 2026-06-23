@@ -19,7 +19,7 @@
             >
               <span class="bottom-nav-icon">
                 <component v-if="!item.primary" :is="item.icon" :size="19" />
-                <img v-else class="magpie-icon" src="/card-images/magpie-face.png" alt="AI" />
+                <img v-else class="magpie-icon" src="/card-images/magpie-face.png" alt="카치" />
               </span>
               <span>{{ item.label }}</span>
             </RouterLink>
@@ -39,7 +39,7 @@ const currentRoute = useRoute()
 const navItems = [
   { path: '/cards', icon: CreditCard, label: '카드', matches: ['/cards', '/recommendations'] },
   { path: '/analytics/cards', icon: BarChart3, label: '소비분석', matches: ['/analytics'] },
-  { path: '/chat', icon: null, label: 'AI', primary: true },
+  { path: '/chat', icon: null, label: '카치', primary: true },
   { path: '/budget', icon: Target, label: '예산', matches: ['/budget'] },
   { path: '/community', icon: Users, label: '커뮤니티', matches: ['/community'] },
 ]
