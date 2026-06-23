@@ -6,7 +6,7 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-const useMockApi = import.meta.env.VITE_USE_MOCK_API !== 'false'
+const useMockApi = import.meta.env.VITE_USE_MOCK_API === 'true'
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 let mockStore = clone(mockPlans)
 

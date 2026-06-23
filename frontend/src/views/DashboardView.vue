@@ -178,6 +178,37 @@
             />
           </div>
         </div>
+
+        <div class="card-manage-toolbar" aria-label="보유 카드 관리">
+          <button
+            type="button"
+            class="wallet-icon-button"
+            aria-label="보유 카드 관리 메뉴"
+            :aria-expanded="isCardManageMenuOpen"
+            @click.stop="toggleCardManageMenu"
+          >
+            <MoreHorizontal :size="20" />
+          </button>
+          <div v-if="isCardManageMenuOpen" class="card-manage-menu" role="menu" aria-label="보유 카드 관리 메뉴">
+            <button type="button" role="menuitem" @click.stop="openCardPickerFromMenu">
+              <PlusCircle :size="15" />
+              <span>카드 추가</span>
+            </button>
+            <button
+              type="button"
+              class="danger"
+              role="menuitem"
+              :disabled="!activeCard || isDeletingCard"
+              @click.stop="deleteActiveCardFromMenu"
+            >
+              <Trash2 :size="15" />
+              <span>{{ isDeletingCard ? '삭제 중' : '카드 삭제' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <p v-if="cardManageMessage" class="card-manage-note">{{ cardManageMessage }}</p>
+        <p v-if="cardManageError" class="card-manage-note error">{{ cardManageError }}</p>
       </div>
 
       <div class="quick-grid">
@@ -211,15 +242,69 @@
       </section>
 
     </div>
+
+    <div v-if="isCardPickerOpen" class="card-picker-backdrop" @click.self="closeCardPicker">
+      <section class="card-picker-sheet" aria-label="카드 추가">
+        <header>
+          <div>
+            <span>카드 추가</span>
+            <h2>목록에서 내 카드를 선택하세요</h2>
+          </div>
+          <button type="button" class="picker-close-button" aria-label="닫기" @click="closeCardPicker">
+            <X :size="18" />
+          </button>
+        </header>
+
+        <form class="card-search-form" @submit.prevent="loadCandidateCards">
+          <Search :size="17" />
+          <input
+            v-model.trim="cardSearch"
+            type="search"
+            placeholder="카드명, 카드사, 혜택 검색"
+            @input="scheduleCandidateSearch"
+          />
+        </form>
+
+        <div class="candidate-card-list scrollbar-hide">
+          <p v-if="isLoadingCandidateCards" class="candidate-empty">카드를 찾는 중입니다.</p>
+          <p v-else-if="candidateCards.length === 0" class="candidate-empty">검색 결과가 없습니다.</p>
+          <template v-else>
+            <article v-for="candidate in candidateCards" :key="candidateCardId(candidate)" class="candidate-card-row">
+              <div class="candidate-card-image">
+                <img
+                  v-if="candidate.imageUrl || candidate.image_url"
+                  :src="candidate.imageUrl || candidate.image_url"
+                  :alt="candidate.name || candidate.cardName || candidate.card_name"
+                />
+              </div>
+              <div class="candidate-card-copy">
+                <span>{{ candidate.issuer || candidate.issuerName || candidate.issuer_name }}</span>
+                <strong>{{ candidate.name || candidate.cardName || candidate.card_name }}</strong>
+                <p>{{ candidate.benefitSummary || candidate.titleDescription || candidate.title_description }}</p>
+              </div>
+              <button
+                type="button"
+                :aria-label="isOwnedCandidate(candidate) ? '이미 보유한 카드' : `${candidate.name || candidate.cardName || candidate.card_name} 추가`"
+                :disabled="isOwnedCandidate(candidate) || isAddingCardId === candidateCardId(candidate)"
+                @click="handleAddCandidate(candidate)"
+              >
+                <Check v-if="isOwnedCandidate(candidate)" :size="16" />
+                <PlusCircle v-else :size="16" />
+              </button>
+            </article>
+          </template>
+        </div>
+      </section>
+    </div>
   </section>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { BarChart3, Bell, CalendarDays, ChevronLeft, ChevronRight, PlusCircle, Search, Settings, Sparkles } from 'lucide-vue-next'
+import { BarChart3, Bell, CalendarDays, Check, ChevronLeft, ChevronRight, MoreHorizontal, PlusCircle, Search, Settings, Sparkles, Trash2, X } from 'lucide-vue-next'
 import { cards as mockCards, krw, transactions as mockTransactions } from '@/data/mockData'
-import { fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
+import { addOwnedCard, deleteOwnedCard, fetchCards, fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
 
 const router = useRouter()
 const cards = ref(mockCards)
@@ -230,6 +315,15 @@ const isCarouselGliding = ref(false)
 const carouselDirection = ref('next')
 const motionTargetIndex = ref(null)
 const imageOrientations = ref({})
+const isCardPickerOpen = ref(false)
+const isCardManageMenuOpen = ref(false)
+const cardSearch = ref('')
+const candidateCards = ref([])
+const isLoadingCandidateCards = ref(false)
+const cardManageMessage = ref('')
+const cardManageError = ref('')
+const isDeletingCard = ref(false)
+const isAddingCardId = ref('')
 const totalSpent = computed(() => cards.value.reduce((sum, card) => sum + card.spent, 0))
 const totalSpendLabel = computed(() => krw(totalSpent.value))
 const activeCard = computed(() => cards.value[activeCardIndex.value] || cards.value[0] || null)
@@ -254,6 +348,7 @@ const quickActions = [
   { label: '목표 지출', path: '/plans/new', icon: CalendarDays, color: '#24364f' },
 ]
 let cardGlideTimer = null
+let cardSearchTimer = null
 
 function syncActiveCard() {
   const stack = cardStackRef.value
@@ -333,14 +428,113 @@ function benefitTags(card) {
     .slice(0, 2)
 }
 
+function candidateCardId(card) {
+  return String(card.id || card.cardAdId || card.card_ad_id)
+}
+
+function isOwnedCandidate(card) {
+  const id = candidateCardId(card)
+  return cards.value.some((ownedCard) => String(ownedCard.id) === id)
+}
+
+async function loadWalletData() {
+  const [apiTransactions, apiCards] = await Promise.all([fetchTransactions(), fetchOwnedCards()])
+  transactions.value = apiTransactions
+  cards.value = apiCards.map((card, index) => normalizeCard(card, index, apiTransactions))
+  activeCardIndex.value = Math.min(activeCardIndex.value, Math.max(cards.value.length - 1, 0))
+  await nextTick()
+}
+
+async function loadCandidateCards() {
+  isLoadingCandidateCards.value = true
+  cardManageError.value = ''
+  try {
+    candidateCards.value = await fetchCards({
+      search: cardSearch.value,
+      active: 1,
+      limit: 24,
+    })
+  } catch (error) {
+    candidateCards.value = []
+    cardManageError.value = '카드 목록을 불러오지 못했습니다.'
+  } finally {
+    isLoadingCandidateCards.value = false
+  }
+}
+
+function scheduleCandidateSearch() {
+  window.clearTimeout(cardSearchTimer)
+  cardSearchTimer = window.setTimeout(loadCandidateCards, 260)
+}
+
+function toggleCardManageMenu() {
+  isCardManageMenuOpen.value = !isCardManageMenuOpen.value
+}
+
+async function openCardPicker() {
+  isCardManageMenuOpen.value = false
+  isCardPickerOpen.value = true
+  cardManageMessage.value = ''
+  cardManageError.value = ''
+  await loadCandidateCards()
+}
+
+async function openCardPickerFromMenu() {
+  await openCardPicker()
+}
+
+function closeCardPicker() {
+  isCardPickerOpen.value = false
+  window.clearTimeout(cardSearchTimer)
+}
+
+async function handleAddCandidate(candidate) {
+  const id = candidateCardId(candidate)
+  if (!id || isOwnedCandidate(candidate) || isAddingCardId.value) return
+
+  isAddingCardId.value = id
+  cardManageError.value = ''
+  try {
+    await addOwnedCard(id)
+    cardManageMessage.value = '보유 카드에 추가했습니다.'
+    await loadWalletData()
+    await loadCandidateCards()
+    const addedIndex = cards.value.findIndex((card) => String(card.id) === id)
+    if (addedIndex >= 0) goToCard(addedIndex)
+  } catch (error) {
+    cardManageError.value = '카드를 추가하지 못했습니다.'
+  } finally {
+    isAddingCardId.value = ''
+  }
+}
+
+async function handleDeleteActiveCard() {
+  if (!activeCard.value || isDeletingCard.value) return
+  isCardManageMenuOpen.value = false
+  const ok = window.confirm(`${activeCard.value.name} 카드를 보유 목록에서 삭제할까요?`)
+  if (!ok) return
+
+  isDeletingCard.value = true
+  cardManageError.value = ''
+  try {
+    await deleteOwnedCard(activeCard.value.id)
+    cardManageMessage.value = '보유 카드에서 삭제했습니다.'
+    activeCardIndex.value = Math.max(activeCardIndex.value - 1, 0)
+    await loadWalletData()
+  } catch (error) {
+    cardManageError.value = '카드를 삭제하지 못했습니다.'
+  } finally {
+    isDeletingCard.value = false
+  }
+}
+
+async function deleteActiveCardFromMenu() {
+  await handleDeleteActiveCard()
+}
+
 onMounted(async () => {
   try {
-    const apiTransactions = await fetchTransactions()
-    const apiCards = await fetchOwnedCards()
-    transactions.value = apiTransactions
-    cards.value = apiCards.map((card, index) => normalizeCard(card, index, apiTransactions))
-    await nextTick()
-    goToCard(0)
+    await loadWalletData()
   } catch (error) {
     console.warn('諛깆뿏??API瑜?遺덈윭?ㅼ? 紐삵빐 mock ?곗씠?곕? ?ъ슜?⑸땲??', error)
   }
@@ -462,17 +656,19 @@ onMounted(async () => {
 .header-actions .icon-button {
   width: 42px;
   height: 42px;
-  border: 1px solid rgba(32, 36, 42, 0.06) !important;
-  background: rgba(255, 255, 255, 0.82) !important;
-  color: #20242a !important;
-  box-shadow: 0 8px 22px rgba(36, 54, 79, 0.055) !important;
+  border: 1px solid rgba(36, 54, 79, 0.11) !important;
+  background: transparent !important;
+  color: #24364f !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(16px) saturate(1.08);
 }
 
 :global(.app-backdrop .phone-shell .dashboard-header .header-actions .icon-button) {
-  border: 1px solid rgba(32, 36, 42, 0.06) !important;
-  background: rgba(255, 255, 255, 0.82) !important;
-  color: #20242a !important;
-  box-shadow: 0 8px 22px rgba(36, 54, 79, 0.055) !important;
+  border: 1px solid rgba(36, 54, 79, 0.11) !important;
+  background: transparent !important;
+  color: #24364f !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(16px) saturate(1.08);
 }
 
 .month-summary {
@@ -672,6 +868,121 @@ onMounted(async () => {
 
 .card-dots button:disabled {
   cursor: default;
+}
+
+.card-manage-toolbar {
+  position: absolute;
+  top: clamp(6px, 2.8vw, 12px);
+  right: clamp(10px, 4.8vw, 20px);
+  z-index: 8;
+  display: flex;
+  justify-content: center;
+  margin: 0;
+}
+
+.wallet-icon-button {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  background: transparent;
+  color: rgba(36, 54, 79, 0.72);
+  box-shadow: none;
+  backdrop-filter: none;
+  transition: transform 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+
+.wallet-icon-button svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.45;
+}
+
+.wallet-icon-button:active {
+  transform: scale(0.96);
+}
+
+.wallet-icon-button:hover {
+  color: #0f5fae;
+}
+
+.wallet-icon-button:disabled {
+  opacity: 0.45;
+}
+
+.card-manage-menu {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  display: grid;
+  min-width: 136px;
+  gap: 2px;
+  border: 1px solid rgba(36, 54, 79, 0.11);
+  border-radius: 16px;
+  padding: 6px;
+  background: rgba(248, 251, 253, 0.82);
+  box-shadow: 0 18px 36px rgba(36, 54, 79, 0.13);
+  backdrop-filter: blur(20px) saturate(1.08);
+}
+
+.card-manage-menu button {
+  display: grid;
+  min-height: 38px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 9px;
+  background: transparent;
+  color: #24364f;
+  font-size: 12px;
+  font-weight: 850;
+  text-align: left;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.card-manage-menu button:hover:not(:disabled) {
+  background: rgba(36, 54, 79, 0.07);
+  color: #0f5fae;
+}
+
+.card-manage-menu button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.card-manage-menu button.danger {
+  color: #b3261e;
+}
+
+.card-manage-menu button.danger:hover:not(:disabled) {
+  background: rgba(179, 38, 30, 0.07);
+  color: #d92d20;
+}
+
+.card-manage-menu button:disabled {
+  color: rgba(36, 54, 79, 0.34);
+}
+
+.card-manage-menu svg {
+  justify-self: center;
+  stroke-width: 2.35;
+}
+
+.card-manage-note {
+  margin: 8px 0 0;
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.card-manage-note.error {
+  color: #d92d20;
 }
 
 .pay-card {
@@ -1130,12 +1441,13 @@ onMounted(async () => {
   flex-shrink: 0;
   border-radius: 999px;
   padding: 4px 8px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(248, 251, 253, 0.58);
   color: var(--accent);
   font-size: 10px;
   font-style: normal;
   font-weight: 900;
-  box-shadow: inset 0 0 0 1px var(--accent-border);
+  box-shadow: inset 0 0 0 1px var(--accent-border), inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(12px) saturate(1.05);
 }
 
 .card-info strong {
@@ -1305,9 +1617,15 @@ onMounted(async () => {
 }
 
 .quick-action.app-card-sm {
-  border-color: rgba(32, 36, 42, 0.06) !important;
-  background: rgba(255, 255, 255, 0.82) !important;
-  box-shadow: 0 10px 30px rgba(36, 54, 79, 0.055) !important;
+  border-color: rgba(36, 54, 79, 0.1) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.quick-action.app-card-sm:hover {
+  background: rgba(248, 251, 253, 0.34) !important;
+  box-shadow: none !important;
 }
 
 .quick-action svg {
@@ -1395,6 +1713,209 @@ onMounted(async () => {
   color: #008c95;
 }
 
+.card-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(20, 28, 38, 0.28);
+  backdrop-filter: blur(10px);
+}
+
+.card-picker-sheet {
+  display: flex;
+  width: 100%;
+  max-height: min(78dvh, 700px);
+  flex-direction: column;
+  border: 1px solid rgba(36, 54, 79, 0.12);
+  border-radius: 28px 28px 0 0;
+  padding: 18px 16px 14px;
+  background: rgba(248, 251, 253, 0.84);
+  box-shadow: 0 -22px 50px rgba(36, 54, 79, 0.18);
+  backdrop-filter: blur(24px) saturate(1.1);
+}
+
+.card-picker-sheet header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.card-picker-sheet header span {
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.card-picker-sheet header h2 {
+  margin: 3px 0 0;
+  color: #20242a;
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.picker-close-button {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(36, 54, 79, 0.11);
+  background: rgba(248, 251, 253, 0.56);
+  color: #24364f;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58), 0 10px 24px rgba(36, 54, 79, 0.06);
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.card-search-form {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  border: 1px solid rgba(36, 54, 79, 0.11);
+  border-radius: 16px;
+  padding: 0 13px;
+  background: rgba(248, 251, 253, 0.58);
+  color: #5f6b77;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.card-search-form input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #20242a;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.card-search-form input::placeholder {
+  color: #8a9aad;
+}
+
+.candidate-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+  padding: 14px 2px 2px;
+}
+
+.candidate-empty {
+  margin: 28px 0 30px;
+  color: #6e6e73;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.candidate-card-row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 96px;
+  border: 1px solid rgba(36, 54, 79, 0.1);
+  border-radius: 20px;
+  padding: 10px;
+  background: rgba(248, 251, 253, 0.58);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58), 0 12px 26px rgba(36, 54, 79, 0.055);
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.candidate-card-image {
+  display: flex;
+  width: 74px;
+  height: 74px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 16px;
+  background: rgba(232, 241, 251, 0.48);
+  box-shadow: inset 0 0 0 1px rgba(36, 54, 79, 0.07);
+}
+
+.candidate-card-image img {
+  max-width: 62px;
+  max-height: 62px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 12px rgba(36, 54, 79, 0.12));
+}
+
+.candidate-card-copy {
+  min-width: 0;
+}
+
+.candidate-card-copy span {
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.candidate-card-copy strong {
+  display: block;
+  margin-top: 3px;
+  color: #20242a;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-card-copy p {
+  display: -webkit-box;
+  margin: 5px 0 0;
+  overflow: hidden;
+  color: #6e6e73;
+  font-size: 11.5px;
+  font-weight: 750;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.candidate-card-row > button {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0;
+  background: transparent;
+  color: #24364f;
+  box-shadow: none;
+  backdrop-filter: none;
+  transition: transform 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+
+.candidate-card-row > button:hover:not(:disabled) {
+  color: #0f5fae;
+}
+
+.candidate-card-row > button:active {
+  transform: scale(0.96);
+}
+
+.candidate-card-row > button:disabled {
+  background: transparent;
+  color: rgba(36, 54, 79, 0.42);
+  box-shadow: none;
+  opacity: 1;
+}
+
 @media (max-width: 380px) {
   .dashboard-header {
     border-radius: 0;
@@ -1451,6 +1972,21 @@ onMounted(async () => {
   .quick-action svg {
     width: 18px;
     height: 18px;
+  }
+
+  .card-manage-toolbar {
+    top: 4px;
+    right: 8px;
+  }
+
+  .wallet-icon-button {
+    width: 38px;
+    height: 38px;
+  }
+
+  .card-manage-menu {
+    top: 36px;
+    min-width: 130px;
   }
 }
 

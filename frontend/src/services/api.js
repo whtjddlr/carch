@@ -13,8 +13,6 @@ const networkByCardId = {
   10609: 'VISA',
 }
 
-export const ownedCardIds = ['10029', '10612', '10609']
-
 export const normalizeCard = (card, index = 0, transactions = []) => {
   const id = String(card.id || card.cardAdId || card.card_ad_id)
   const spent = transactions
@@ -59,8 +57,23 @@ export const normalizeTransaction = (tx) => ({
 })
 
 export async function fetchOwnedCards() {
-  const response = await api.get(`/api/cards/?ids=${ownedCardIds.join(',')}`)
+  const response = await api.get('/api/owned-cards/')
   return response.data.results || []
+}
+
+export async function fetchCards(params = {}) {
+  const response = await api.get('/api/cards/', { params })
+  return response.data.results || []
+}
+
+export async function addOwnedCard(cardId) {
+  const response = await api.post('/api/owned-cards/', { cardId })
+  return response.data
+}
+
+export async function deleteOwnedCard(cardId) {
+  const response = await api.delete(`/api/owned-cards/${cardId}/`)
+  return response.data
 }
 
 export async function fetchCard(id) {

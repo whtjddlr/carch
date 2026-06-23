@@ -19,10 +19,29 @@
   --carch-border: rgba(32, 36, 42, 0.08);
   --carch-muted: #6e6e73;
   --carch-silver: #e6ecf2;
-  --carch-panel: rgba(255, 255, 255, 0.86);
-  --carch-panel-soft: rgba(255, 255, 255, 0.62);
+  --carch-panel: rgba(250, 252, 255, 0.72);
+  --carch-panel-strong: rgba(250, 252, 255, 0.84);
+  --carch-panel-soft: rgba(250, 252, 255, 0.52);
+  --carch-surface-bg: rgba(248, 251, 253, 0.42);
+  --carch-surface-bg-strong: rgba(248, 251, 253, 0.56);
+  --carch-surface-border: rgba(36, 54, 79, 0.1);
+  --carch-surface-shadow: none;
+  --carch-glass: rgba(248, 251, 253, 0.58);
+  --carch-glass-strong: rgba(248, 251, 253, 0.74);
+  --carch-glass-border: rgba(36, 54, 79, 0.11);
+  --carch-glass-highlight: rgba(255, 255, 255, 0.62);
   --carch-line: rgba(32, 36, 42, 0.1);
-  --carch-shadow: 0 10px 30px rgba(36, 54, 79, 0.055);
+  --carch-shadow: 0 14px 34px rgba(36, 54, 79, 0.07);
+  --carch-shadow-soft: 0 10px 24px rgba(36, 54, 79, 0.045);
+  --carch-control-bg: transparent;
+  --carch-control-bg-hover: rgba(248, 251, 253, 0.36);
+  --carch-control-bg-active: rgba(232, 241, 251, 0.46);
+  --carch-control-border: rgba(36, 54, 79, 0.12);
+  --carch-control-shadow: none;
+  --carch-primary-control: rgba(36, 54, 79, 0.9);
+  --carch-primary-control-hover: rgba(36, 54, 79, 0.97);
+  --carch-danger-soft: transparent;
+  --carch-danger-border: rgba(217, 45, 32, 0.2);
 }
 
 * {
@@ -54,6 +73,11 @@ select {
 
 button {
   border: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
 }
 
 button,
@@ -157,10 +181,11 @@ a {
 }
 
 .app-backdrop .phone-shell :is(.blue-gradient, .purple-gradient, .teal-gradient) .icon-button {
-  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--carch-control-border);
+  background: transparent;
   color: var(--carch-ink);
-  box-shadow: inset 0 0 0 1px rgba(32, 36, 42, 0.065), 0 8px 20px rgba(36, 54, 79, 0.045);
-  backdrop-filter: blur(14px);
+  box-shadow: none;
+  backdrop-filter: blur(16px) saturate(1.1);
 }
 
 .app-backdrop .phone-shell :is(
@@ -227,11 +252,11 @@ a {
   .detail-header,
   .editor-header
 ) :is(a, button, .back-link, .back-button) {
-  border: 1px solid rgba(32, 36, 42, 0.065) !important;
-  background: rgba(255, 255, 255, 0.72) !important;
+  border: 1px solid var(--carch-control-border) !important;
+  background: transparent !important;
   color: var(--carch-ink) !important;
-  box-shadow: 0 6px 18px rgba(36, 54, 79, 0.04) !important;
-  backdrop-filter: blur(12px);
+  box-shadow: none !important;
+  backdrop-filter: blur(16px) saturate(1.1);
 }
 
 .header-spacer {
@@ -249,29 +274,29 @@ a {
 }
 
 .app-card {
-  border: 1px solid rgba(32, 36, 42, 0.06);
+  border: 1px solid var(--carch-surface-border);
   border-radius: 16px;
-  background: var(--carch-panel);
-  box-shadow: var(--carch-shadow);
+  background: var(--carch-surface-bg);
+  box-shadow: var(--carch-surface-shadow);
   animation: card-enter 260ms ease both;
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(18px) saturate(1.08);
 }
 
 .app-card-sm {
-  border: 1px solid rgba(32, 36, 42, 0.06);
+  border: 1px solid var(--carch-surface-border);
   border-radius: 16px;
-  background: var(--carch-panel);
-  box-shadow: var(--carch-shadow);
+  background: var(--carch-surface-bg);
+  box-shadow: var(--carch-surface-shadow);
   animation: card-enter 240ms ease both;
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(18px) saturate(1.08);
 }
 
 .app-backdrop .phone-shell :is(.app-card, .app-card-sm) {
-  border-color: rgba(32, 36, 42, 0.06) !important;
-  background: var(--carch-panel) !important;
-  box-shadow: var(--carch-shadow) !important;
+  border-color: var(--carch-surface-border) !important;
+  background: var(--carch-surface-bg) !important;
+  box-shadow: var(--carch-surface-shadow) !important;
 }
 
 .app-backdrop .phone-shell :is(
@@ -302,11 +327,11 @@ a {
   .warning-card,
   .role-card
 ) {
-  border: 1px solid rgba(32, 36, 42, 0.06) !important;
-  background: var(--carch-panel) !important;
-  box-shadow: var(--carch-shadow) !important;
+  border: 1px solid var(--carch-surface-border) !important;
+  background: var(--carch-surface-bg) !important;
+  box-shadow: var(--carch-surface-shadow) !important;
   color: var(--carch-ink) !important;
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(18px) saturate(1.08);
 }
 
 .app-backdrop .phone-shell .budget-list-header .current-summary {
@@ -336,12 +361,24 @@ a {
   .tag-row span,
   .example-chip,
   .quick-chip,
-  .benefit-chip
+  .benefit-chip,
+  .action-chips span,
+  .ai-pill
 ) {
-  border: 1px solid rgba(32, 36, 42, 0.06) !important;
+  border: 1px solid var(--carch-control-border) !important;
   border-radius: 999px;
-  background: var(--carch-panel-soft) !important;
+  background: transparent !important;
   color: var(--carch-ink) !important;
+  box-shadow: none !important;
+}
+
+.app-backdrop .phone-shell :is(
+  .insight-list li,
+  .compact-list li,
+  .record-list li
+) {
+  border: 1px solid var(--carch-surface-border) !important;
+  background: rgba(248, 251, 253, 0.28) !important;
   box-shadow: none !important;
 }
 
@@ -350,11 +387,11 @@ a {
   .mode-card,
   .metric-panel
 ) {
-  border-color: rgba(32, 36, 42, 0.06) !important;
+  border-color: var(--carch-control-border) !important;
   border-radius: 14px !important;
-  background: var(--carch-panel) !important;
-  box-shadow: var(--carch-shadow) !important;
-  backdrop-filter: blur(12px);
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(18px) saturate(1.08);
 }
 
 .app-backdrop .phone-shell :is(
@@ -370,11 +407,11 @@ a {
   .insight-card,
   .action-card
 ) {
-  border-color: rgba(32, 36, 42, 0.06) !important;
+  border-color: var(--carch-surface-border) !important;
   border-radius: 14px !important;
-  background: var(--carch-panel) !important;
-  box-shadow: var(--carch-shadow) !important;
-  backdrop-filter: blur(14px);
+  background: var(--carch-surface-bg) !important;
+  box-shadow: var(--carch-surface-shadow) !important;
+  backdrop-filter: blur(18px) saturate(1.08);
 }
 
 .app-backdrop .phone-shell :is(
@@ -387,9 +424,10 @@ a {
   .complete-button
 ) {
   border-color: transparent !important;
-  background: var(--carch-blue) !important;
+  background: var(--carch-primary-control) !important;
   color: #fff !important;
-  box-shadow: 0 14px 28px rgba(15, 95, 174, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.72) !important;
+  box-shadow: 0 16px 30px rgba(36, 54, 79, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.24) !important;
+  backdrop-filter: blur(16px) saturate(1.08);
 }
 
 .app-backdrop .phone-shell :is(
@@ -399,10 +437,11 @@ a {
   .secondary-button,
   .cancel-button
 ) {
-  border: 1px solid rgba(32, 36, 42, 0.065) !important;
-  background: var(--carch-panel-soft) !important;
+  border: 1px solid var(--carch-control-border) !important;
+  background: var(--carch-control-bg) !important;
   color: var(--carch-ink) !important;
-  box-shadow: none !important;
+  box-shadow: var(--carch-control-shadow) !important;
+  backdrop-filter: blur(16px) saturate(1.08);
 }
 
 .icon-button {
@@ -448,8 +487,9 @@ a {
 }
 
 .primary-button:disabled {
-  background: #dbe4ee;
+  background: rgba(219, 228, 238, 0.68);
   color: #8a9aad;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56);
 }
 
 .outline-button {
@@ -482,6 +522,159 @@ a {
   transition: filter 180ms ease, transform 120ms ease;
 }
 
+.app-backdrop .phone-shell :is(
+  .app-back-button,
+  .menu-button,
+  .primary-icon,
+  .chat-composer button,
+  .comment-list button,
+  footer button
+) {
+  border: 1px solid var(--carch-control-border) !important;
+  background: var(--carch-control-bg) !important;
+  color: var(--carch-ink) !important;
+  box-shadow: var(--carch-control-shadow) !important;
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.app-backdrop .phone-shell :is(
+  .quick-replies button,
+  .source-tabs button,
+  .example-row button,
+  .option-button,
+  .expense-mode-button,
+  .strategy-button,
+  .search-tabs button,
+  .plan-menu button,
+  .capture-box label,
+  .item-section-head button
+) {
+  border: 1px solid var(--carch-control-border) !important;
+  background: var(--carch-control-bg) !important;
+  color: #4a5663 !important;
+  box-shadow: var(--carch-control-shadow) !important;
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.app-backdrop .phone-shell :is(.primary-icon, .chat-composer button) {
+  border-color: transparent !important;
+  background: var(--carch-primary-control) !important;
+  color: #fff !important;
+  box-shadow: 0 14px 26px rgba(36, 54, 79, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.24) !important;
+}
+
+.app-backdrop .phone-shell :is(
+  .primary-button,
+  .floating-action-button,
+  .send-button,
+  .submit-button,
+  .save-button,
+  .confirm-button,
+  .complete-button,
+  .primary-icon,
+  .chat-composer button
+):hover:not(:disabled) {
+  background: var(--carch-primary-control-hover) !important;
+  box-shadow: 0 18px 34px rgba(36, 54, 79, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.26) !important;
+}
+
+.app-backdrop .phone-shell :is(
+  .app-back-button,
+  .menu-button,
+  .muted-button,
+  .outline-button,
+  .ghost-button,
+  .secondary-button,
+  .cancel-button,
+  .quick-replies button,
+  .source-tabs button,
+  .example-row button,
+  .option-button,
+  .expense-mode-button,
+  .strategy-button,
+  .search-tabs button,
+  .plan-menu button,
+  .comment-list button,
+  footer button,
+  .capture-box label,
+  .item-section-head button
+):hover:not(:disabled) {
+  border-color: rgba(36, 54, 79, 0.16) !important;
+  background: var(--carch-control-bg-hover) !important;
+  color: var(--carch-ink) !important;
+  box-shadow: none !important;
+}
+
+.app-backdrop .phone-shell :is(
+  .source-tabs button.active,
+  .option-button.active,
+  .expense-mode-button.active,
+  .strategy-button.active,
+  .search-tabs button.active
+) {
+  border-color: rgba(15, 95, 174, 0.22) !important;
+  background: var(--carch-control-bg-active) !important;
+  color: var(--carch-blue) !important;
+  box-shadow: inset 0 0 0 1px rgba(15, 95, 174, 0.1) !important;
+}
+
+.app-backdrop .phone-shell :is(
+  .danger-button,
+  .ghost-button.danger,
+  footer button.liked,
+  .plan-menu .danger
+) {
+  border-color: var(--carch-danger-border) !important;
+  background: var(--carch-danger-soft) !important;
+  color: #d92d20 !important;
+  box-shadow: none !important;
+}
+
+.app-backdrop .phone-shell :is(
+  .primary-button,
+  .outline-button,
+  .muted-button,
+  .floating-action-button,
+  .quick-replies button,
+  .source-tabs button,
+  .example-row button,
+  .option-button,
+  .expense-mode-button,
+  .strategy-button,
+  .search-tabs button,
+  .plan-menu button,
+  .primary-icon,
+  .chat-composer button,
+  .comment-list button,
+  footer button
+) {
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 120ms ease, opacity 160ms ease;
+}
+
+.app-backdrop .phone-shell :is(
+  .primary-button,
+  .outline-button,
+  .muted-button,
+  .quick-replies button,
+  .source-tabs button,
+  .example-row button,
+  .option-button,
+  .expense-mode-button,
+  .strategy-button,
+  .search-tabs button,
+  .plan-menu button,
+  .primary-icon,
+  .chat-composer button,
+  .comment-list button,
+  footer button
+):disabled {
+  border-color: rgba(36, 54, 79, 0.08) !important;
+  background: transparent !important;
+  color: rgba(74, 86, 99, 0.58) !important;
+  box-shadow: none !important;
+  opacity: 1;
+}
+
 .field-label {
   display: block;
   margin-bottom: 6px;
@@ -496,17 +689,19 @@ a {
   border: 1px solid var(--carch-border);
   border-radius: 14px;
   padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--carch-glass-strong);
   color: var(--carch-ink);
   font-size: 14px;
   outline: none;
 }
 
 .app-backdrop .phone-shell :is(input, textarea, select, .form-field) {
-  border-color: rgba(32, 36, 42, 0.1) !important;
+  border-color: var(--carch-glass-border) !important;
   border-radius: 14px !important;
-  background: rgba(255, 255, 255, 0.72) !important;
+  background: var(--carch-glass-strong) !important;
   color: var(--carch-ink) !important;
+  box-shadow: inset 0 1px 0 var(--carch-glass-highlight) !important;
+  backdrop-filter: blur(14px) saturate(1.06);
 }
 
 .app-backdrop .phone-shell :is(input, textarea, select, .form-field):focus {
@@ -522,7 +717,7 @@ a {
 .metric-tile {
   border-radius: 14px;
   padding: 10px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--carch-glass);
 }
 
 .metric-label {
@@ -560,13 +755,14 @@ a {
   justify-content: center;
   border-radius: 999px;
   padding: 0;
-  background: var(--carch-blue);
+  background: rgba(36, 54, 79, 0.92);
   color: #fff;
   font-size: 13px;
   font-weight: 900;
   text-decoration: none;
-  box-shadow: 0 14px 28px rgba(15, 95, 174, 0.24), 0 0 0 4px rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 34px rgba(36, 54, 79, 0.22), 0 0 0 5px rgba(248, 251, 253, 0.66), inset 0 1px 0 rgba(255, 255, 255, 0.28);
   transition: transform 140ms ease, box-shadow 180ms ease, filter 180ms ease;
+  backdrop-filter: blur(14px) saturate(1.08);
 }
 
 .floating-action-button:hover {
@@ -583,9 +779,9 @@ a {
 
 .bottom-nav {
   flex-shrink: 0;
-  border-top: 1px solid rgba(32, 36, 42, 0.065);
-  background: rgba(243, 246, 248, 0.98);
-  box-shadow: none;
+  border-top: 1px solid var(--carch-glass-border);
+  background: rgba(243, 246, 248, 0.76);
+  box-shadow: 0 -12px 30px rgba(36, 54, 79, 0.045);
   backdrop-filter: blur(18px);
 }
 
@@ -644,8 +840,8 @@ a {
 .bottom-nav-link.router-link-active,
 .bottom-nav-link.active {
   color: var(--carch-ink);
-  background: #fff;
-  box-shadow: 0 6px 18px rgba(36, 54, 79, 0.045), inset 0 0 0 1px rgba(32, 36, 42, 0.045);
+  background: var(--carch-glass);
+  box-shadow: inset 0 0 0 1px var(--carch-glass-border), inset 0 1px 0 var(--carch-glass-highlight), var(--carch-shadow-soft);
 }
 
 .bottom-nav-link.is-ai {
@@ -660,9 +856,9 @@ a {
   height: 48px;
   border: 4px solid var(--carch-page);
   border-radius: 999px;
-  background: var(--carch-ink);
+  background: rgba(36, 54, 79, 0.94);
   color: #fff;
-  box-shadow: 0 14px 26px rgba(36, 54, 79, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.75);
+  box-shadow: 0 14px 26px rgba(36, 54, 79, 0.18), 0 0 0 1px rgba(248, 251, 253, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 
 .app-backdrop .phone-shell :is(.section-head a, .selector-head a, .profile-summary a) {
@@ -699,9 +895,12 @@ a {
   width: min(100vw, 430px);
   max-width: 430px;
   border-radius: 24px 24px 0 0;
-  background: #fff;
+  border: 1px solid var(--carch-glass-border);
+  background: rgba(248, 251, 253, 0.86);
   padding: 24px;
   animation: sheet-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  box-shadow: 0 -24px 56px rgba(36, 54, 79, 0.18);
+  backdrop-filter: blur(22px) saturate(1.1);
 }
 
 .desktop-page {

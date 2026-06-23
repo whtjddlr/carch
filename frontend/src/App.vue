@@ -32,12 +32,12 @@
 <script setup>
 import { nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Bot, CreditCard, Receipt, Target, Users } from 'lucide-vue-next'
+import { BarChart3, Bot, CreditCard, Target, Users } from 'lucide-vue-next'
 
 const currentRoute = useRoute()
 const navItems = [
-  { path: '/cards', icon: CreditCard, label: '카드', matches: ['/cards', '/recommendations', '/analytics'] },
-  { path: '/transactions', icon: Receipt, label: '거래내역', matches: ['/transactions'] },
+  { path: '/cards', icon: CreditCard, label: '카드', matches: ['/cards', '/recommendations'] },
+  { path: '/analytics/cards', icon: BarChart3, label: '소비분석', matches: ['/analytics'] },
   { path: '/chat', icon: Bot, label: 'AI', primary: true },
   { path: '/budget', icon: Target, label: '예산', matches: ['/budget'] },
   { path: '/community', icon: Users, label: '커뮤니티', matches: ['/community'] },
