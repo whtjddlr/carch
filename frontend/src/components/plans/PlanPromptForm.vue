@@ -7,8 +7,8 @@
         :value="rawPrompt"
         class="form-field prompt-textarea"
         rows="5"
-        placeholder="예: 10월 결혼 예정이고 혼수가전 예산은 700만 원이에요.
-7월부터 9월까지 냉장고, TV, 세탁기와 건조기를 구매하고 싶어요."
+        placeholder="예: 다음 달 큰 지출 예산 80만 원을 관리하고 싶어요.
+정장 셔츠, 구두, 증명사진, 토익스피킹 응시료를 순서대로 결제할 예정입니다."
         @input="$emit('update:rawPrompt', $event.target.value)"
       />
       <p v-if="errors.prompt" class="error-text">{{ errors.prompt }}</p>

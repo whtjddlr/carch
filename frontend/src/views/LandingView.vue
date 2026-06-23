@@ -25,16 +25,16 @@
         <div class="preview-screen">
           <div class="preview-header blue-gradient">
             <small>안녕하세요</small>
-            <strong>김지훈님</strong>
+            <strong>남주현님</strong>
             <div class="preview-stat">
               <span>이번 달 총 지출</span>
-              <b>784,000원</b>
+              <b>506,050원</b>
             </div>
           </div>
           <div class="preview-card blue-gradient">
             <span>VISA</span>
             <b>4521 **** **** 7892</b>
-            <small>KIM JIHUN · 12/27</small>
+            <small>NAM JUHYUN · 12/27</small>
           </div>
           <div class="preview-list">
             <div v-for="tx in transactions.slice(0, 4)" :key="tx.id">

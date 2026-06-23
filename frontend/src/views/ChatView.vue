@@ -77,7 +77,7 @@ import { ArrowRight, Bot, SendHorizontal, Sparkles } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { sendChatMessage } from '@/services/api'
 
-const starterReplies = ['이번 달 소비 분석해줘', '나한테 맞는 카드 추천해줘', '혼수가전 구매 계획 도와줘']
+const starterReplies = ['이번 달 소비 분석해줘', '나한테 맞는 카드 추천해줘', '큰 지출 계획 도와줘']
 const messages = ref([
   {
     id: 'assistant-welcome',

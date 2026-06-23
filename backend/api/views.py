@@ -13,18 +13,22 @@ from django.views.decorators.csrf import csrf_exempt
 from .ai_service import chat_with_ai, analyze_spending_with_ai, get_ai_status, parse_purchase_plan_with_ai, parse_transaction_with_ai
 from .card_repository import fetch_card, fetch_cards
 from .models import AIAnalysisRecord, CommunityComment, CommunityPost, OwnedCard, PurchasePlan, Transaction
-from .seed_data import TRANSACTIONS
+from .seed_data import PURCHASE_PLANS, TRANSACTIONS
 
 
 MERCHANT_HINTS = [
+    ('컴포즈커피', '카페', '☕'),
     ('스타벅스', '카페', '☕'),
     ('투썸', '카페', '☕'),
     ('메가커피', '카페', '☕'),
+    ('샐러디', '식비', '🥗'),
     ('쿠팡', '쇼핑', '📦'),
+    ('무신사', '쇼핑', '🛍️'),
     ('마켓컬리', '쇼핑', '📦'),
     ('GS25', '편의점', '🏪'),
     ('CU', '편의점', '🏪'),
     ('세븐일레븐', '편의점', '🏪'),
+    ('스포애니', '헬스', '🏋️'),
     ('올리브영', '뷰티', '💄'),
     ('이마트', '마트', '🛒'),
     ('홈플러스', '마트', '🛒'),
@@ -32,9 +36,14 @@ MERCHANT_HINTS = [
     ('배달의민족', '식비', '🍕'),
     ('요기요', '식비', '🍕'),
     ('카카오택시', '교통', '🚕'),
+    ('카카오T', '교통', '🚕'),
     ('택시', '교통', '🚕'),
     ('CGV', '문화', '🎬'),
     ('넷플릭스', '구독', '📺'),
+    ('네이버플러스', '구독', '📱'),
+    ('토익스피킹', '교육', '📚'),
+    ('링글', '교육', '🗣️'),
+    ('교보문고', '교육', '📖'),
 ]
 
 CARD_HINTS = [
@@ -164,6 +173,26 @@ def ensure_transactions_seeded():
     Transaction.objects.bulk_create(rows, ignore_conflicts=True)
 
 
+def ensure_purchase_plans_seeded():
+    if PurchasePlan.objects.exists():
+        return
+
+    for item in PURCHASE_PLANS:
+        PurchasePlan.objects.create(
+            title=item['title'][:120],
+            plan_type=item.get('type', '큰 지출')[:40],
+            expense_mode=item.get('expenseMode', 'planned-extra')[:40],
+            total_budget=int(item.get('totalBudget') or 0),
+            start_month=item.get('startMonth', '2026-07')[:7],
+            end_month=item.get('endMonth', '2026-08')[:7],
+            status=item.get('status', '선택 완료')[:30],
+            selected_scenario_id=item.get('selectedScenarioId') or '',
+            progress=int(item.get('progress') or 0),
+            items=item.get('items') or [],
+            scenarios=item.get('scenarios') or [],
+        )
+
+
 def transaction_queryset():
     ensure_transactions_seeded()
     return Transaction.objects.all()
@@ -205,7 +234,7 @@ def ensure_community_seeded():
             'likes': 47,
             'liked': False,
             'comments': [
-                {'author': '김지훈', 'avatar': '김', 'body': 'SHOPPER 전월 실적 채우는 게 생각보다 괜찮나요?'},
+                {'author': '남주현', 'avatar': '남', 'body': 'SHOPPER 전월 실적 채우는 게 생각보다 괜찮나요?'},
                 {'author': '박서연', 'avatar': '박', 'body': '쇼핑몰 자주 쓰면 체감 혜택이 꽤 있어요.'},
             ],
         },
@@ -940,9 +969,9 @@ def fallback_chat_response(message, context):
         route = '/transactions/new'
         quick_replies = ['결제내역 추가할래', '최근 거래 보여줘', '카테고리 분석해줘']
     elif '계획' in text or '구매' in text:
-        reply = '큰 구매는 예산과 구매 월을 나눈 뒤 카드 혜택 조건에 맞춰 배치하면 좋아요. 구매 계획 화면에서 AI가 품목과 월별 배분 초안을 만들어줄 수 있습니다.'
+        reply = '예정된 큰 지출은 목적과 시점을 먼저 나눈 뒤 카드 혜택 조건에 맞춰 배치하면 좋습니다. 취업 준비, 여행, 전자기기처럼 항목이 섞인 계획도 월별 초안으로 정리할 수 있습니다.'
         route = '/plans/new'
-        quick_replies = ['구매 계획 만들기', '혼수가전 계획 예시', '카드 추천해줘']
+        quick_replies = ['큰 지출 계획 만들기', '취업 준비 예시', '카드 추천해줘']
     else:
         reply = f"현재 데이터에서는 {top_category['category']} 지출이 가장 크게 보여요. 먼저 상위 카테고리를 확인하고, 자주 쓰는 카드가 그 지출에 맞는 혜택을 주는지 비교해보면 좋겠습니다."
         route = '/analytics/cards'
@@ -1030,12 +1059,12 @@ def community_post_list(request):
         if not body:
             return json_response({'detail': '본문을 입력해 주세요.'}, status=400)
 
-        author = (payload.get('author') or '김지훈').strip()
+        author = (payload.get('author') or '남주현').strip()
         post = CommunityPost.objects.create(
             title=title[:120],
             body=body,
             author=author[:30],
-            avatar=(payload.get('avatar') or author[:1] or '김')[:2],
+            avatar=(payload.get('avatar') or author[:1] or '남')[:2],
             tags=normalize_tags(payload.get('tags')),
         )
         return json_response(serialize_community_post(post, include_comments=True), status=201)
@@ -1116,12 +1145,12 @@ def community_comment_list(request, post_id):
         body = (payload.get('body') or payload.get('text') or payload.get('content') or '').strip()
         if not body:
             return json_response({'detail': '댓글을 입력해 주세요.'}, status=400)
-        author = (payload.get('author') or '김지훈').strip()
+        author = (payload.get('author') or '남주현').strip()
         comment = CommunityComment.objects.create(
             post=post,
             body=body,
             author=author[:30],
-            avatar=(payload.get('avatar') or author[:1] or '김')[:2],
+            avatar=(payload.get('avatar') or author[:1] or '남')[:2],
         )
         return json_response(serialize_comment(comment), status=201)
 
@@ -1150,21 +1179,21 @@ def ai_contract(request):
         {
             'when': '카드/결제내역 API 연결 후 실제 AI 호출을 붙입니다.',
             'input': {
-                'rawPrompt': '10월 결혼 예정이고 혼수가전 예산은 700만 원이에요.',
+                'rawPrompt': '다음 달 큰 지출 예산 80만 원을 관리하고 싶어요.',
                 'transactions': '최근 결제내역 배열',
                 'cards': '보유/추천 카드 배열',
             },
             'parseOutput': {
-                'title': '혼수가전 구매 계획',
-                'type': '혼수',
-                'totalBudget': 7000000,
+                'title': '취업 준비 지출 계획',
+                'type': '취업 준비',
+                'totalBudget': 800000,
                 'startMonth': '2026-07',
-                'endMonth': '2026-09',
+                'endMonth': '2026-08',
                 'items': [
                     {
-                        'name': '냉장고',
-                        'category': '가전',
-                        'amount': 2500000,
+                        'name': '정장 셔츠·슬랙스',
+                        'category': '쇼핑',
+                        'amount': 210000,
                         'targetMonth': '2026-07',
                         'required': True,
                         'flexible': False,
@@ -1178,6 +1207,7 @@ def ai_contract(request):
 @csrf_exempt
 def purchase_plan_list(request):
     if request.method == 'GET':
+        ensure_purchase_plans_seeded()
         plans = [serialize_purchase_plan(plan) for plan in PurchasePlan.objects.all()]
         return json_response(plans)
 
@@ -1285,7 +1315,7 @@ def parse_purchase_plan(request):
         ai_plan['analysisRecordId'] = f'a{record.id}'
         return json_response(ai_plan)
 
-    plan_type = '기타'
+    plan_type = '큰 지출'
     if '이사' in text:
         plan_type = '이사'
     elif '여행' in text:
@@ -1293,21 +1323,74 @@ def parse_purchase_plan(request):
     elif '출산' in text or '육아' in text:
         plan_type = '육아'
     elif '혼수' in text or '결혼' in text:
-        plan_type = '혼수'
+        plan_type = '결혼 준비'
+    elif any(keyword in text for keyword in ['면접', '취업', '정장', '토익']):
+        plan_type = '취업 준비'
+    elif any(keyword in text for keyword in ['기념일', '데이트', '선물']):
+        plan_type = '기념일'
+    elif any(keyword in text for keyword in ['헬스', '운동', 'PT', '보충제']):
+        plan_type = '운동'
+    elif any(keyword in text for keyword in ['노트북', '태블릿', '맥북']):
+        plan_type = '전자기기'
 
     start_month = payload.get('startMonth') or '2026-07'
-    end_month = payload.get('endMonth') or '2026-09'
+    end_month = payload.get('endMonth') or '2026-08'
+    item_templates = {
+        '여행': [
+            ('항공권', '항공', 1600000),
+            ('숙박', '숙박', 1800000),
+            ('여행자보험', '보험', 200000),
+            ('현지 교통', '교통', 400000),
+        ],
+        '이사': [
+            ('이사 비용', '이사', 350000),
+            ('침대', '가구', 600000),
+            ('수납장', '가구', 240000),
+            ('생활용품', '생활', 180000),
+        ],
+        '취업 준비': [
+            ('정장 셔츠·슬랙스', '쇼핑', 210000),
+            ('구두', '쇼핑', 160000),
+            ('증명사진', '취업', 50000),
+            ('어학 응시료', '교육', 84000),
+        ],
+        '기념일': [
+            ('식사 예약', '식비', 180000),
+            ('영화·전시', '문화', 50000),
+            ('선물', '쇼핑', 180000),
+            ('이동비', '교통', 40000),
+        ],
+        '운동': [
+            ('헬스장 3개월권', '헬스', 180000),
+            ('보충제', '쇼핑', 70000),
+            ('운동복', '쇼핑', 80000),
+            ('인바디·관리비', '헬스', 20000),
+        ],
+        '전자기기': [
+            ('노트북', '전자기기', 1200000),
+            ('보호 파우치', '쇼핑', 40000),
+            ('마우스·허브', '전자기기', 90000),
+            ('AS 보증', '서비스', 70000),
+        ],
+    }
+    templates = item_templates.get(plan_type) or item_templates['취업 준비']
     plan = {
-        'title': '새 소비 계획' if plan_type == '기타' else f'{plan_type} 구매 계획',
+        'title': '새 목표 지출 계획' if plan_type == '큰 지출' else f'{plan_type} 지출 계획',
         'type': plan_type,
-        'totalBudget': int(payload.get('budget') or 7000000),
+        'totalBudget': int(payload.get('budget') or 800000),
         'startMonth': start_month,
         'endMonth': end_month,
         'items': [
-            {'id': 'i1', 'name': '냉장고', 'category': '가전', 'amount': 2500000, 'targetMonth': start_month, 'required': True, 'flexible': False},
-            {'id': 'i2', 'name': '세탁기', 'category': '가전', 'amount': 1200000, 'targetMonth': start_month, 'required': True, 'flexible': True},
-            {'id': 'i3', 'name': '건조기', 'category': '가전', 'amount': 1000000, 'targetMonth': end_month, 'required': True, 'flexible': True},
-            {'id': 'i4', 'name': 'TV', 'category': '가전', 'amount': 1800000, 'targetMonth': end_month, 'required': False, 'flexible': True},
+            {
+                'id': f'i{index + 1}',
+                'name': name,
+                'category': category,
+                'amount': amount,
+                'targetMonth': start_month if index < 2 else end_month,
+                'required': index < 3,
+                'flexible': index != 0,
+            }
+            for index, (name, category, amount) in enumerate(templates)
         ],
         'aiMode': 'mock',
     }
@@ -1401,10 +1484,10 @@ def fallback_chat_response(message, context):
         quick_replies = ['결제내역 추가할래', '최근 거래 보여줘', '카테고리 분석해줘']
         chips = [{'label': '추천 입력', 'value': '문장 보정', 'tone': 'blue'}]
     elif '계획' in text or '구매' in text:
-        reply = '큰 구매는 월 예산 안에서 관리할지, 별도 예정 지출로 볼지 먼저 선택하는 게 좋아요. 구매 계획 화면에서 품목과 월별 배치를 만들 수 있습니다.'
+        reply = '큰 지출은 월 예산 안에서 관리할지, 별도 예정 지출로 볼지 먼저 선택하는 게 좋아요. 취업 준비, 여행, 전자기기처럼 목적이 다른 지출도 품목과 월별 배치로 정리할 수 있습니다.'
         route = '/plans/new'
         message_type = 'purchase-plan'
-        quick_replies = ['구매 계획 만들기', '이사 계획 예시', '카드 추천해줘']
+        quick_replies = ['큰 지출 계획 만들기', '취업 준비 예시', '카드 추천해줘']
         chips = [{'label': '관리 방식', 'value': '선택 가능', 'tone': 'gold'}]
     else:
         reply = f'현재 데이터에서는 {top_category_name} 지출이 가장 크게 보여요. 먼저 상위 지출을 확인하고, 자주 쓰는 카드가 그 소비에 맞는 혜택을 주는지 비교하면 좋습니다.'
@@ -1434,16 +1517,16 @@ def ai_contract(request):
             'stored': 'AIAnalysisRecord.result_payload',
             'features': {
                 'transactionParse': {
-                    'input': {'rawText': '어제 스타벅스 강남역점 5,500원 결제'},
+                    'input': {'rawText': '오늘 컴포즈커피 역삼센터필드점 3,800원 결제'},
                     'output': {
                         'schemaVersion': 'transaction-parse-v2',
                         'cardId': '10029',
-                        'merchantName': '스타벅스 강남역점',
+                        'merchantName': '컴포즈커피 역삼센터필드점',
                         'category': '카페',
-                        'amount': -5500,
+                        'amount': -3800,
                         'approvedAt': '2026-06-23T09:30:00+09:00',
-                        'displayTitle': '스타벅스 결제',
-                        'displaySubtitle': '카페 · 5,500원 · LOCA 100',
+                        'displayTitle': '컴포즈커피 결제',
+                        'displaySubtitle': '카페 · 3,800원 · LOCA 100',
                         'corrections': [],
                         'confidence': 0.85,
                         'reviewFields': ['amount', 'approvedAt'],

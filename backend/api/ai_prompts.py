@@ -59,16 +59,16 @@ Return this exact JSON shape:
 {{
   "schemaVersion": "transaction-parse-v2",
   "cardId": "10029",
-  "merchantName": "스타벅스 강남역점",
+  "merchantName": "컴포즈커피 역삼센터필드점",
   "category": "카페",
-  "amount": -5500,
+  "amount": -3800,
   "approvedAt": "{today}T09:30:00+09:00",
   "icon": "☕",
   "address": "직접 입력",
-  "displayTitle": "스타벅스 결제",
-  "displaySubtitle": "카페 · 5,500원 · LOCA 100",
+  "displayTitle": "컴포즈커피 결제",
+  "displaySubtitle": "카페 · 3,800원 · LOCA 100",
   "corrections": [
-    {{"field": "amount", "label": "금액", "before": "5500원", "after": "-5500", "reason": "결제 문맥이라 지출로 처리"}}
+    {{"field": "amount", "label": "금액", "before": "3800원", "after": "-3800", "reason": "결제 문맥이라 지출로 처리"}}
   ],
   "confidence": 0.85,
   "reviewFields": ["merchantName", "amount", "approvedAt", "cardId"]
@@ -98,7 +98,7 @@ Defaults supplied by UI:
 - expenseMode: {expense_mode}
 
 Rules:
-- Infer a Korean title and type from the user note. Examples: 혼수, 이사, 여행, 출산, 생활, 기타.
+- Infer a Korean title and type from the user note. Examples: 큰 지출, 취업 준비, 여행, 기념일, 운동, 전자기기, 이사, 결혼 준비, 생활, 기타.
 - totalBudget must be an integer in KRW. Use the UI default if the note does not contain a clearer budget.
 - startMonth/endMonth must be YYYY-MM.
 - items must be realistic purchase items mentioned or clearly implied by the note.
@@ -112,28 +112,28 @@ Rules:
 Return this exact JSON shape:
 {{
   "schemaVersion": "purchase-plan-parse-v2",
-  "title": "이사 가전 구매 계획",
-  "type": "이사",
-  "summary": "필수 가전은 7월에 먼저 사고, 선택 품목은 예산 여유에 따라 뒤로 미루는 계획입니다.",
+  "title": "취업 준비 지출 계획",
+  "type": "취업 준비",
+  "summary": "필수 면접 준비물은 7월에 먼저 결제하고, 응시료와 교통비는 8월 일정에 맞춰 분리하는 계획입니다.",
   "expenseModeRecommendation": "planned-extra",
-  "totalBudget": 2500000,
+  "totalBudget": 800000,
   "startMonth": "2026-07",
   "endMonth": "2026-08",
   "items": [
     {{
       "id": "i1",
-      "name": "냉장고",
-      "category": "가전",
-      "amount": 1200000,
+      "name": "정장 셔츠·슬랙스",
+      "category": "쇼핑",
+      "amount": 210000,
       "targetMonth": "2026-07",
       "required": true,
       "flexible": false,
       "priority": "high",
-      "reason": "생활 필수 품목이라 우선 배치"
+      "reason": "면접 일정 전 준비가 필요한 필수 품목"
     }}
   ],
   "reviewCards": [
-    {{"label": "총 예산", "value": "2,500,000원", "caption": "사용자 입력 기준", "tone": "navy"}},
+    {{"label": "총 예산", "value": "800,000원", "caption": "사용자 입력 기준", "tone": "navy"}},
     {{"label": "관리 방식", "value": "별도 지출", "caption": "월 예산 밖 계획", "tone": "teal"}}
   ],
   "riskNotes": ["실제 카드 혜택과 전월 실적 조건은 카드사 안내를 확인해야 합니다."],

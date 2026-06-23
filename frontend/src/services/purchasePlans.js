@@ -30,8 +30,51 @@ const inferType = (text = '') => {
   if (text.includes('이사')) return '이사'
   if (text.includes('여행')) return '여행'
   if (text.includes('출산') || text.includes('육아')) return '육아'
-  if (text.includes('혼수') || text.includes('결혼')) return '혼수'
-  return '기타'
+  if (text.includes('혼수') || text.includes('결혼')) return '결혼 준비'
+  if (text.includes('면접') || text.includes('취업') || text.includes('정장') || text.includes('토익')) return '취업 준비'
+  if (text.includes('기념일') || text.includes('데이트') || text.includes('선물')) return '기념일'
+  if (text.includes('헬스') || text.includes('운동') || text.includes('PT') || text.includes('보충제')) return '운동'
+  if (text.includes('노트북') || text.includes('태블릿') || text.includes('맥북')) return '전자기기'
+  return '큰 지출'
+}
+
+const itemTemplates = {
+  여행: [
+    ['항공권', '항공', 1600000],
+    ['숙박', '숙박', 1800000],
+    ['여행자보험', '보험', 200000],
+    ['현지 교통', '교통', 400000],
+  ],
+  이사: [
+    ['이사 비용', '이사', 350000],
+    ['침대', '가구', 600000],
+    ['수납장', '가구', 240000],
+    ['생활용품', '생활', 180000],
+  ],
+  '취업 준비': [
+    ['정장 셔츠·슬랙스', '쇼핑', 210000],
+    ['구두', '쇼핑', 160000],
+    ['증명사진', '취업', 50000],
+    ['어학 응시료', '교육', 84000],
+  ],
+  기념일: [
+    ['식사 예약', '식비', 180000],
+    ['영화·전시', '문화', 50000],
+    ['선물', '쇼핑', 180000],
+    ['이동비', '교통', 40000],
+  ],
+  운동: [
+    ['헬스장 3개월권', '헬스', 180000],
+    ['보충제', '쇼핑', 70000],
+    ['운동복', '쇼핑', 80000],
+    ['인바디·관리비', '헬스', 20000],
+  ],
+  전자기기: [
+    ['노트북', '전자기기', 1200000],
+    ['보호 파우치', '쇼핑', 40000],
+    ['마우스·허브', '전자기기', 90000],
+    ['AS 보증', '서비스', 70000],
+  ],
 }
 
 const buildScenarios = (plan) => {
@@ -85,23 +128,27 @@ export async function parsePurchasePlan(payload) {
   await delay(900)
   const text = payload.rawPrompt || payload.prompt || ''
   const type = inferType(text)
-  const title = type === '기타' ? '새 소비 계획' : `${type} 구매 계획`
+  const title = type === '큰 지출' ? '새 목표 지출 계획' : `${type} 지출 계획`
   const startMonth = payload.startMonth || '2026-07'
-  const endMonth = payload.endMonth || '2026-09'
+  const endMonth = payload.endMonth || '2026-08'
+  const templates = itemTemplates[type] || itemTemplates['취업 준비']
 
   return {
     title,
     type,
     expenseMode: payload.expenseMode || 'planned-extra',
-    totalBudget: Number(payload.budget || 7000000),
+    totalBudget: Number(payload.budget || 800000),
     startMonth,
     endMonth,
-    items: [
-      { id: `i${Date.now()}1`, name: type === '여행' ? '항공권' : type === '이사' ? '소파' : '냉장고', category: type === '여행' ? '항공' : type === '이사' ? '가구' : '가전', amount: type === '여행' ? 1600000 : 2500000, targetMonth: startMonth, required: true, flexible: false },
-      { id: `i${Date.now()}2`, name: type === '여행' ? '숙박' : type === '이사' ? '침대' : '세탁기', category: type === '여행' ? '숙박' : type === '이사' ? '가구' : '가전', amount: type === '여행' ? 1800000 : 1200000, targetMonth: startMonth, required: true, flexible: true },
-      { id: `i${Date.now()}3`, name: type === '여행' ? '여행자보험' : type === '이사' ? '식탁' : '건조기', category: type === '여행' ? '보험' : type === '이사' ? '가구' : '가전', amount: type === '여행' ? 200000 : 1000000, targetMonth: endMonth, required: true, flexible: true },
-      { id: `i${Date.now()}4`, name: type === '여행' ? '현지 교통' : type === '이사' ? '수납장' : 'TV', category: type === '여행' ? '교통' : type === '이사' ? '가구' : '가전', amount: type === '여행' ? 400000 : 1800000, targetMonth: endMonth, required: false, flexible: true },
-    ],
+    items: templates.map(([name, category, amount], index) => ({
+      id: `i${Date.now()}${index + 1}`,
+      name,
+      category,
+      amount,
+      targetMonth: index < 2 ? startMonth : endMonth,
+      required: index < 3,
+      flexible: index !== 0,
+    })),
   }
 }
 

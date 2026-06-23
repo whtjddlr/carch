@@ -79,8 +79,8 @@ class PurchasePlan(models.Model):
 class CommunityPost(models.Model):
     title = models.CharField(max_length=120)
     body = models.TextField()
-    author = models.CharField(max_length=30, default='김지훈')
-    avatar = models.CharField(max_length=2, default='김')
+    author = models.CharField(max_length=30, default='남주현')
+    avatar = models.CharField(max_length=2, default='남')
     tags = models.JSONField(default=list, blank=True)
     likes = models.PositiveIntegerField(default=0)
     liked = models.BooleanField(default=False)
@@ -97,8 +97,8 @@ class CommunityPost(models.Model):
 class CommunityComment(models.Model):
     post = models.ForeignKey(CommunityPost, related_name='comment_set', on_delete=models.CASCADE)
     body = models.TextField()
-    author = models.CharField(max_length=30, default='김지훈')
-    avatar = models.CharField(max_length=2, default='김')
+    author = models.CharField(max_length=30, default='남주현')
+    avatar = models.CharField(max_length=2, default='남')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

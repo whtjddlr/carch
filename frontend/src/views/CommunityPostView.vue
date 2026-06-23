@@ -109,7 +109,7 @@ async function loadPost() {
       post.value = {
         ...fallbackPost,
         commentItems: [
-          { id: `${fallbackPost.id}-comment-1`, author: '김지훈', avatar: '김', date: '방금 전', body: '예시 데이터에서도 댓글 흐름을 확인할 수 있어요.' },
+          { id: `${fallbackPost.id}-comment-1`, author: '남주현', avatar: '남', date: '방금 전', body: '예시 데이터에서도 댓글 흐름을 확인할 수 있어요.' },
         ],
       }
       isFallbackData.value = true
@@ -144,8 +144,8 @@ async function handleCommentSubmit() {
     if (!isFallbackData.value) return
     created = {
       id: `local-${Date.now()}`,
-      author: '김지훈',
-      avatar: '김',
+      author: '남주현',
+      avatar: '남',
       date: '방금 전',
       body,
     }

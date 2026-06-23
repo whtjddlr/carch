@@ -44,7 +44,7 @@ export const normalizeCard = (card, index = 0, transactions = []) => {
     limit: card.limit || 5000000,
     num: card.num || `${id.slice(-4)} **** **** ${String(7000 + index * 137).slice(-4)}`,
     exp: card.exp || '12/27',
-    holder: card.holder || 'KIM JIHUN',
+    holder: card.holder || 'NAM JUHYUN',
     lastSpent: card.lastSpent || spent,
   }
 }
