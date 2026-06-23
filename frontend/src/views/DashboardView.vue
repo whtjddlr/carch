@@ -844,13 +844,13 @@ onMounted(async () => {
 
 .card-manage-toolbar {
   position: absolute;
-  top: clamp(8px, 2.8vw, 14px);
-  right: clamp(10px, 4.8vw, 20px);
+  top: clamp(148px, 39vw, 162px);
+  right: clamp(8px, 3.5vw, 16px);
   z-index: 6;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 8px;
+  gap: 0;
   margin: 0;
 }
 
@@ -1905,9 +1905,9 @@ onMounted(async () => {
   }
 
   .card-manage-toolbar {
-    top: 5px;
+    top: 148px;
     right: 8px;
-    gap: 7px;
+    gap: 0;
   }
 
   .wallet-icon-button {
