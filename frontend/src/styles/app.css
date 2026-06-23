@@ -29,6 +29,15 @@
   --carch-line: rgba(32, 36, 42, 0.1);
   --carch-shadow: 0 14px 34px rgba(36, 54, 79, 0.07);
   --carch-shadow-soft: 0 10px 24px rgba(36, 54, 79, 0.045);
+  --carch-control-bg: transparent;
+  --carch-control-bg-hover: rgba(248, 251, 253, 0.36);
+  --carch-control-bg-active: rgba(232, 241, 251, 0.46);
+  --carch-control-border: rgba(36, 54, 79, 0.12);
+  --carch-control-shadow: none;
+  --carch-primary-control: rgba(36, 54, 79, 0.9);
+  --carch-primary-control-hover: rgba(36, 54, 79, 0.97);
+  --carch-danger-soft: transparent;
+  --carch-danger-border: rgba(217, 45, 32, 0.2);
 }
 
 * {
@@ -398,9 +407,10 @@ a {
   .complete-button
 ) {
   border-color: transparent !important;
-  background: var(--carch-navy) !important;
+  background: var(--carch-primary-control) !important;
   color: #fff !important;
   box-shadow: 0 16px 30px rgba(36, 54, 79, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.24) !important;
+  backdrop-filter: blur(16px) saturate(1.08);
 }
 
 .app-backdrop .phone-shell :is(
@@ -410,10 +420,10 @@ a {
   .secondary-button,
   .cancel-button
 ) {
-  border: 1px solid var(--carch-glass-border) !important;
-  background: var(--carch-glass) !important;
+  border: 1px solid var(--carch-control-border) !important;
+  background: var(--carch-control-bg) !important;
   color: var(--carch-ink) !important;
-  box-shadow: inset 0 1px 0 var(--carch-glass-highlight), var(--carch-shadow-soft) !important;
+  box-shadow: var(--carch-control-shadow) !important;
   backdrop-filter: blur(16px) saturate(1.08);
 }
 
@@ -493,6 +503,159 @@ a {
   font-size: 14px;
   font-weight: 900;
   transition: filter 180ms ease, transform 120ms ease;
+}
+
+.app-backdrop .phone-shell :is(
+  .app-back-button,
+  .menu-button,
+  .primary-icon,
+  .chat-composer button,
+  .comment-list button,
+  footer button
+) {
+  border: 1px solid var(--carch-control-border) !important;
+  background: var(--carch-control-bg) !important;
+  color: var(--carch-ink) !important;
+  box-shadow: var(--carch-control-shadow) !important;
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.app-backdrop .phone-shell :is(
+  .quick-replies button,
+  .source-tabs button,
+  .example-row button,
+  .option-button,
+  .expense-mode-button,
+  .strategy-button,
+  .search-tabs button,
+  .plan-menu button,
+  .capture-box label,
+  .item-section-head button
+) {
+  border: 1px solid var(--carch-control-border) !important;
+  background: var(--carch-control-bg) !important;
+  color: #4a5663 !important;
+  box-shadow: var(--carch-control-shadow) !important;
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.app-backdrop .phone-shell :is(.primary-icon, .chat-composer button) {
+  border-color: transparent !important;
+  background: var(--carch-primary-control) !important;
+  color: #fff !important;
+  box-shadow: 0 14px 26px rgba(36, 54, 79, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.24) !important;
+}
+
+.app-backdrop .phone-shell :is(
+  .primary-button,
+  .floating-action-button,
+  .send-button,
+  .submit-button,
+  .save-button,
+  .confirm-button,
+  .complete-button,
+  .primary-icon,
+  .chat-composer button
+):hover:not(:disabled) {
+  background: var(--carch-primary-control-hover) !important;
+  box-shadow: 0 18px 34px rgba(36, 54, 79, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.26) !important;
+}
+
+.app-backdrop .phone-shell :is(
+  .app-back-button,
+  .menu-button,
+  .muted-button,
+  .outline-button,
+  .ghost-button,
+  .secondary-button,
+  .cancel-button,
+  .quick-replies button,
+  .source-tabs button,
+  .example-row button,
+  .option-button,
+  .expense-mode-button,
+  .strategy-button,
+  .search-tabs button,
+  .plan-menu button,
+  .comment-list button,
+  footer button,
+  .capture-box label,
+  .item-section-head button
+):hover:not(:disabled) {
+  border-color: rgba(36, 54, 79, 0.16) !important;
+  background: var(--carch-control-bg-hover) !important;
+  color: var(--carch-ink) !important;
+  box-shadow: none !important;
+}
+
+.app-backdrop .phone-shell :is(
+  .source-tabs button.active,
+  .option-button.active,
+  .expense-mode-button.active,
+  .strategy-button.active,
+  .search-tabs button.active
+) {
+  border-color: rgba(15, 95, 174, 0.22) !important;
+  background: var(--carch-control-bg-active) !important;
+  color: var(--carch-blue) !important;
+  box-shadow: inset 0 0 0 1px rgba(15, 95, 174, 0.1) !important;
+}
+
+.app-backdrop .phone-shell :is(
+  .danger-button,
+  .ghost-button.danger,
+  footer button.liked,
+  .plan-menu .danger
+) {
+  border-color: var(--carch-danger-border) !important;
+  background: var(--carch-danger-soft) !important;
+  color: #d92d20 !important;
+  box-shadow: none !important;
+}
+
+.app-backdrop .phone-shell :is(
+  .primary-button,
+  .outline-button,
+  .muted-button,
+  .floating-action-button,
+  .quick-replies button,
+  .source-tabs button,
+  .example-row button,
+  .option-button,
+  .expense-mode-button,
+  .strategy-button,
+  .search-tabs button,
+  .plan-menu button,
+  .primary-icon,
+  .chat-composer button,
+  .comment-list button,
+  footer button
+) {
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 120ms ease, opacity 160ms ease;
+}
+
+.app-backdrop .phone-shell :is(
+  .primary-button,
+  .outline-button,
+  .muted-button,
+  .quick-replies button,
+  .source-tabs button,
+  .example-row button,
+  .option-button,
+  .expense-mode-button,
+  .strategy-button,
+  .search-tabs button,
+  .plan-menu button,
+  .primary-icon,
+  .chat-composer button,
+  .comment-list button,
+  footer button
+):disabled {
+  border-color: rgba(36, 54, 79, 0.08) !important;
+  background: transparent !important;
+  color: rgba(74, 86, 99, 0.58) !important;
+  box-shadow: none !important;
+  opacity: 1;
 }
 
 .field-label {
