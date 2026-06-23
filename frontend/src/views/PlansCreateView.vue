@@ -260,7 +260,11 @@ const savePlan = async () => {
 
 const cancelCreate = () => {
   resetWizard()
-  router.push('/plans')
+  if (window.history.state?.back) {
+    router.back()
+  } else {
+    router.push('/plans')
+  }
 }
 </script>
 

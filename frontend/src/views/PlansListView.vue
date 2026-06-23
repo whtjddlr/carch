@@ -22,7 +22,7 @@
       </div>
     </div>
 
-    <button class="floating-action-button" type="button" aria-label="새 목표 지출 계획" @click="createNew">
+    <button v-if="plans.length" class="floating-action-button" type="button" aria-label="새 목표 지출 계획" @click="createNew">
       <Plus :size="20" />
     </button>
 
