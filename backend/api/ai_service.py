@@ -182,7 +182,7 @@ def request_gms_json(prompt, developer_prompt):
             last_error = ValueError(f'Empty GMS output: {finish_reason or "unknown"}')
         except requests.Timeout as error:
             last_error = error
-            break
+            continue
         except requests.RequestException as error:
             last_error = error
     if last_error:

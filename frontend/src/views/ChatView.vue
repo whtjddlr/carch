@@ -77,7 +77,7 @@ import { ArrowRight, Bot, SendHorizontal, Sparkles } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { sendChatMessage } from '@/services/api'
 
-const starterReplies = ['이번 달 소비 분석해줘', '나한테 맞는 카드 추천해줘', '큰 지출 계획 도와줘']
+const starterReplies = ['소비 분석 보기', '카드 추천 보기', '목표 지출 계획']
 const messages = ref([
   {
     id: 'assistant-welcome',
@@ -138,10 +138,10 @@ async function sendMessage(text = draft.value) {
   } catch (error) {
     console.warn('챗봇 API 호출 실패', error)
     messages.value.push(
-      makeMessage('assistant', '지금은 챗봇 API 연결이 불안정합니다. 결제내역 추가나 소비 분석 화면에서 먼저 확인해 주세요.', {
+      makeMessage('assistant', '현재는 저장된 데이터를 기준으로 안내합니다. 결제내역 추가나 소비 분석 화면에서 먼저 확인하시기 바랍니다.', {
         quickReplies: ['소비 분석 보기', '결제내역 추가하기', '카드 추천 보기'],
         relatedRoute: '/analytics',
-        summaryChips: [{ label: '연결 상태', value: 'fallback', tone: 'gray' }],
+        summaryChips: [{ label: '응답 기준', value: '저장된 데이터', tone: 'gray' }],
         actionButtons: [{ label: '소비 분석 보기', route: '/analytics' }],
         messageType: 'general',
         aiMode: 'mock',

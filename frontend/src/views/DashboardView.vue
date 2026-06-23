@@ -39,6 +39,32 @@
       </div>
 
       <div class="card-carousel" :class="[{ 'is-gliding': isCarouselGliding }, `glide-${carouselDirection}`]">
+        <div class="card-manage-toolbar">
+          <button
+            type="button"
+            class="wallet-icon-button"
+            aria-label="카드 관리"
+            @click="toggleCardManageMenu"
+          >
+            <MoreHorizontal :size="19" />
+          </button>
+          <div v-if="isCardManageMenuOpen" class="card-manage-menu">
+            <button type="button" @click="openCardPickerFromMenu">
+              <PlusCircle :size="16" />
+              <span>카드 추가</span>
+            </button>
+            <button
+              type="button"
+              class="danger"
+              :disabled="!activeCard || activeCardIndex >= cards.length || isDeletingCard"
+              @click="deleteActiveCardFromMenu"
+            >
+              <Trash2 :size="16" />
+              <span>카드 삭제</span>
+            </button>
+          </div>
+        </div>
+
         <div
           class="card-stage"
           @pointerdown="onDragStart"
@@ -473,7 +499,7 @@ onMounted(async () => {
   try {
     await loadWalletData()
   } catch (error) {
-    console.warn('諛깆뿏??API瑜?遺덈윭?ㅼ? 紐삵빐 mock ?곗씠?곕? ?ъ슜?⑸땲??', error)
+    console.warn('대시보드 API를 불러오지 못해 기본 데이터를 사용합니다.', error)
   }
 })
 </script>
@@ -986,7 +1012,7 @@ onMounted(async () => {
 .card-manage-toolbar {
   position: absolute;
   top: clamp(6px, 2.8vw, 12px);
-  left: clamp(6px, 3vw, 14px);
+  right: clamp(6px, 3vw, 14px);
   z-index: 8;
   display: flex;
   justify-content: center;
@@ -1030,7 +1056,7 @@ onMounted(async () => {
 .card-manage-menu {
   position: absolute;
   top: 38px;
-  left: 0;
+  right: 0;
   display: grid;
   min-width: 136px;
   gap: 2px;

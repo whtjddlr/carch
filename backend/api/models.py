@@ -1,7 +1,15 @@
+from django.conf import settings
 from django.db import models
 
 
 class Transaction(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='transactions',
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+    )
     public_id = models.CharField(max_length=40, unique=True)
     card_id = models.CharField(max_length=20)
     merchant_name = models.CharField(max_length=120)
@@ -18,6 +26,7 @@ class Transaction(models.Model):
     class Meta:
         ordering = ['-approved_at', '-id']
         indexes = [
+            models.Index(fields=['user', '-approved_at']),
             models.Index(fields=['card_id', '-approved_at']),
             models.Index(fields=['category', '-approved_at']),
         ]
@@ -27,7 +36,14 @@ class Transaction(models.Model):
 
 
 class OwnedCard(models.Model):
-    card_id = models.CharField(max_length=20, unique=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='owned_cards',
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+    )
+    card_id = models.CharField(max_length=20)
     nickname = models.CharField(max_length=80, blank=True, default='')
     display_order = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -35,7 +51,11 @@ class OwnedCard(models.Model):
 
     class Meta:
         ordering = ['display_order', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'card_id'], name='api_owned_user_card_uniq'),
+        ]
         indexes = [
+            models.Index(fields=['user', 'display_order', 'id']),
             models.Index(fields=['display_order', 'id']),
         ]
 
@@ -43,7 +63,67 @@ class OwnedCard(models.Model):
         return self.nickname or self.card_id
 
 
+class AuthSession(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='carch_sessions', on_delete=models.CASCADE)
+    token_hash = models.CharField(max_length=64, unique=True)
+    provider = models.CharField(max_length=20, default='email')
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['token_hash']),
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['expires_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.user_id} {self.provider}'
+
+
+class SocialAccount(models.Model):
+    PROVIDERS = [
+        ('kakao', '카카오'),
+        ('naver', '네이버'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='social_accounts', on_delete=models.CASCADE)
+    provider = models.CharField(max_length=20, choices=PROVIDERS)
+    provider_user_id = models.CharField(max_length=120)
+    email = models.EmailField(blank=True, default='')
+    name = models.CharField(max_length=80, blank=True, default='')
+    avatar_url = models.URLField(blank=True, default='')
+    raw_profile = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['provider', 'id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['provider', 'provider_user_id'],
+                name='api_social_provider_user_uniq',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['provider', 'provider_user_id']),
+            models.Index(fields=['email']),
+        ]
+
+    def __str__(self):
+        return f'{self.provider}:{self.provider_user_id}'
+
+
 class PurchasePlan(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='purchase_plans',
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+    )
     title = models.CharField(max_length=120)
     plan_type = models.CharField(max_length=40, default='기타')
     expense_mode = models.CharField(max_length=40, default='planned-extra')
@@ -68,6 +148,7 @@ class PurchasePlan(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
+            models.Index(fields=['user', '-created_at']),
             models.Index(fields=['-created_at']),
             models.Index(fields=['status', '-created_at']),
         ]
@@ -116,7 +197,15 @@ class AIAnalysisRecord(models.Model):
         ('purchase_plan', '소비 계획 분석'),
     ]
 
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='ai_analysis_records',
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+    )
     analysis_type = models.CharField(max_length=40, choices=ANALYSIS_TYPES)
+    cache_key = models.CharField(max_length=80, blank=True, default='')
     title = models.CharField(max_length=120, blank=True)
     input_payload = models.JSONField(default=dict, blank=True)
     result_payload = models.JSONField(default=dict, blank=True)
@@ -127,7 +216,12 @@ class AIAnalysisRecord(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
+            models.Index(fields=['user', 'analysis_type', '-created_at']),
             models.Index(fields=['analysis_type', '-created_at']),
+            models.Index(
+                fields=['analysis_type', 'cache_key', '-created_at'],
+                name='api_ai_cache_idx',
+            ),
         ]
 
     def __str__(self):

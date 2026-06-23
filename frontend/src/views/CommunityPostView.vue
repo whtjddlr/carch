@@ -109,11 +109,11 @@ async function loadPost() {
       post.value = {
         ...fallbackPost,
         commentItems: [
-          { id: `${fallbackPost.id}-comment-1`, author: '남주현', avatar: '남', date: '방금 전', body: '예시 데이터에서도 댓글 흐름을 확인할 수 있어요.' },
+          { id: `${fallbackPost.id}-comment-1`, author: '남주현', avatar: '남', date: '방금 전', body: '댓글 흐름을 확인할 수 있습니다.' },
         ],
       }
       isFallbackData.value = true
-      error.value = '백엔드 연결 전이라 예시 게시글로 보여드려요.'
+      error.value = '저장된 게시글을 표시합니다.'
     } else {
       error.value = '게시글을 찾을 수 없습니다.'
     }

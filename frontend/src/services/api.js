@@ -5,6 +5,7 @@ import {
   communityPosts as seedCommunityPosts,
   recommendations as seedRecommendations,
   transactions as seedTransactions,
+  user as seedUser,
 } from '@/data/mockData'
 
 const envNumber = (value, fallback) => {
@@ -17,11 +18,78 @@ export const DEFAULT_API_TIMEOUT_MS = envNumber(import.meta.env.VITE_API_TIMEOUT
 export const AI_REQUEST_TIMEOUT_MS = envNumber(import.meta.env.VITE_AI_TIMEOUT_MS, 50000)
 export const USE_MOCK_API = ['true', '1', 'yes'].includes(String(import.meta.env.VITE_USE_MOCK_API || '').toLowerCase())
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: DEFAULT_API_TIMEOUT_MS,
 })
+
+const mockAuthUser = {
+  id: 'mock-user',
+  name: seedUser.name,
+  email: seedUser.email,
+  initials: seedUser.initials,
+}
+
+export async function fetchAuthProviders() {
+  if (USE_MOCK_API) {
+    await delay(80)
+    return {
+      email: { enabled: true },
+      providers: [
+        { id: 'kakao', label: '카카오', enabled: true, requiresSecret: false, startUrl: '/api/auth/oauth/kakao/start/' },
+        { id: 'naver', label: '네이버', enabled: true, requiresSecret: true, startUrl: '/api/auth/oauth/naver/start/' },
+      ],
+    }
+  }
+  const response = await api.get('/api/auth/providers/')
+  return response.data
+}
+
+export async function loginWithEmail(payload) {
+  if (USE_MOCK_API) {
+    await delay(180)
+    return { ok: true, token: 'mock-auth-token', provider: 'email', user: { ...mockAuthUser, email: payload.email || mockAuthUser.email } }
+  }
+  const response = await api.post('/api/auth/email/login/', payload)
+  return response.data
+}
+
+export async function signupWithEmail(payload) {
+  if (USE_MOCK_API) {
+    await delay(220)
+    return {
+      ok: true,
+      token: 'mock-auth-token',
+      provider: 'email',
+      user: {
+        ...mockAuthUser,
+        name: payload.name || mockAuthUser.name,
+        email: payload.email || mockAuthUser.email,
+      },
+    }
+  }
+  const response = await api.post('/api/auth/email/signup/', payload)
+  return response.data
+}
+
+export async function fetchCurrentUser() {
+  if (USE_MOCK_API) {
+    await delay(80)
+    return { authenticated: true, user: mockAuthUser }
+  }
+  const response = await api.get('/api/auth/me/')
+  return response.data
+}
+
+export async function logoutAuth() {
+  if (USE_MOCK_API) {
+    await delay(80)
+    return { ok: true }
+  }
+  const response = await api.post('/api/auth/logout/')
+  return response.data
+}
 
 const gradients = ['blue', 'purple', 'teal']
 const networkByCardId = {
@@ -368,10 +436,12 @@ function buildMockRecommendationBundle(options = {}) {
     categoryRows: summary.spendingTrend.categoryChanges.map((item) => ({ category: item.category, amount: item.adjustedAmount })),
     byCard: summary.byCard,
     topCategory: summary.byCategory.slice().sort((a, b) => b.amount - a.amount)[0]?.category || '쇼핑',
-    styleTags: ['생활비 관리형', '쇼핑 집중형', '실적 점검형'],
+    recommendationTopCategory: summary.spendingTrend.recurringCategories?.[0]?.category || '식비',
+    styleTags: ['생활비 관리형', '쇼핑 집중형', '실적 관리형'],
     period: summary.period,
     spendingTrend: summary.spendingTrend,
   }
+  const oneTimeCategorySet = new Set((summary.spendingTrend.oneTimeCandidates || []).map((item) => item.category))
   const results = [
     {
       id: 'r1',
@@ -394,6 +464,8 @@ function buildMockRecommendationBundle(options = {}) {
         annualDelta: 115488,
         remainingSpendForBenefit: 0,
         eligibleRatio: 1,
+        potentialMonthlyBenefit: 12624,
+        potentialMonthlyNetBenefit: 11624,
       },
       spendingFit: { styleTags: ['생활비', '쇼핑', '이동'] },
     },
@@ -409,7 +481,9 @@ function buildMockRecommendationBundle(options = {}) {
         monthlyDelta: index === 0 ? 2811 : 0,
         annualDelta: index === 0 ? 33732 : 0,
         remainingSpendForBenefit: index === 0 ? 147225 : 0,
-        eligibleRatio: index === 0 ? 0.72 : 1,
+        eligibleRatio: index === 0 ? 0 : 1,
+        potentialMonthlyBenefit: 9000 - index * 1000,
+        potentialMonthlyNetBenefit: (9000 - index * 1000) - Math.round(Number(item.annualFee || 0) / 12),
       },
       spendingFit: { styleTags: item.tags || [] },
     })),
@@ -428,7 +502,7 @@ function buildMockRecommendationBundle(options = {}) {
       toIssuer: 'BC카드',
       toImageUrl: '/card-images/10035.png',
       scope: 'candidate',
-      scopeLabel: '추천 카드 검토',
+      scopeLabel: '비교 카드',
       title: '식비는 BC 바로 On&Off 카드',
       body: '식비 결제를 조정하면 월 3,672원의 추가 혜택이 예상됩니다.',
     },
@@ -445,14 +519,22 @@ function buildMockRecommendationBundle(options = {}) {
       toIssuer: 'BC카드',
       toImageUrl: '/card-images/10035.png',
       scope: 'candidate',
-      scopeLabel: '추천 카드 검토',
+      scopeLabel: '비교 카드',
       title: '쇼핑은 BC 바로 On&Off 카드',
       body: '반복 쇼핑으로 확인된 금액만 반영해 월 2,965원의 개선을 계산했습니다.',
     },
-  ]
+  ].filter((item) => !oneTimeCategorySet.has(item.category))
   return {
     count: results.length,
     profile,
+    baseline: {
+      cardId: 'current-portfolio',
+      cardName: '현재 사용 조합',
+      monthlyNetBenefit: 2000,
+      expectedMonthlyBenefit: 5600,
+      potentialMonthlyBenefit: 5600,
+      monthlyAnnualFee: 3600,
+    },
     results,
     recommendations: results,
     routingSuggestions,
@@ -743,8 +825,8 @@ export async function sendChatMessage(payload) {
       reply: isPlan
         ? '예정된 지출은 목적과 시점을 나누면 관리가 쉬워집니다. 소비계획에서 예산 안 지출과 별도 예정 지출을 구분해볼 수 있습니다.'
         : isRecommend
-          ? '최근 6개월 흐름을 기준으로 반복 지출을 보정했습니다. 현재는 식비와 쇼핑 결제 카드를 조정할 때 월 9,624원의 순혜택 개선이 예상됩니다.'
-          : '이번 달 지출은 506,050원입니다. 쇼핑과 교육 지출이 평소보다 증가해 일회성 가능성을 분리했고, 반복 지출 기준으로 카드 혜택을 비교했습니다.',
+          ? '최근 6개월 흐름을 기준으로 반복 지출을 분리했습니다. 식비와 쇼핑 결제 카드를 조정하면 월 9,624원의 순혜택 개선이 예상됩니다.'
+          : '이번 달 지출은 506,050원입니다. 쇼핑과 교육 지출이 평소보다 높아 일시적인 지출과 반복 지출을 나누어 비교했습니다.',
       summaryChips: [
         { label: '기준', value: '최근 6개월', tone: 'navy' },
         { label: '다음으로', value: isPlan ? '소비계획' : '혜택 비교', tone: 'teal' },
