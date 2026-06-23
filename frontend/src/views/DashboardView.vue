@@ -881,18 +881,18 @@ onMounted(async () => {
 }
 
 .wallet-icon-button.is-add {
-  border-color: rgba(36, 54, 79, 0.18);
-  background: rgba(36, 54, 79, 0.9);
-  color: #fff;
-  box-shadow: 0 16px 30px rgba(36, 54, 79, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  border-color: rgba(36, 54, 79, 0.17);
+  background: rgba(36, 54, 79, 0.1);
+  color: #24364f;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62), 0 12px 26px rgba(36, 54, 79, 0.065);
 }
 
 .wallet-icon-button.is-add:hover {
-  background: rgba(36, 54, 79, 0.96);
+  background: rgba(36, 54, 79, 0.15);
 }
 
 .wallet-icon-button.danger {
-  background: rgba(179, 38, 30, 0.075);
+  background: rgba(179, 38, 30, 0.065);
   border-color: rgba(179, 38, 30, 0.14);
   color: #b3261e;
 }
