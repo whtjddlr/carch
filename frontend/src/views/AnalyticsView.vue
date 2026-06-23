@@ -29,7 +29,7 @@
           <strong class="metric-value">{{ krw(totalExpense) }}</strong>
         </article>
         <article class="app-card metric-card metric-card-saving">
-          <span>절감</span>
+          <span>개선</span>
           <strong class="metric-value success">{{ krw(expectedSaving) }}</strong>
         </article>
       </div>
@@ -54,9 +54,9 @@
         </ul>
         <div v-if="pendingReviewCandidates.length" class="spend-review-panel">
           <div class="review-copy">
-            <span>추천 기준 확인</span>
+            <span>반복 여부</span>
             <strong>앞으로도 반복될 지출인가요?</strong>
-            <p>한 번 선택하면 같은 항목은 다시 묻지 않습니다.</p>
+            <p>선택하면 같은 항목은 다시 묻지 않습니다.</p>
           </div>
           <div class="review-list">
             <article v-for="item in pendingReviewCandidates" :key="item.category" class="review-item">
@@ -97,8 +97,8 @@
 
       <article v-if="aiAnalysis" class="app-card ai-card">
         <div class="section-title">
-          <span>진단</span>
-          <small>신뢰도 <b>{{ Math.round(Number(aiAnalysis.confidence || 0) * 100) }}%</b></small>
+          <span>핵심 진단</span>
+          <small>분석 기준 <b>{{ trendPeriodLabel }}</b></small>
         </div>
         <div class="primary-insight compact" :class="`severity-${aiAnalysis.primaryInsight?.severity || 'info'}`">
           <div>
@@ -123,7 +123,7 @@
 
       <article v-if="recommendationAlert?.show && topRecommendation" class="app-card card-switch-card">
         <div class="section-title">
-          <span>교체</span>
+          <span>카드 추천</span>
           <small>매칭 <b>{{ topRecommendation.match }}%</b></small>
         </div>
         <div class="switch-hero">
@@ -148,18 +148,18 @@
             <b>{{ signedKrw(topRecommendationEconomics.annualDelta) }}</b>
           </span>
           <span>
-            <small>계산 기준</small>
+            <small>기준</small>
             <b>연회비 포함</b>
           </span>
         </div>
         <RouterLink class="switch-link" :to="`/recommendations/r1`">
-          비교
+          자세히
         </RouterLink>
       </article>
 
       <article class="app-card chart-card">
         <div class="section-title">
-          <span>분포</span>
+          <span>지출 분포</span>
           <small>{{ categoryCountLabel }}</small>
         </div>
         <div class="donut-panel">
@@ -185,7 +185,7 @@
 
       <article v-if="aiAnalysis?.categoryInsights?.length" class="app-card insight-card">
         <div class="section-title">
-          <span>해석</span>
+          <span>요약</span>
           <small>TOP 3</small>
         </div>
         <ul class="compact-list">
@@ -267,7 +267,7 @@ const primaryTrendChange = computed(() => {
 const trendPrimaryTitle = computed(() => {
   const item = primaryTrendChange.value
   if (!item) return '안정'
-  if (item.oneTimeCandidate) return `${item.category} 급증`
+  if (item.oneTimeCandidate) return `${item.category} 증가`
   if (Number(item.deltaFromBaseline || 0) > 0) return `${item.category} 증가`
   if (Number(item.deltaFromBaseline || 0) < 0) return `${item.category} 감소`
   return `${item.category} 안정`
@@ -277,10 +277,10 @@ const trendPrimaryCopy = computed(() => {
   if (!item) return '반복 소비 기준선을 쌓고 있습니다.'
   const base = krw(item.baselineReference || item.baselineAverage || 0)
   if (item.userConfirmedRecurring) {
-    return `반복 지출로 반영해 카드 추천을 다시 계산했습니다.`
+    return `반복 지출로 반영했습니다.`
   }
   if (item.oneTimeCandidate) {
-    return `평소 ${base} 수준으로 보정해 추천에 반영합니다.`
+    return `평소 ${base} 기준으로 계산합니다.`
   }
   return `평소 ${base} 기준으로 변화를 확인했습니다.`
 })
@@ -300,9 +300,9 @@ const trendHighlights = computed(() => {
       tone: Number(total.deltaFromBaseline || 0) > 0 ? 'attention' : 'success',
     },
     {
-      label: '추천 반영',
+      label: '추천 기준',
       value: krw(total.adjustedForRecommendation),
-      caption: '일회성 보정',
+      caption: '평소 소비',
       tone: 'success',
     },
   ]
@@ -377,7 +377,7 @@ const analysisSignals = computed(() => {
   if (top) items.push({ label: '집중', value: top.category })
   if (second) items.push({ label: '보조', value: second.category })
   if (topRecommendation.value?.economics?.monthlyDelta > 0) {
-    items.push({ label: '절감', value: signedKrw(topRecommendation.value.economics.monthlyDelta) })
+    items.push({ label: '개선', value: signedKrw(topRecommendation.value.economics.monthlyDelta) })
   }
   return items.slice(0, 3)
 })
@@ -401,29 +401,29 @@ function buildMockSummary() {
     byCard: [],
     aiAnalysis: {
       aiMode: 'mock',
-      summaryTitle: '예시 분석',
+      summaryTitle: '소비 요약',
       confidence: 0.78,
-      headline: '쇼핑과 마트 지출 비중이 높아 카드 혜택 조건 점검이 필요합니다.',
+      headline: '상위 지출 변화에 맞춰 카드 혜택 조건 확인이 필요합니다.',
       savingOpportunities: [
         {
-          title: '쇼핑 결제 카드 재배치',
+          title: '쇼핑 결제 카드 조정',
           reason: '쿠팡과 온라인 쇼핑 지출이 가장 크게 잡혀 있습니다.',
-          action: '카드의정석2 SHOPPER 혜택 한도부터 확인하세요.',
+          action: '카드의정석2 SHOPPER 혜택 조건을 확인하시기 바랍니다.',
           amount: 12000,
         },
         {
-          title: '마트 지출 묶어서 관리',
-          reason: '마트 결제는 이마트 신한카드 혜택과 맞물릴 수 있습니다.',
-          action: '월 예산의 마트 항목과 카드 실적을 같이 보세요.',
+          title: '교육 지출 기준 확인',
+          reason: '교육 지출은 이번 달에 평소보다 크게 반영되었습니다.',
+          action: '반복 지출이면 추천 기준에 함께 반영하시기 바랍니다.',
           amount: 8000,
         },
       ],
       categoryInsights: byCategory.slice(0, 3).map((item) => ({
         category: item.category,
         amount: item.amount,
-        insight: `${item.category} 지출은 이번 달 카드 혜택 후보로 먼저 확인해볼 만합니다.`,
+        insight: `${item.category} 지출은 카드 혜택 비교 기준으로 확인할 수 있습니다.`,
       })),
-      nextActions: ['결제내역 보정하기', '목표 지출 계획 만들기', '추천 카드 다시 보기'],
+      nextActions: ['결제내역 정리', '소비계획 만들기', '카드 추천 보기'],
     },
   }
 }
@@ -448,7 +448,7 @@ async function loadSummary() {
   } catch {
     summary.value = buildMockSummary()
     recommendationBundle.value = null
-    error.value = '백엔드 연결 전이므로 예시 소비 데이터 기반 인사이트를 제공합니다.'
+    error.value = '저장된 소비 데이터를 기준으로 분석을 제공합니다.'
   } finally {
     isLoading.value = false
   }
@@ -462,7 +462,7 @@ async function refreshAnalysis() {
     summary.value = await fetchSpendingSummary(trendRequestOptions({ ai: true, refresh: true }))
     recommendationBundle.value = await fetchCardRecommendationBundle(trendRequestOptions())
   } catch {
-    error.value = '새 인사이트를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+    error.value = '새 분석을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
     isRefreshing.value = false
   }
@@ -495,7 +495,7 @@ function signedKrw(value) {
 function compactSummaryLabel(label) {
   const text = String(label || '')
   if (text.includes('지출')) return '지출'
-  if (text.includes('절감')) return '절감'
+  if (text.includes('절감') || text.includes('개선')) return '개선'
   if (text.includes('점검')) return '점검'
   if (text.includes('카드')) return '카드'
   return text.replace(/이번 달|예상|기준|분석/g, '').trim() || '요약'

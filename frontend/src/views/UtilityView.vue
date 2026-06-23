@@ -528,7 +528,7 @@ const settingItems = [
 const securityItems = [
   { label: '로그인 보호', description: '현재 기기에서 안전하게 로그인 중입니다.', icon: Lock },
   { label: '개인정보 관리', description: '프로필 정보와 알림 권한을 분리해 관리합니다.', icon: User },
-  { label: '데이터 보관', description: '분석 기록은 DB 저장 기준으로 관리됩니다.', icon: ShieldCheck },
+  { label: '데이터 보관', description: '분석 기록을 안전하게 보관합니다.', icon: ShieldCheck },
 ]
 
 const searchTypes = [

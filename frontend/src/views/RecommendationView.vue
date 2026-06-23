@@ -36,7 +36,7 @@
               <b>{{ krw(recommendation.economics.monthlyNetBenefit) }}</b>
             </span>
             <span>
-              <small>현재 카드 대비</small>
+              <small>현재 사용 대비</small>
               <b :class="{ positive: recommendation.economics.monthlyDelta > 0 }">
                 {{ signedKrw(recommendation.economics.monthlyDelta) }}
               </b>
@@ -50,11 +50,11 @@
           </div>
 
           <div v-if="recommendation.performanceFill" class="performance-fill-detail">
-            <span>실적 충족 시</span>
+            <span>실적을 채우면</span>
             <strong>{{ signedKrw(recommendation.performanceFill.monthlyGain) }} / 월</strong>
             <p>
               {{ krw(recommendation.performanceFill.remaining) }}을 더 채우면
-              추가 효율 {{ recommendation.performanceFill.efficiency }}%가 예상됩니다.
+              채운 금액 대비 {{ recommendation.performanceFill.efficiency }}%의 추가 혜택률입니다.
             </p>
           </div>
 
@@ -135,11 +135,11 @@
 
         <article v-if="bundle?.profile" class="app-card profile-card">
           <div>
-            <span>추천 기준</span>
+            <span>계산 기준</span>
             <strong>{{ bundle.profile.styleTags?.join(' · ') || '소비 분석 중' }}</strong>
             <p>
-              반복 소비 {{ krw(bundle.profile.totalExpense) }} 기준으로 계산했습니다.
-              <template v-if="oneTimeCount"> 일회성 후보 {{ oneTimeCount }}건은 낮게 반영했습니다.</template>
+              반복적으로 쓰는 {{ krw(bundle.profile.totalExpense) }}을 기준으로 계산했습니다.
+              <template v-if="oneTimeCount"> 일시적인 지출 {{ oneTimeCount }}건은 덜 반영했습니다.</template>
             </p>
           </div>
         </article>
@@ -152,7 +152,7 @@
 
         <div class="section-heading">
           <h2>추천 카드</h2>
-          <span>순혜택 순</span>
+          <span>혜택 큰 순</span>
         </div>
 
         <div class="recommend-list">
@@ -183,7 +183,7 @@
               </div>
               <div v-else class="mini-economics">
                 <b>{{ signedKrw(item.economics.monthlyDelta) }}</b>
-                <small>월 순혜택 차이</small>
+                <small>월 개선 예상</small>
               </div>
             </div>
           </article>
@@ -232,13 +232,14 @@ function signedKrw(value) {
 
 function buildPerformanceFill(economics = {}) {
   const remaining = Number(economics.remainingSpendForBenefit || 0)
-  const eligibleRatio = Number(economics.eligibleRatio || 1)
+  const eligibleRatio = Number(economics.eligibleRatio ?? 1)
   const currentNet = Number(economics.monthlyNetBenefit || 0)
   const currentGross = Number(economics.expectedMonthlyBenefit || 0)
+  const potentialGross = Number(economics.potentialMonthlyBenefit || 0)
   const monthlyAnnualFee = Number(economics.monthlyAnnualFee || 0)
-  if (remaining <= 0 || eligibleRatio >= 1 || currentGross <= 0) return null
+  if (remaining <= 0 || eligibleRatio >= 1 || potentialGross <= 0) return null
 
-  const fullGross = Math.round(currentGross / Math.max(eligibleRatio, 0.25))
+  const fullGross = potentialGross
   const fullNet = fullGross - monthlyAnnualFee
   const monthlyGain = Math.max(0, fullNet - currentNet)
   if (monthlyGain <= 0) return null
@@ -257,7 +258,7 @@ function normalizeRecommendation(item) {
     ...item,
     benefit: item.benefit || item.benefitSummary || '소비 패턴에 맞춘 혜택 카드',
     highlights: item.highlights?.length ? item.highlights : item.benefits || item.tags || [],
-    reason: item.reason || '소비 스타일과 주요 지출 카테고리를 기준으로 추천했어요.',
+    reason: item.reason || '소비 스타일과 주요 지출 카테고리를 기준으로 추천합니다.',
     economics,
     performanceFill: buildPerformanceFill(economics),
     spendingFit: item.spendingFit || { styleTags: item.tags || [] },

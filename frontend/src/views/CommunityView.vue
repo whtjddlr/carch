@@ -96,7 +96,7 @@ async function loadPosts() {
       !term || `${post.title} ${post.body} ${post.author} ${post.tags.join(' ')}`.toLowerCase().includes(term)
     ))
     isFallbackData.value = true
-    error.value = '백엔드 연결 전이라 예시 게시글로 보여드려요.'
+    error.value = '저장된 게시글을 표시합니다.'
   } finally {
     isLoading.value = false
   }

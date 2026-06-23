@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LandingView from '@/views/LandingView.vue'
 import AuthView from '@/views/AuthView.vue'
+import AuthCallbackView from '@/views/AuthCallbackView.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import TransactionsView from '@/views/TransactionsView.vue'
 import TransactionCreateView from '@/views/TransactionCreateView.vue'
@@ -17,6 +18,7 @@ import PlansListView from '@/views/PlansListView.vue'
 import PlansCreateView from '@/views/PlansCreateView.vue'
 import PlanDetailView from '@/views/PlanDetailView.vue'
 import DevPanelView from '@/views/DevPanelView.vue'
+import { isAuthenticated } from '@/services/auth'
 
 const protectedMeta = { requiresAuth: true, bottomNav: true }
 
@@ -24,6 +26,7 @@ const routes = [
   { path: '/', name: 'Landing', component: LandingView, meta: { fullPage: true } },
   { path: '/login', name: 'Login', component: AuthView, props: { mode: 'login' }, meta: { requiresAuth: false } },
   { path: '/signup', name: 'Signup', component: AuthView, props: { mode: 'signup' }, meta: { requiresAuth: false } },
+  { path: '/login/callback', name: 'AuthCallback', component: AuthCallbackView, meta: { requiresAuth: false } },
   { path: '/cards', name: 'Dashboard', component: DashboardView, meta: protectedMeta },
   { path: '/cards/:id', name: 'CardDetail', component: UtilityView, props: { type: 'card' }, meta: { requiresAuth: true } },
   { path: '/cards/apply/:id', name: 'CardApply', component: UtilityView, props: { type: 'cardApply' }, meta: { requiresAuth: true } },
@@ -60,8 +63,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  const isLoggedIn = true
-  if (to.meta.requiresAuth && !isLoggedIn) return { name: 'Login' }
+  if (to.meta.requiresAuth && !isAuthenticated()) return { name: 'Login', query: { next: to.fullPath } }
   return true
 })
 

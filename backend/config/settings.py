@@ -157,6 +157,14 @@ GMS_FALLBACK_MODEL = os.environ.get('GMS_FALLBACK_MODEL', 'gpt-5.4-mini')
 GMS_TIMEOUT_SECONDS = int(os.environ.get('GMS_TIMEOUT_SECONDS', '45'))
 GMS_MAX_OUTPUT_TOKENS = int(os.environ.get('GMS_MAX_OUTPUT_TOKENS', '3000'))
 
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5175').rstrip('/')
+AUTH_SESSION_DAYS = int(os.environ.get('AUTH_SESSION_DAYS', '14'))
+EMAIL_AUTH_ENABLED = os.environ.get('EMAIL_AUTH_ENABLED', 'true').lower() in {'1', 'true', 'yes'}
+KAKAO_CLIENT_ID = os.environ.get('KAKAO_REST_API_KEY') or os.environ.get('KAKAO_CLIENT_ID') or ''
+KAKAO_CLIENT_SECRET = os.environ.get('KAKAO_CLIENT_SECRET', '')
+NAVER_CLIENT_ID = os.environ.get('NAVER_CLIENT_ID', '')
+NAVER_CLIENT_SECRET = os.environ.get('NAVER_CLIENT_SECRET', '')
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 

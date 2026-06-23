@@ -81,7 +81,7 @@ def build_purchase_plan_prompt(payload, today):
     budget = payload.get('budget') or payload.get('totalBudget') or 7000000
     start_month = payload.get('startMonth') or '2026-07'
     end_month = payload.get('endMonth') or '2026-09'
-    strategy = payload.get('strategy') or '혜택 최적화'
+    strategy = payload.get('strategy') or '혜택 개선'
     expense_mode = payload.get('expenseMode') or 'planned-extra'
 
     return f"""
@@ -189,32 +189,35 @@ Rules:
 - nextActions should be short Korean action labels, no more than 16 Korean characters each when possible.
 - Keep Korean copy polished, direct, and suitable for a formal finance app.
 - Use a refined financial-service tone. Avoid casual endings and prefer precise formal phrasing such as "권장합니다", "필요합니다", "예상됩니다", "유리합니다".
+- Do not mention categories, cards, merchants, or benefits that are not present in the supplied JSON.
+- Do not expose implementation words such as mock, fallback, DB, cache, candidate, or confidence in reader-facing Korean copy.
+- Treat one-time spending separately: say it is reflected lightly in recommendations; do not describe it as recurring spending.
 - Keep UI copy concise: one sentence per field when possible.
 
 Return this exact JSON shape:
 {{
   "schemaVersion": "spending-analysis-v2",
   "summaryTitle": "이번 달 소비 인사이트",
-  "headline": "쇼핑과 마트 지출 비중이 높아 카드 혜택 조건 점검이 필요합니다.",
-  "narrative": "최근 거래는 생활형 소비가 중심입니다. 상위 지출 카테고리와 보유 카드의 전월 실적 충족률을 함께 확인하는 것이 유리합니다.",
+  "headline": "상위 지출 변화에 맞춰 카드 혜택 조건 확인이 필요합니다.",
+  "narrative": "최근 6개월 흐름과 이번 달 소비를 함께 반영했습니다. 반복 지출 중심으로 보유 카드의 전월 실적 충족 여부를 확인하는 것이 유리합니다.",
   "primaryInsight": {{
     "label": "핵심 포인트",
-    "title": "쇼핑 지출 비중 확대",
-    "body": "반복 결제가 특정 카테고리에 집중되어 카드 혜택 재배치가 필요합니다.",
+    "title": "상위 지출 변화",
+    "body": "반복 지출 기준으로 카드 사용 조정이 필요합니다.",
     "severity": "attention",
-    "metricLabel": "점검 금액",
+    "metricLabel": "대상 금액",
     "metricValue": 89000
   }},
   "summaryCards": [
     {{"label": "총 지출", "value": "280,000원", "caption": "최근 거래 기준", "tone": "navy"}},
-    {{"label": "우선 점검", "value": "쇼핑", "caption": "가장 큰 카테고리", "tone": "teal"}}
+    {{"label": "우선 확인", "value": "쇼핑", "caption": "가장 큰 카테고리", "tone": "teal"}}
   ],
   "savingOpportunities": [
     {{
-      "title": "쇼핑 결제 카드 재배치",
+      "title": "상위 지출 카드 조정",
       "amount": 20000,
-      "reason": "쇼핑 지출이 가장 커서 혜택 조건을 먼저 확인할 가치가 있습니다.",
-      "action": "쇼핑 특화 카드와 현재 카드 실적을 비교하시기 바랍니다.",
+      "reason": "상위 지출과 카드 혜택 조건이 맞물리는 구간입니다.",
+      "action": "현재 카드 실적과 비교 카드 혜택 조건을 함께 확인하시기 바랍니다.",
       "severity": "attention",
       "route": "/recommendations/new"
     }}
@@ -238,7 +241,7 @@ Return this exact JSON shape:
     }}
   ],
   "warnings": ["카드 혜택과 전월 실적 조건은 카드사 안내를 최종 확인해야 합니다."],
-  "nextActions": ["상위 지출 확인", "실적 달성률 보기", "카드 혜택 비교"],
+  "nextActions": ["상위 지출 확인", "실적 확인", "카드 혜택 비교"],
   "actionButtons": [
     {{"label": "카드 추천 보기", "route": "/recommendations/new", "intent": "recommendation"}},
     {{"label": "결제내역 추가", "route": "/transactions/new", "intent": "data-entry"}}
@@ -303,6 +306,8 @@ Rules:
 - Use the user's transaction/category/card data when relevant.
 - If the user asks for an app action, set relatedRoute and include an actionButton.
 - Do not invent exact card benefits, limits, or transaction facts outside the supplied JSON.
+- Use concise, refined Korean. Avoid casual endings such as "해줘", "좋아요", "예상돼요" in assistant copy.
+- Do not expose implementation words such as mock, fallback, DB, cache, candidate, or confidence.
 - messageType must be one of general, spending-analysis, card-recommendation, transaction-help, purchase-plan, navigation.
 - tone must be one of navy, teal, blue, gray, gold, danger.
 - actionButtons[].route must be one of /cards, /transactions, /transactions/new, /budget, /recommendations/new, /analytics, /community, /plans, /plans/new.
@@ -312,12 +317,12 @@ Return this exact JSON shape:
 {{
   "schemaVersion": "chat-response-v2",
   "messageType": "spending-analysis",
-  "reply": "최근 지출은 쇼핑과 생활 소비가 먼저 눈에 띄어요. 상위 카테고리와 보유 카드의 전월 실적을 같이 보면 혜택을 놓치는 구간을 줄일 수 있습니다.",
+  "reply": "최근 지출은 상위 카테고리 중심으로 확인이 필요합니다. 보유 카드의 전월 실적과 혜택 조건을 함께 비교하면 누락되는 혜택을 줄일 수 있습니다.",
   "summaryChips": [
     {{"label": "우선 확인", "value": "상위 지출", "tone": "teal"}},
-    {{"label": "다음 행동", "value": "카드 비교", "tone": "navy"}}
+    {{"label": "다음으로", "value": "카드 비교", "tone": "navy"}}
   ],
-  "quickReplies": ["이번 달 소비 분석해줘", "카드 추천해줘", "결제내역 추가할래"],
+  "quickReplies": ["소비 분석 보기", "카드 추천 보기", "결제내역 추가"],
   "actionButtons": [
     {{"label": "소비 분석 보기", "route": "/analytics", "intent": "open-analysis"}}
   ],
