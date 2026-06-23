@@ -843,16 +843,20 @@ onMounted(async () => {
 }
 
 .card-manage-toolbar {
+  position: absolute;
+  top: clamp(2px, 1.4vw, 7px);
+  right: clamp(8px, 4vw, 18px);
+  z-index: 6;
   display: flex;
   justify-content: center;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 7px;
+  margin: 0;
 }
 
 .wallet-icon-button {
   display: inline-flex;
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(36, 54, 79, 0.12);
@@ -866,8 +870,8 @@ onMounted(async () => {
 }
 
 .wallet-icon-button svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   stroke-width: 2.45;
 }
 
@@ -1894,6 +1898,16 @@ onMounted(async () => {
   .quick-action svg {
     width: 18px;
     height: 18px;
+  }
+
+  .card-manage-toolbar {
+    top: 0;
+    right: 8px;
+  }
+
+  .wallet-icon-button {
+    width: 38px;
+    height: 38px;
   }
 }
 
