@@ -52,11 +52,36 @@
             <span>{{ item.caption }}</span>
           </li>
         </ul>
-        <div v-if="oneTimeCandidates.length" class="one-time-strip">
-          <span>일회성 후보</span>
-          <b v-for="item in oneTimeCandidates.slice(0, 2)" :key="item.category">
-            {{ item.category }} {{ krw(item.currentAmount) }}
-          </b>
+        <div v-if="reviewCandidates.length" class="spend-review-panel">
+          <div class="review-copy">
+            <span>추천 기준 확인</span>
+            <strong>앞으로도 반복될 지출인가요?</strong>
+            <p>반복 지출로 바꾸면 카드 추천에 그대로 반영합니다.</p>
+          </div>
+          <div class="review-list">
+            <article v-for="item in reviewCandidates" :key="item.category" class="review-item">
+              <div>
+                <strong>{{ item.category }}</strong>
+                <small>평소 {{ krw(item.baselineReference) }} · 이번 달 {{ krw(item.currentAmount) }}</small>
+              </div>
+              <div class="review-toggle" role="group" :aria-label="`${item.category} 지출 반영 방식`">
+                <button
+                  type="button"
+                  :class="{ active: !isRecurringOverride(item.category) }"
+                  @click="setRecurringOverride(item.category, false)"
+                >
+                  이번 달만
+                </button>
+                <button
+                  type="button"
+                  :class="{ active: isRecurringOverride(item.category) }"
+                  @click="setRecurringOverride(item.category, true)"
+                >
+                  반복
+                </button>
+              </div>
+            </article>
+          </div>
         </div>
       </article>
 
@@ -193,6 +218,7 @@ const recommendationBundle = ref(null)
 const isLoading = ref(false)
 const isRefreshing = ref(false)
 const error = ref('')
+const recurringOverrides = ref([])
 
 const safeSummary = computed(() => summary.value || { totalExpense: 0, totalIncome: 0, byCategory: [], byCard: [] })
 const aiAnalysis = computed(() => safeSummary.value.aiAnalysis || null)
@@ -208,6 +234,7 @@ const trendPeriodLabel = computed(() => {
   return currentMonth ? `${currentMonth.replace('-', '.')} 기준` : '최근 6개월'
 })
 const oneTimeCandidates = computed(() => spendingTrend.value?.oneTimeCandidates || [])
+const reviewCandidates = computed(() => spendingTrend.value?.reviewCandidates || oneTimeCandidates.value)
 const primaryTrendChange = computed(() => {
   const oneTime = oneTimeCandidates.value[0]
   if (oneTime) return oneTime
@@ -225,6 +252,9 @@ const trendPrimaryCopy = computed(() => {
   const item = primaryTrendChange.value
   if (!item) return '반복 소비 기준선을 쌓고 있습니다.'
   const base = krw(item.baselineReference || item.baselineAverage || 0)
+  if (item.userConfirmedRecurring) {
+    return `반복 지출로 반영해 카드 추천을 다시 계산했습니다.`
+  }
   if (item.oneTimeCandidate) {
     return `평소 ${base} 수준으로 보정해 추천에 반영합니다.`
   }
@@ -352,15 +382,22 @@ function buildMockSummary() {
   }
 }
 
+function trendRequestOptions(extra = {}) {
+  return {
+    ...extra,
+    recurringCategories: recurringOverrides.value,
+  }
+}
+
 async function loadSummary() {
   isLoading.value = true
   error.value = ''
   try {
-    summary.value = await fetchSpendingSummary({ ai: true })
+    summary.value = await fetchSpendingSummary(trendRequestOptions({ ai: true }))
     if (!summary.value?.aiAnalysis && summary.value?.aiAnalysisStatus === 'empty') {
-      summary.value = await fetchSpendingSummary({ ai: true, refresh: true })
+      summary.value = await fetchSpendingSummary(trendRequestOptions({ ai: true, refresh: true }))
     }
-    const recommendations = await fetchCardRecommendationBundle()
+    const recommendations = await fetchCardRecommendationBundle(trendRequestOptions())
     recommendationBundle.value = recommendations
   } catch {
     summary.value = buildMockSummary()
@@ -376,12 +413,31 @@ async function refreshAnalysis() {
   isRefreshing.value = true
   error.value = ''
   try {
-    summary.value = await fetchSpendingSummary({ ai: true, refresh: true })
+    summary.value = await fetchSpendingSummary(trendRequestOptions({ ai: true, refresh: true }))
+    recommendationBundle.value = await fetchCardRecommendationBundle(trendRequestOptions())
   } catch {
     error.value = '새 인사이트를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
     isRefreshing.value = false
   }
+}
+
+async function setRecurringOverride(category, enabled) {
+  const next = new Set(recurringOverrides.value)
+  if (enabled) next.add(category)
+  else next.delete(category)
+  recurringOverrides.value = [...next]
+  error.value = ''
+  try {
+    summary.value = await fetchSpendingSummary(trendRequestOptions({ ai: true }))
+    recommendationBundle.value = await fetchCardRecommendationBundle(trendRequestOptions())
+  } catch {
+    error.value = '추천 기준을 다시 계산하지 못했습니다.'
+  }
+}
+
+function isRecurringOverride(category) {
+  return recurringOverrides.value.includes(category)
 }
 
 function signedKrw(value) {
@@ -634,6 +690,95 @@ onMounted(loadSummary)
 .one-time-strip b {
   background: rgba(180, 83, 9, 0.09);
   color: #b45309;
+}
+
+.spend-review-panel {
+  margin-top: 12px;
+  border-top: 1px solid rgba(36, 54, 79, 0.08);
+  padding-top: 12px;
+}
+
+.review-copy span {
+  color: #008c95;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.review-copy strong {
+  display: block;
+  margin-top: 3px;
+  color: #17202b;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.review-copy p {
+  margin: 4px 0 0;
+  color: #6e6e73;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.review-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(251, 253, 255, 0.82);
+}
+
+.review-item strong {
+  display: block;
+  color: #17202b;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.review-item small {
+  display: block;
+  margin-top: 3px;
+  color: #7a8592;
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.review-toggle {
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  overflow: hidden;
+  border: 1px solid rgba(36, 54, 79, 0.1);
+  border-radius: 999px;
+  background: rgba(237, 242, 247, 0.86);
+}
+
+.review-toggle button {
+  min-height: 34px;
+  border: 0;
+  padding: 0 10px;
+  background: transparent;
+  color: #6e6e73;
+  font-size: 11px;
+  font-weight: 950;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.review-toggle button.active {
+  background: #24364f;
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(36, 54, 79, 0.16);
 }
 
 .ai-summary-grid {

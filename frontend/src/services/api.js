@@ -118,8 +118,15 @@ export async function createTransaction(payload) {
   return normalizeTransaction(response.data)
 }
 
-export async function fetchCardRecommendationBundle() {
-  const response = await api.get('/api/recommendations/cards/')
+const applyCategoryOverrides = (params, categories = []) => {
+  const values = Array.isArray(categories) ? categories.filter(Boolean) : []
+  if (values.length) params.recurringCategories = values.join(',')
+  return params
+}
+
+export async function fetchCardRecommendationBundle({ recurringCategories = [] } = {}) {
+  const params = applyCategoryOverrides({}, recurringCategories)
+  const response = await api.get('/api/recommendations/cards/', { params })
   return response.data
 }
 
@@ -128,8 +135,8 @@ export async function fetchCardRecommendations() {
   return data.results || []
 }
 
-export async function fetchSpendingSummary({ ai = false, refresh = false } = {}) {
-  const params = {}
+export async function fetchSpendingSummary({ ai = false, refresh = false, recurringCategories = [] } = {}) {
+  const params = applyCategoryOverrides({}, recurringCategories)
   if (ai) params.ai = 1
   if (refresh) params.refresh = 1
   const response = await api.get('/api/analytics/spending-summary/', {
