@@ -1599,11 +1599,19 @@ def _build_spending_profile():
     expenses = [item for item in transactions if _as_int(item.get('amount')) < 0]
     by_category = defaultdict(int)
     by_card = defaultdict(int)
+    by_category_card = defaultdict(lambda: {'amount': 0, 'merchants': []})
 
     for item in expenses:
         amount = abs(_as_int(item.get('amount')))
-        by_category[item.get('category') or item.get('cat') or '기타'] += amount
-        by_card[str(item.get('cardId') or item.get('card_id') or '')] += amount
+        category = item.get('category') or item.get('cat') or '기타'
+        card_id = str(item.get('cardId') or item.get('card_id') or '')
+        by_category[category] += amount
+        by_card[card_id] += amount
+        category_card = by_category_card[(category, card_id)]
+        category_card['amount'] += amount
+        merchant = item.get('merchantName') or item.get('merchant') or ''
+        if merchant and merchant not in category_card['merchants']:
+            category_card['merchants'].append(merchant)
 
     category_rows = sorted(
         [{'category': key, 'amount': value} for key, value in by_category.items()],
@@ -1629,6 +1637,19 @@ def _build_spending_profile():
         'totalExpense': total_expense,
         'categoryRows': category_rows,
         'byCard': [{'cardId': key, 'amount': value} for key, value in by_card.items()],
+        'categoryCardRows': sorted(
+            [
+                {
+                    'category': category,
+                    'cardId': card_id,
+                    'amount': value['amount'],
+                    'merchantExamples': value['merchants'][:3],
+                }
+                for (category, card_id), value in by_category_card.items()
+            ],
+            key=lambda item: item['amount'],
+            reverse=True,
+        ),
         'topCategory': top_category,
         'styleTags': style_tags[:3],
     }
@@ -1676,8 +1697,14 @@ def _benefit_rate_for_category(card, category):
         percent_values = [float(match) for match in re.findall(r'(\d+(?:\.\d+)?)\s*%', text)]
         return min(max(percent_values or [1.0]), 15.0), None, f'{category} 관련 혜택'
     if '전가맹' in text or '국내' in text or '언제나' in text:
-        percent_values = [float(match) for match in re.findall(r'(\d+(?:\.\d+)?)\s*%', text)]
-        return min(max(percent_values or [0.5]), 3.0), None, '기본 혜택'
+        basic_matches = re.findall(
+            r'(?:전가맹|국내외?|가맹점|언제나)[^%]{0,40}?(\d+(?:\.\d+)?)\s*%',
+            text,
+        )
+        percent_values = [float(match) for match in basic_matches]
+        if not percent_values:
+            percent_values = [float(match) for match in re.findall(r'(\d+(?:\.\d+)?)\s*%\s*(?:적립|할인)', text)]
+        return min(percent_values or [0.5], default=0.5), None, '기본 혜택'
     return 0.2, None, '기본 추정'
 
 
@@ -1741,6 +1768,145 @@ def _recommendation_reason(card, value, profile, monthly_delta):
     if value.get('remainingSpendForBenefit'):
         return f'혜택 조건까지 {_krw(value["remainingSpendForBenefit"])} 정도 남아 있어, 실적을 채우면 후보가 될 수 있어요.'
     return f'{top_category} 소비와 일부 혜택이 맞지만 현재 보유 카드 대비 순혜택은 크지 않아요.'
+
+
+def _card_id(card):
+    return str(card.get('cardAdId') or card.get('card_ad_id') or card.get('id') or '')
+
+
+def _card_name(card):
+    return card.get('name') or card.get('cardName') or card.get('card_name') or '추천 카드'
+
+
+def _issuer_name(card):
+    return card.get('issuer') or card.get('issuerName') or card.get('issuer_name') or ''
+
+
+def _card_image_url(card):
+    return card.get('imageUrl') or card.get('image_url') or ''
+
+
+def _topic_particle(text):
+    word = str(text or '').strip()
+    if not word:
+        return '는'
+    last = word[-1]
+    code = ord(last)
+    if 0xAC00 <= code <= 0xD7A3:
+        return '은' if (code - 0xAC00) % 28 else '는'
+    return '은'
+
+
+def _estimate_category_benefit(card, category, amount):
+    rate, limit, label = _benefit_rate_for_category(card, category)
+    estimated = round(_as_int(amount) * rate / 100)
+    if limit is not None:
+        estimated = min(estimated, _as_int(limit))
+    return {
+        'rate': round(rate, 2),
+        'benefitLabel': label,
+        'estimatedBenefit': estimated,
+    }
+
+
+def _build_routing_suggestions(profile, owned_values, result_cards, owned_ids):
+    cards_by_id = {}
+    destinations = []
+    for item in owned_values:
+        card = item.get('card') or {}
+        card_id = _card_id(card)
+        if card_id:
+            cards_by_id[card_id] = card
+            destinations.append({'card': card, 'rank': 99, 'monthlyDelta': 0})
+    for index, card in enumerate(result_cards):
+        card_id = _card_id(card)
+        if card_id:
+            cards_by_id.setdefault(card_id, card)
+            destinations.append(
+                {
+                    'card': card,
+                    'rank': index,
+                    'monthlyDelta': _as_int((card.get('economics') or {}).get('monthlyDelta')),
+                }
+            )
+
+    suggestions = []
+    seen = set()
+    for row in profile.get('categoryCardRows') or []:
+        source_card_id = str(row.get('cardId') or '')
+        source_card = cards_by_id.get(source_card_id)
+        amount = _as_int(row.get('amount'))
+        category = row.get('category') or '기타'
+        if not source_card or amount <= 0:
+            continue
+
+        source_estimate = _estimate_category_benefit(source_card, category, amount)
+        for destination_item in destinations:
+            destination = destination_item['card']
+            target_card_id = _card_id(destination)
+            if not target_card_id or target_card_id == source_card_id:
+                continue
+
+            target_estimate = _estimate_category_benefit(destination, category, amount)
+            monthly_gain = target_estimate['estimatedBenefit'] - source_estimate['estimatedBenefit']
+            if monthly_gain < 1000:
+                continue
+
+            key = (category, source_card_id, target_card_id)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            target_name = _card_name(destination)
+            source_name = _card_name(source_card)
+            owned_target = target_card_id in owned_ids
+            suggestions.append(
+                {
+                    'id': f'route-{category}-{source_card_id}-{target_card_id}',
+                    'category': category,
+                    'amount': amount,
+                    'monthlyGain': monthly_gain,
+                    'fromCardId': source_card_id,
+                    'fromCardName': source_name,
+                    'fromIssuer': _issuer_name(source_card),
+                    'fromRate': source_estimate['rate'],
+                    'fromBenefit': source_estimate['estimatedBenefit'],
+                    'toCardId': target_card_id,
+                    'toCardName': target_name,
+                    'toIssuer': _issuer_name(destination),
+                    'toImageUrl': _card_image_url(destination),
+                    'toRate': target_estimate['rate'],
+                    'toBenefit': target_estimate['estimatedBenefit'],
+                    'benefitLabel': target_estimate['benefitLabel'],
+                    'merchantExamples': row.get('merchantExamples') or [],
+                    'scope': 'owned' if owned_target else 'candidate',
+                    'scopeLabel': '보유 카드 조정' if owned_target else '추천 카드 검토',
+                    'destinationRank': destination_item['rank'],
+                    'destinationMonthlyDelta': destination_item['monthlyDelta'],
+                    'title': f'{category}{_topic_particle(category)} {target_name}',
+                    'body': f'{source_name}의 {category} 결제를 {target_name}로 옮기면 월 {_krw(monthly_gain)} 더 남습니다.',
+                }
+            )
+
+    suggestions.sort(
+        key=lambda item: (
+            item['destinationMonthlyDelta'],
+            item['monthlyGain'],
+            item['scope'] == 'owned',
+            -item['destinationRank'],
+        ),
+        reverse=True,
+    )
+    unique_categories = []
+    used_categories = set()
+    for item in suggestions:
+        if item['category'] in used_categories:
+            continue
+        used_categories.add(item['category'])
+        unique_categories.append(item)
+        if len(unique_categories) >= 4:
+            break
+    return unique_categories
 
 
 def card_recommendations(request):
@@ -1813,6 +1979,7 @@ def card_recommendations(request):
     results = ranked[:5]
     top = results[0] if results else None
     alert = (top or {}).get('notification') or {'show': False}
+    routing_suggestions = _build_routing_suggestions(profile, owned_values, results, owned_ids)
 
     return json_response(
         {
@@ -1826,6 +1993,7 @@ def card_recommendations(request):
                 'monthlyAnnualFee': _as_int((baseline or {}).get('monthlyAnnualFee')),
             },
             'alert': alert,
+            'routingSuggestions': routing_suggestions,
             'results': results,
         }
     )

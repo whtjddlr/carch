@@ -44,9 +44,9 @@
           </div>
 
           <div class="payback-panel">
-            <span>연회비 회수</span>
-            <strong>{{ recommendation.economics.paybackMonths ? `약 ${recommendation.economics.paybackMonths}개월` : '추가 연회비 부담 낮음' }}</strong>
-            <p>연간 예상 차이 {{ signedKrw(recommendation.economics.annualDelta) }}</p>
+            <span>연회비 반영</span>
+            <strong>{{ signedKrw(recommendation.economics.monthlyDelta) }}</strong>
+            <p>연간 기준 {{ signedKrw(recommendation.economics.annualDelta) }}</p>
           </div>
 
           <div class="tag-row">
@@ -66,24 +66,82 @@
     <template v-else>
       <header class="recommend-header blue-gradient">
         <AppBackButton fallback="/cards" />
-        <p>AI 카드 추천</p>
-        <h1>소비 스타일에 맞는<br />순혜택 카드</h1>
+        <p>카드 추천</p>
+        <h1>결제 방향만 바꿔도<br />혜택이 커집니다</h1>
       </header>
 
       <div class="screen-scroll scrollbar-hide recommendation-body">
+        <article v-if="routingSuggestions.length" class="app-card routing-card">
+          <div class="routing-title">
+            <span>{{ primaryRouting.scopeLabel }}</span>
+            <strong>{{ primaryRouting.title }}</strong>
+            <p>{{ primaryRouting.body }}</p>
+          </div>
+
+          <div class="routing-flow">
+            <div class="route-card-mini muted">
+              <small>현재</small>
+              <b>{{ primaryRouting.fromCardName }}</b>
+            </div>
+            <ArrowRight :size="18" stroke-width="2.4" />
+            <div class="route-card-mini target">
+              <img v-if="primaryRouting.toImageUrl" :src="primaryRouting.toImageUrl" :alt="primaryRouting.toCardName" />
+              <small>추천</small>
+              <b>{{ primaryRouting.toCardName }}</b>
+            </div>
+          </div>
+
+          <div class="routing-metrics">
+            <span>
+              <small>대상 지출</small>
+              <b>{{ krw(primaryRouting.amount) }}</b>
+            </span>
+            <span>
+              <small>월 개선</small>
+              <b>{{ signedKrw(primaryRouting.monthlyGain) }}</b>
+            </span>
+            <span>
+              <small>분야</small>
+              <b>{{ primaryRouting.category }}</b>
+            </span>
+          </div>
+
+          <button type="button" class="route-action" @click="goToSuggestion(primaryRouting)">
+            추천 카드 보기
+            <ArrowRight :size="16" stroke-width="2.5" />
+          </button>
+
+          <div v-if="routingSuggestions.length > 1" class="routing-more">
+            <button
+              v-for="item in routingSuggestions.slice(1)"
+              :key="item.id"
+              type="button"
+              @click="goToSuggestion(item)"
+            >
+              <span>{{ item.category }}</span>
+              <b>{{ signedKrw(item.monthlyGain) }}</b>
+            </button>
+          </div>
+        </article>
+
         <article v-if="bundle?.profile" class="app-card profile-card">
           <div>
             <span>소비 스타일</span>
             <strong>{{ bundle.profile.styleTags?.join(' · ') || '소비 분석 중' }}</strong>
-            <p>총 지출 {{ krw(bundle.profile.totalExpense) }} 기준으로 연회비를 반영한 순혜택을 계산했어요.</p>
+            <p>{{ krw(bundle.profile.totalExpense) }} 소비를 기준으로 순혜택을 계산했습니다.</p>
           </div>
         </article>
 
-        <article v-if="bundle?.alert?.show && recommendationItems[0]" class="app-card alert-card">
+        <article v-if="!routingSuggestions.length && bundle?.alert?.show && recommendationItems[0]" class="app-card alert-card">
           <span>추천 알림</span>
           <strong>{{ bundle.alert.title }}</strong>
           <p>{{ bundle.alert.body }}</p>
         </article>
+
+        <div class="section-heading">
+          <h2>추천 카드</h2>
+          <span>순혜택 순</span>
+        </div>
 
         <div class="recommend-list">
           <article
@@ -112,6 +170,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ArrowRight } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { krw, recommendations } from '@/data/mockData'
 import { fetchCardRecommendationBundle } from '@/services/api'
@@ -131,6 +190,13 @@ const defaultEconomics = {
 const recommendationItems = ref(recommendations.map(normalizeRecommendation))
 const isDetail = computed(() => Boolean(route.params.id))
 const recommendation = computed(() => recommendationItems.value.find((item) => item.id === route.params.id) || recommendationItems.value[0])
+const routingSuggestions = computed(() => {
+  const items = bundle.value?.routingSuggestions || []
+  return items
+    .filter((item) => Number(item.monthlyGain || 0) > 0)
+    .slice(0, 4)
+})
+const primaryRouting = computed(() => routingSuggestions.value[0] || {})
 
 function signedKrw(value) {
   const amount = Number(value || 0)
@@ -167,6 +233,11 @@ function mapRecommendation(card, index) {
     spendingFit: card.spendingFit || { styleTags: [] },
     notification: card.notification || {},
   })
+}
+
+function goToSuggestion(item) {
+  const matched = recommendationItems.value.find((card) => String(card.cardAdId) === String(item.toCardId))
+  router.push(matched ? `/recommendations/${matched.id}` : '/cards')
 }
 
 onMounted(async () => {
@@ -255,11 +326,197 @@ onMounted(async () => {
   background: rgba(240, 253, 250, 0.82);
 }
 
+.routing-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border-color: rgba(34, 55, 78, 0.12);
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 18px 38px rgba(34, 55, 78, 0.1);
+}
+
+.routing-title span {
+  color: #008c95;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.routing-title strong {
+  display: block;
+  margin-top: 5px;
+  color: #17202b;
+  font-size: 20px;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.routing-title p {
+  max-width: 28em;
+  margin: 6px 0 0;
+  color: #52606d;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.routing-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  color: #008c95;
+}
+
+.route-card-mini {
+  position: relative;
+  min-height: 86px;
+  overflow: hidden;
+  border: 1px solid rgba(34, 55, 78, 0.1);
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.route-card-mini.target {
+  border-color: rgba(0, 140, 149, 0.22);
+  background: rgba(238, 249, 248, 0.82);
+}
+
+.route-card-mini img {
+  position: absolute;
+  right: 10px;
+  bottom: -12px;
+  width: 48px;
+  height: 66px;
+  object-fit: contain;
+  opacity: 0.82;
+  filter: drop-shadow(0 10px 14px rgba(34, 55, 78, 0.16));
+}
+
+.route-card-mini small {
+  display: block;
+  color: #8a96a3;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.route-card-mini b {
+  position: relative;
+  z-index: 1;
+  display: block;
+  max-width: calc(100% - 34px);
+  margin-top: 7px;
+  color: #17202b;
+  font-size: 13px;
+  font-weight: 950;
+  line-height: 1.35;
+}
+
+.route-card-mini.muted b {
+  color: #5f6b77;
+}
+
+.routing-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.routing-metrics span {
+  min-height: 66px;
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(245, 248, 250, 0.82);
+}
+
+.routing-metrics small {
+  display: block;
+  color: #7a8592;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.routing-metrics b {
+  display: block;
+  margin-top: 7px;
+  color: #17202b;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.routing-metrics span:nth-child(2) b {
+  color: #008c95;
+}
+
+.route-action {
+  display: inline-flex;
+  min-height: 44px;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 16px;
+  background: #22374e;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 950;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.routing-more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.routing-more button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(34, 55, 78, 0.1);
+  border-radius: 999px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.58);
+  color: #52606d;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.routing-more b {
+  color: #008c95;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 18px 2px 10px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  color: #17202b;
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.section-heading span {
+  color: #8a96a3;
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .recommend-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 12px;
 }
 
 .recommend-card {
