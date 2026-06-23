@@ -34,6 +34,32 @@
         </article>
       </div>
 
+      <article v-if="spendingTrend" class="app-card trend-card">
+        <div class="section-title">
+          <span>흐름</span>
+          <small>{{ trendPeriodLabel }}</small>
+        </div>
+        <div v-if="primaryTrendChange" class="trend-primary">
+          <strong>{{ trendPrimaryTitle }}</strong>
+          <p>{{ trendPrimaryCopy }}</p>
+        </div>
+        <ul class="trend-metrics">
+          <li v-for="item in trendHighlights" :key="item.label">
+            <small>{{ item.label }}</small>
+            <strong :class="{ success: item.tone === 'success', attention: item.tone === 'attention' }">
+              {{ item.value }}
+            </strong>
+            <span>{{ item.caption }}</span>
+          </li>
+        </ul>
+        <div v-if="oneTimeCandidates.length" class="one-time-strip">
+          <span>일회성 후보</span>
+          <b v-for="item in oneTimeCandidates.slice(0, 2)" :key="item.category">
+            {{ item.category }} {{ krw(item.currentAmount) }}
+          </b>
+        </div>
+      </article>
+
       <div v-if="aiAnalysis?.summaryCards?.length" class="ai-summary-grid">
         <article
           v-for="card in aiAnalysis.summaryCards"
@@ -170,12 +196,63 @@ const error = ref('')
 
 const safeSummary = computed(() => summary.value || { totalExpense: 0, totalIncome: 0, byCategory: [], byCard: [] })
 const aiAnalysis = computed(() => safeSummary.value.aiAnalysis || null)
+const spendingTrend = computed(() => safeSummary.value.spendingTrend || null)
 const totalExpense = computed(() => Number(safeSummary.value.totalExpense || 0))
 const expectedSaving = computed(() =>
   (aiAnalysis.value?.savingOpportunities || []).reduce((sum, item) => sum + Number(item.amount || 0), 0),
 )
 const topRecommendation = computed(() => recommendationBundle.value?.results?.[0] || null)
 const recommendationAlert = computed(() => recommendationBundle.value?.alert || null)
+const trendPeriodLabel = computed(() => {
+  const currentMonth = spendingTrend.value?.currentMonth
+  return currentMonth ? `${currentMonth.replace('-', '.')} 기준` : '최근 6개월'
+})
+const oneTimeCandidates = computed(() => spendingTrend.value?.oneTimeCandidates || [])
+const primaryTrendChange = computed(() => {
+  const oneTime = oneTimeCandidates.value[0]
+  if (oneTime) return oneTime
+  return (spendingTrend.value?.categoryChanges || []).find((item) => Number(item.currentAmount || 0) > 0) || null
+})
+const trendPrimaryTitle = computed(() => {
+  const item = primaryTrendChange.value
+  if (!item) return '안정'
+  if (item.oneTimeCandidate) return `${item.category} 급증`
+  if (Number(item.deltaFromBaseline || 0) > 0) return `${item.category} 증가`
+  if (Number(item.deltaFromBaseline || 0) < 0) return `${item.category} 감소`
+  return `${item.category} 안정`
+})
+const trendPrimaryCopy = computed(() => {
+  const item = primaryTrendChange.value
+  if (!item) return '반복 소비 기준선을 쌓고 있습니다.'
+  const base = krw(item.baselineReference || item.baselineAverage || 0)
+  if (item.oneTimeCandidate) {
+    return `평소 ${base} 수준으로 보정해 추천에 반영합니다.`
+  }
+  return `평소 ${base} 기준으로 변화를 확인했습니다.`
+})
+const trendHighlights = computed(() => {
+  const total = spendingTrend.value?.total || {}
+  return [
+    {
+      label: '전월',
+      value: signedKrw(total.deltaFromPrevious),
+      caption: '지난달 대비',
+      tone: Number(total.deltaFromPrevious || 0) > 0 ? 'attention' : 'success',
+    },
+    {
+      label: '평소',
+      value: signedKrw(total.deltaFromBaseline),
+      caption: '6개월 평균 대비',
+      tone: Number(total.deltaFromBaseline || 0) > 0 ? 'attention' : 'success',
+    },
+    {
+      label: '추천 반영',
+      value: krw(total.adjustedForRecommendation),
+      caption: '일회성 보정',
+      tone: 'success',
+    },
+  ]
+})
 const analysisButtonLabel = computed(() => {
   if (isRefreshing.value) return '분석 중'
   return aiAnalysis.value ? '인사이트 갱신' : '인사이트 생성'
@@ -412,7 +489,8 @@ onMounted(loadSummary)
 .metric-grid article,
 .chart-card,
 .ai-card,
-.insight-card {
+.insight-card,
+.trend-card {
   padding: 16px;
 }
 
@@ -459,6 +537,103 @@ onMounted(loadSummary)
 
 .success {
   color: #008c95 !important;
+}
+
+.attention {
+  color: #b45309 !important;
+}
+
+.trend-card {
+  margin-bottom: 12px;
+  border-color: rgba(36, 54, 79, 0.1);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.trend-primary {
+  border-radius: 15px;
+  margin-bottom: 10px;
+  padding: 13px;
+  background: rgba(244, 248, 251, 0.88);
+}
+
+.trend-primary strong {
+  display: block;
+  color: #17202b;
+  font-size: 20px;
+  font-weight: 950;
+  line-height: 1.18;
+}
+
+.trend-primary p {
+  margin: 6px 0 0;
+  color: #5f6b77;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+  word-break: keep-all;
+}
+
+.trend-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.trend-metrics li {
+  min-width: 0;
+  border-radius: 13px;
+  padding: 11px 10px;
+  background: rgba(251, 253, 255, 0.82);
+}
+
+.trend-metrics small,
+.trend-metrics span {
+  display: block;
+  color: #8a9aad;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.trend-metrics strong {
+  display: block;
+  margin: 5px 0 3px;
+  color: #17202b;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.one-time-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.one-time-strip span,
+.one-time-strip b {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.one-time-strip span {
+  background: rgba(36, 54, 79, 0.08);
+  color: #5f6b77;
+}
+
+.one-time-strip b {
+  background: rgba(180, 83, 9, 0.09);
+  color: #b45309;
 }
 
 .ai-summary-grid {

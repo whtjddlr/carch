@@ -153,11 +153,11 @@ def serialize_transaction(transaction):
 
 
 def ensure_transactions_seeded():
-    if Transaction.objects.exists():
-        return
-
+    existing_ids = set(Transaction.objects.values_list('public_id', flat=True))
     rows = []
     for item in TRANSACTIONS:
+        if item['id'] in existing_ids:
+            continue
         rows.append(
             Transaction(
                 public_id=item['id'],
@@ -170,7 +170,8 @@ def ensure_transactions_seeded():
                 address=item.get('address') or '-',
             )
         )
-    Transaction.objects.bulk_create(rows, ignore_conflicts=True)
+    if rows:
+        Transaction.objects.bulk_create(rows, ignore_conflicts=True)
 
 
 def ensure_purchase_plans_seeded():
@@ -196,6 +197,135 @@ def ensure_purchase_plans_seeded():
 def transaction_queryset():
     ensure_transactions_seeded()
     return Transaction.objects.all()
+
+
+def _month_key_from_transaction(item):
+    date_text = str(item.get('date') or item.get('approvedAt') or item.get('approved_at') or '')
+    return date_text[:7] if len(date_text) >= 7 else ''
+
+
+def _shift_month(month_key, delta):
+    try:
+        year, month = [int(part) for part in str(month_key).split('-')[:2]]
+    except (TypeError, ValueError):
+        now = timezone.localtime()
+        year, month = now.year, now.month
+    month_index = year * 12 + month - 1 + int(delta)
+    shifted_year = month_index // 12
+    shifted_month = month_index % 12 + 1
+    return f'{shifted_year:04d}-{shifted_month:02d}'
+
+
+def _median(values):
+    clean = sorted(_as_int(value) for value in values)
+    if not clean:
+        return 0
+    middle = len(clean) // 2
+    if len(clean) % 2:
+        return clean[middle]
+    return round((clean[middle - 1] + clean[middle]) / 2)
+
+
+def _pct_change(current, base):
+    current = _as_int(current)
+    base = _as_int(base)
+    if base <= 0:
+        return None
+    return round(((current - base) / base) * 100)
+
+
+def _build_spending_trend(transactions):
+    expenses = [item for item in transactions if _as_int(item.get('amount')) < 0]
+    months = sorted({month for month in (_month_key_from_transaction(item) for item in expenses) if month})
+    current_month = months[-1] if months else timezone.localtime().strftime('%Y-%m')
+    previous_month = _shift_month(current_month, -1)
+    baseline_months = [_shift_month(current_month, -index) for index in range(1, 7)]
+
+    by_month_category = defaultdict(int)
+    by_month_total = defaultdict(int)
+    for item in expenses:
+        month = _month_key_from_transaction(item)
+        if not month:
+            continue
+        amount = abs(_as_int(item.get('amount')))
+        category = item.get('category') or item.get('cat') or '기타'
+        by_month_category[(month, category)] += amount
+        by_month_total[month] += amount
+
+    categories = sorted({category for _, category in by_month_category.keys()})
+    category_changes = []
+    adjusted_total = 0
+
+    for category in categories:
+        current_amount = by_month_category[(current_month, category)]
+        previous_amount = by_month_category[(previous_month, category)]
+        baseline_values = [by_month_category[(month, category)] for month in baseline_months]
+        baseline_average = round(sum(baseline_values) / len(baseline_values)) if baseline_values else 0
+        baseline_median = _median(baseline_values)
+        baseline_reference = max(baseline_median, baseline_average)
+        delta_from_previous = current_amount - previous_amount
+        delta_from_baseline = current_amount - baseline_reference
+        one_time = (
+            current_amount >= 50000
+            and (
+                (baseline_reference > 0 and current_amount >= baseline_reference * 1.75 and delta_from_baseline >= 35000)
+                or (baseline_reference == 0 and current_amount >= 80000)
+            )
+        )
+        if one_time:
+            adjusted_amount = min(current_amount, round(max(baseline_reference, current_amount * 0.45)))
+            status = 'one-time'
+        elif delta_from_baseline >= 30000 and baseline_reference > 0:
+            adjusted_amount = current_amount
+            status = 'increase'
+        elif delta_from_baseline <= -30000 and baseline_reference > 0:
+            adjusted_amount = current_amount
+            status = 'decrease'
+        else:
+            adjusted_amount = current_amount
+            status = 'stable'
+        adjusted_total += adjusted_amount
+        category_changes.append(
+            {
+                'category': category,
+                'currentAmount': current_amount,
+                'previousAmount': previous_amount,
+                'baselineAverage': baseline_average,
+                'baselineMedian': baseline_median,
+                'baselineReference': baseline_reference,
+                'deltaFromPrevious': delta_from_previous,
+                'deltaFromBaseline': delta_from_baseline,
+                'changeRateFromBaseline': _pct_change(current_amount, baseline_reference),
+                'adjustedAmount': adjusted_amount,
+                'recommendationWeight': round(adjusted_amount / current_amount, 2) if current_amount else 0,
+                'status': status,
+                'oneTimeCandidate': one_time,
+            }
+        )
+
+    category_changes.sort(key=lambda item: abs(item['deltaFromBaseline']), reverse=True)
+    current_total = by_month_total[current_month]
+    previous_total = by_month_total[previous_month]
+    baseline_totals = [by_month_total[month] for month in baseline_months]
+    baseline_total_average = round(sum(baseline_totals) / len(baseline_totals)) if baseline_totals else 0
+
+    return {
+        'currentMonth': current_month,
+        'previousMonth': previous_month,
+        'baselineMonths': baseline_months,
+        'basisLabel': '최근 6개월 기준',
+        'total': {
+            'current': current_total,
+            'previous': previous_total,
+            'baselineAverage': baseline_total_average,
+            'deltaFromPrevious': current_total - previous_total,
+            'deltaFromBaseline': current_total - baseline_total_average,
+            'adjustedForRecommendation': adjusted_total,
+        },
+        'categoryChanges': category_changes,
+        'oneTimeCandidates': [item for item in category_changes if item['oneTimeCandidate']][:4],
+        'recurringCategories': [item for item in category_changes if not item['oneTimeCandidate'] and item['currentAmount'] > 0][:5],
+    }
 
 
 def get_transaction_or_404(transaction_id):
@@ -795,7 +925,18 @@ def parse_transaction(request):
 
 def spending_summary(request):
     transactions = [serialize_transaction(item) for item in transaction_queryset()]
-    expense_rows = [item for item in transactions if item['amount'] < 0]
+    spending_trend = _build_spending_trend(transactions)
+    current_month = spending_trend['currentMonth']
+    expense_rows = [
+        item
+        for item in transactions
+        if item['amount'] < 0 and _month_key_from_transaction(item) == current_month
+    ]
+    income_rows = [
+        item
+        for item in transactions
+        if item['amount'] > 0 and _month_key_from_transaction(item) == current_month
+    ]
     by_category = defaultdict(int)
     by_card = defaultdict(int)
     for item in expense_rows:
@@ -805,9 +946,15 @@ def spending_summary(request):
 
     summary = {
         'totalExpense': sum(abs(item['amount']) for item in expense_rows),
-        'totalIncome': sum(item['amount'] for item in transactions if item['amount'] > 0),
+        'totalIncome': sum(item['amount'] for item in income_rows),
         'byCategory': [{'category': key, 'amount': value} for key, value in by_category.items()],
         'byCard': [{'cardId': key, 'amount': value} for key, value in by_card.items()],
+        'period': {
+            'currentMonth': current_month,
+            'previousMonth': spending_trend['previousMonth'],
+            'baselineMonths': spending_trend['baselineMonths'],
+        },
+        'spendingTrend': spending_trend,
     }
 
     include_ai = request.GET.get('ai') in {'1', 'true', 'yes'}
@@ -838,6 +985,7 @@ def spending_summary(request):
             'totalIncome': summary['totalIncome'],
             'byCategory': summary['byCategory'],
             'byCard': summary['byCard'],
+            'spendingTrend': spending_trend,
         }
         summary['aiAnalysis'] = analyze_spending_with_ai(summary, transactions, cards) or fallback_spending_analysis(summary)
         record = save_analysis_record(
@@ -866,15 +1014,34 @@ def spending_summary(request):
 
 def fallback_spending_analysis(summary):
     top_category = max(summary['byCategory'], key=lambda item: item['amount'], default={'category': '기타', 'amount': 0})
+    trend = summary.get('spendingTrend') or {}
+    one_time = (trend.get('oneTimeCandidates') or [None])[0]
+    recurring = (trend.get('recurringCategories') or [None])[0]
+    headline = f"{top_category['category']} 지출 비중이 가장 높습니다."
+    if one_time:
+        headline = f"{one_time['category']} 지출은 평소보다 커 일회성 가능성이 있습니다."
+    elif recurring:
+        headline = f"반복 소비는 {recurring['category']} 중심으로 안정적으로 이어지고 있습니다."
     return {
         'summaryTitle': '이번 달 소비 요약',
-        'headline': f"{top_category['category']} 지출 비중이 가장 높습니다.",
+        'headline': headline,
+        'primaryInsight': {
+            'label': '기준선',
+            'title': one_time['category'] if one_time else top_category['category'],
+            'severity': 'attention' if one_time else 'info',
+            'metricValue': one_time['currentAmount'] if one_time else top_category['amount'],
+        },
+        'summaryCards': [
+            {'label': '이번 달', 'value': _krw((trend.get('total') or {}).get('current')), 'tone': 'blue'},
+            {'label': '6개월 평균', 'value': _krw((trend.get('total') or {}).get('baselineAverage')), 'tone': 'gray'},
+            {'label': '추천 반영', 'value': _krw((trend.get('total') or {}).get('adjustedForRecommendation')), 'tone': 'teal'},
+        ],
         'savingOpportunities': [
             {
                 'title': f"{top_category['category']} 예산 점검",
                 'amount': 0,
-                'reason': 'AI 호출 실패 시 기본 규칙으로 만든 안내입니다.',
-                'action': '상위 지출 카테고리의 반복 결제를 확인하세요.',
+                'reason': '최근 6개월 기준선과 이번 달 소비를 비교했습니다.',
+                'action': '일회성 지출은 추천 판단에서 낮게 반영합니다.',
             }
         ],
         'categoryInsights': [
@@ -1594,21 +1761,43 @@ def _category_keywords(category):
     return CARD_RECOMMENDATION_CATEGORY_KEYWORDS.get(str(category), [str(category)])
 
 
-def _build_spending_profile():
+def _build_spending_profile(adjusted_for_recommendation=False):
     transactions = [serialize_transaction(item) for item in transaction_queryset()]
-    expenses = [item for item in transactions if _as_int(item.get('amount')) < 0]
+    spending_trend = _build_spending_trend(transactions)
+    current_month = spending_trend['currentMonth']
+    expenses = [
+        item
+        for item in transactions
+        if _as_int(item.get('amount')) < 0 and _month_key_from_transaction(item) == current_month
+    ]
+    adjustments = {
+        item['category']: _as_int(item.get('adjustedAmount'))
+        for item in spending_trend.get('categoryChanges') or []
+    }
+    actual_by_category = defaultdict(int)
+    for item in expenses:
+        actual_by_category[item.get('category') or item.get('cat') or '기타'] += abs(_as_int(item.get('amount')))
+
     by_category = defaultdict(int)
     by_card = defaultdict(int)
-    by_category_card = defaultdict(lambda: {'amount': 0, 'merchants': []})
+    by_category_card = defaultdict(lambda: {'amount': 0, 'actualAmount': 0, 'merchants': []})
 
     for item in expenses:
-        amount = abs(_as_int(item.get('amount')))
+        raw_amount = abs(_as_int(item.get('amount')))
         category = item.get('category') or item.get('cat') or '기타'
         card_id = str(item.get('cardId') or item.get('card_id') or '')
+        category_actual = actual_by_category[category] or raw_amount
+        if adjusted_for_recommendation:
+            category_adjusted = adjustments.get(category, category_actual)
+            scale = category_adjusted / category_actual if category_actual else 1
+            amount = round(raw_amount * scale)
+        else:
+            amount = raw_amount
         by_category[category] += amount
         by_card[card_id] += amount
         category_card = by_category_card[(category, card_id)]
         category_card['amount'] += amount
+        category_card['actualAmount'] += raw_amount
         merchant = item.get('merchantName') or item.get('merchant') or ''
         if merchant and merchant not in category_card['merchants']:
             category_card['merchants'].append(merchant)
@@ -1643,6 +1832,7 @@ def _build_spending_profile():
                     'category': category,
                     'cardId': card_id,
                     'amount': value['amount'],
+                    'actualAmount': value['actualAmount'],
                     'merchantExamples': value['merchants'][:3],
                 }
                 for (category, card_id), value in by_category_card.items()
@@ -1652,6 +1842,14 @@ def _build_spending_profile():
         ),
         'topCategory': top_category,
         'styleTags': style_tags[:3],
+        'period': {
+            'currentMonth': current_month,
+            'previousMonth': spending_trend['previousMonth'],
+            'baselineMonths': spending_trend['baselineMonths'],
+        },
+        'spendingTrend': spending_trend,
+        'actualTotalExpense': sum(actual_by_category.values()),
+        'adjustedForRecommendation': adjusted_for_recommendation,
     }
 
 
@@ -1764,10 +1962,10 @@ def _estimate_card_value(card, profile, owned=False):
 def _recommendation_reason(card, value, profile, monthly_delta):
     top_category = profile.get('topCategory') or '주요 소비'
     if monthly_delta > 0:
-        return f'{top_category} 지출 기준으로 연회비를 반영해도 현재 카드보다 월 {_krw(monthly_delta)} 정도 더 유리해요.'
+        return f'{top_category} 반복 소비 기준으로 연회비를 반영해도 월 {_krw(monthly_delta)} 정도 개선 여지가 있습니다.'
     if value.get('remainingSpendForBenefit'):
         return f'혜택 조건까지 {_krw(value["remainingSpendForBenefit"])} 정도 남아 있어, 실적을 채우면 후보가 될 수 있어요.'
-    return f'{top_category} 소비와 일부 혜택이 맞지만 현재 보유 카드 대비 순혜택은 크지 않아요.'
+    return f'{top_category} 소비와 일부 혜택이 맞지만 반복 소비 기준의 개선 폭은 크지 않습니다.'
 
 
 def _card_id(card):
@@ -1884,7 +2082,7 @@ def _build_routing_suggestions(profile, owned_values, result_cards, owned_ids):
                     'destinationRank': destination_item['rank'],
                     'destinationMonthlyDelta': destination_item['monthlyDelta'],
                     'title': f'{category}{_topic_particle(category)} {target_name}',
-                    'body': f'{source_name}의 {category} 결제를 {target_name}로 옮기면 월 {_krw(monthly_gain)} 더 남습니다.',
+                    'body': f'반복 {category} 결제를 {target_name}로 모으면 월 {_krw(monthly_gain)} 더 남습니다.',
                 }
             )
 
@@ -1910,7 +2108,7 @@ def _build_routing_suggestions(profile, owned_values, result_cards, owned_ids):
 
 
 def card_recommendations(request):
-    profile = _build_spending_profile()
+    profile = _build_spending_profile(adjusted_for_recommendation=True)
     ensure_owned_cards_seeded()
     owned_ids = {str(item.card_id) for item in OwnedCard.objects.all()}
 

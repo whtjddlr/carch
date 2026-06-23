@@ -126,9 +126,12 @@
 
         <article v-if="bundle?.profile" class="app-card profile-card">
           <div>
-            <span>소비 스타일</span>
+            <span>추천 기준</span>
             <strong>{{ bundle.profile.styleTags?.join(' · ') || '소비 분석 중' }}</strong>
-            <p>{{ krw(bundle.profile.totalExpense) }} 소비를 기준으로 순혜택을 계산했습니다.</p>
+            <p>
+              반복 소비 {{ krw(bundle.profile.totalExpense) }} 기준으로 계산했습니다.
+              <template v-if="oneTimeCount"> 일회성 후보 {{ oneTimeCount }}건은 낮게 반영했습니다.</template>
+            </p>
           </div>
         </article>
 
@@ -197,6 +200,7 @@ const routingSuggestions = computed(() => {
     .slice(0, 4)
 })
 const primaryRouting = computed(() => routingSuggestions.value[0] || {})
+const oneTimeCount = computed(() => bundle.value?.profile?.spendingTrend?.oneTimeCandidates?.length || 0)
 
 function signedKrw(value) {
   const amount = Number(value || 0)
