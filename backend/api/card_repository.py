@@ -18,6 +18,9 @@ CURATED_CARD_COPY = {
         'benefits': ['이마트 계열 15% 할인', '국내외 가맹점 0.5% 적립', '전월 실적 40만원'],
     },
 }
+PREFERRED_CARD_IMAGES = {
+    10612: '2978card.png',
+}
 
 
 def connect_card_db():
@@ -27,6 +30,10 @@ def connect_card_db():
 
 
 def image_filename_for(card_ad_id, local_path=''):
+    preferred = PREFERRED_CARD_IMAGES.get(int(card_ad_id or 0))
+    if preferred and (settings.CARD_IMAGE_DIR / preferred).exists():
+        return preferred
+
     candidates = []
     if local_path:
         candidates.append(Path(local_path).name)

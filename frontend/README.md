@@ -23,6 +23,7 @@ npm run dev
 
 ```bash
 npm run dev      # 개발 서버 실행
+npm run dev:mock # 백엔드 없이 mock 데이터로 개발 서버 실행
 npm run build    # 프로덕션 빌드 검증
 npm run preview  # 빌드 결과 미리보기
 ```
@@ -35,7 +36,13 @@ npm run preview  # 빌드 결과 미리보기
 VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-백엔드가 연결되지 않은 상태에서도 발표와 UI 확인이 가능하도록 주요 화면은 mock/fallback 데이터를 표시합니다.
+백엔드 없이 UI와 플로우만 검수할 때는 mock 모드를 사용합니다.
+
+```bash
+npm run dev:mock
+```
+
+mock 모드는 `VITE_USE_MOCK_API=true`로 실행되며 카드, 거래, 검색, 소비 분석, 카드 추천, 카치 채팅, 커뮤니티, 소비계획 데이터를 프론트에서 직접 반환합니다. 디자이너/프론트 담당자는 백엔드 설치 없이 `http://127.0.0.1:5175`에서 전체 화면을 확인할 수 있습니다.
 
 ## Main Routes
 
@@ -44,7 +51,7 @@ VITE_API_BASE_URL=http://127.0.0.1:8000
 - `/transactions/new`: AI 입력 보정 기반 소비내역 추가
 - `/budget`: 예산 및 큰 지출 관리
 - `/plans`: 목표 지출 계획
-- `/analytics/cards`: 카드 소비 분석
+- `/analytics`: 카드 소비 분석
 - `/community`: 카드 후기 커뮤니티
 - `/chat`: AI 카드 상담
 - `/settings`: 설정

@@ -57,13 +57,13 @@
             @click="onSlideClick(index)"
           >
             <span class="fan-card-media">
-              <img
-                v-if="card.imageUrl"
-                :src="card.imageUrl"
-                :alt="card.name"
-                :class="cardImageClass(card)"
-                @load="setImageOrientation(card.id, $event)"
-              />
+              <span v-if="card.imageUrl" class="fan-card-image" :class="cardImageClass(card)">
+                <img
+                  :src="card.imageUrl"
+                  :alt="card.name"
+                  @load="setImageOrientation(card.id, $event)"
+                />
+              </span>
             </span>
           </button>
 
@@ -345,7 +345,7 @@ function setImageOrientation(cardId, event) {
 }
 
 function cardImageClass(card) {
-  const orientation = imageOrientations.value[card.id]
+  const orientation = imageOrientations.value[card.id] || card.imageOrientation
   return {
     'is-ready': Boolean(orientation),
     'is-landscape': orientation === 'landscape',
@@ -834,27 +834,36 @@ onMounted(async () => {
   box-shadow: 0 18px 32px rgba(36, 54, 79, 0.22);
 }
 
-.fan-card-media img {
+.fan-card-image {
   position: absolute;
   inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 240ms ease;
 }
 
-.fan-card-media img.is-landscape {
+.fan-card-image.is-landscape {
   inset: auto;
   top: 50%;
   left: 50%;
   width: var(--card-h);
   height: var(--card-w);
   transform: translate(-50%, -50%) rotate(90deg);
+  transform-origin: center;
 }
 
-.fan-card-media img.is-ready {
+.fan-card-image img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fan-card-image.is-ready {
   opacity: 1;
 }
 

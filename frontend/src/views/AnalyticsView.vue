@@ -1,5 +1,5 @@
 <template>
-  <section class="screen">
+  <section class="screen analytics-screen">
     <header class="simple-header blue-gradient">
       <AppBackButton fallback="/cards" />
       <div>
@@ -141,15 +141,15 @@
         <div class="switch-metrics">
           <span>
             <small>월</small>
-            <b>{{ signedKrw(topRecommendation.economics.monthlyDelta) }}</b>
+            <b>{{ signedKrw(topRecommendationEconomics.monthlyDelta) }}</b>
           </span>
           <span>
             <small>연</small>
-            <b>{{ signedKrw(topRecommendation.economics.annualDelta) }}</b>
+            <b>{{ signedKrw(topRecommendationEconomics.annualDelta) }}</b>
           </span>
           <span>
-            <small>기준</small>
-            <b>연회비</b>
+            <small>계산 기준</small>
+            <b>연회비 포함</b>
           </span>
         </div>
         <RouterLink class="switch-link" :to="`/recommendations/r1`">
@@ -160,7 +160,7 @@
       <article class="app-card chart-card">
         <div class="section-title">
           <span>분포</span>
-          <small>{{ categoryRows.length }}개</small>
+          <small>{{ categoryCountLabel }}</small>
         </div>
         <div class="donut-panel">
           <div class="category-donut" :style="categoryChartStyle" role="img" :aria-label="categoryChartLabel">
@@ -248,6 +248,7 @@ const expectedSaving = computed(() =>
   (aiAnalysis.value?.savingOpportunities || []).reduce((sum, item) => sum + Number(item.amount || 0), 0),
 )
 const topRecommendation = computed(() => recommendationBundle.value?.results?.[0] || null)
+const topRecommendationEconomics = computed(() => topRecommendation.value?.economics || {})
 const recommendationAlert = computed(() => recommendationBundle.value?.alert || null)
 const trendPeriodLabel = computed(() => {
   const currentMonth = spendingTrend.value?.currentMonth
@@ -310,7 +311,7 @@ const analysisButtonLabel = computed(() => {
   if (isRefreshing.value) return '분석 중'
   return aiAnalysis.value ? '인사이트 갱신' : '인사이트 생성'
 })
-const categoryRows = computed(() => {
+const rawCategoryRows = computed(() => {
   const rows = [...(safeSummary.value.byCategory || [])].sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
   const total = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0)
   return rows.map((item, index) => ({
@@ -320,6 +321,28 @@ const categoryRows = computed(() => {
     color: colors[index % colors.length],
   }))
 })
+const categoryRows = computed(() => {
+  const rows = rawCategoryRows.value
+  if (rows.length <= 6) return rows
+  const majorRows = rows.slice(0, 5)
+  const restRows = rows.slice(5)
+  const restAmount = restRows.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  const restShare = restRows.reduce((sum, item) => sum + Number(item.share || 0), 0)
+  const restPercent = restRows.reduce((sum, item) => sum + Number(item.percent || 0), 0)
+  return [
+    ...majorRows,
+    {
+      category: '기타',
+      amount: restAmount,
+      percent: Math.max(1, Math.round(restPercent)),
+      share: restShare,
+      color: '#8a9aad',
+    },
+  ]
+})
+const categoryCountLabel = computed(() => (
+  rawCategoryRows.value.length > 6 ? '상위 5개 + 기타' : `${rawCategoryRows.value.length}개`
+))
 const topCategory = computed(() => categoryRows.value[0] || null)
 const categoryChartStyle = computed(() => {
   if (!categoryRows.value.length) {
@@ -546,7 +569,7 @@ onMounted(loadSummary)
 }
 
 .page-padding {
-  padding: 18px 20px 28px;
+  padding: 18px 18px 28px;
 }
 
 .notice-card {
@@ -563,7 +586,7 @@ onMounted(loadSummary)
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .metric-grid article,
@@ -571,7 +594,49 @@ onMounted(loadSummary)
 .ai-card,
 .insight-card,
 .trend-card {
-  padding: 16px;
+  padding: 17px 16px;
+}
+
+.metric-card,
+.trend-card,
+.ai-summary-card,
+.ai-card,
+.card-switch-card,
+.chart-card,
+.insight-card {
+  border: 1px solid rgba(36, 54, 79, 0.1) !important;
+  border-radius: 18px !important;
+  background: rgba(251, 253, 255, 0.76) !important;
+  box-shadow: 0 14px 30px rgba(36, 54, 79, 0.055) !important;
+  backdrop-filter: blur(14px) saturate(1.06) !important;
+}
+
+.trend-card,
+.ai-card,
+.card-switch-card,
+.chart-card,
+.insight-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.trend-card::before,
+.ai-card::before,
+.card-switch-card::before,
+.chart-card::before,
+.insight-card::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: #24364f;
+  content: '';
+}
+
+.ai-card::before,
+.card-switch-card::before {
+  background: #008c95;
 }
 
 .metric-card {
@@ -624,7 +689,7 @@ onMounted(loadSummary)
 }
 
 .trend-card {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   border-color: rgba(36, 54, 79, 0.1);
   background: rgba(255, 255, 255, 0.78);
 }
@@ -809,7 +874,7 @@ onMounted(loadSummary)
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .ai-summary-card {
@@ -949,7 +1014,7 @@ onMounted(loadSummary)
 
 .empty-analysis-card {
   padding: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .empty-analysis-card span {
@@ -976,7 +1041,7 @@ onMounted(loadSummary)
 }
 
 .card-switch-card {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   padding: 16px;
   border-color: rgba(0, 140, 149, 0.18);
   background: linear-gradient(180deg, rgba(240, 253, 250, 0.82), rgba(255, 255, 255, 0.78));
@@ -1175,7 +1240,7 @@ h2 {
 
 .chart-card,
 .insight-card {
-  margin-top: 12px;
+  margin-top: 14px;
 }
 
 .donut-panel {

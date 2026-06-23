@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.http import FileResponse, Http404, JsonResponse
-from django.db.models import Max
+from django.db.models import Max, Q
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -667,6 +667,212 @@ def card_image(request, filename):
     return FileResponse(path.open('rb'))
 
 
+def search_limit(request, default=8, maximum=24):
+    try:
+        value = int(request.GET.get('limit', default))
+    except (TypeError, ValueError):
+        value = default
+    return max(1, min(value, maximum))
+
+
+def compact_search_text(*values):
+    return ' '.join(str(value or '').strip() for value in values if str(value or '').strip())
+
+
+def join_search_parts(*values):
+    return ' · '.join(str(value or '').strip() for value in values if str(value or '').strip())
+
+
+def search_score(query, *values):
+    if not query:
+        return 1
+
+    normalized_query = query.casefold()
+    tokens = [token for token in normalized_query.split() if token]
+    score = 0
+    for index, value in enumerate(values):
+        text = str(value or '').casefold()
+        if not text:
+            continue
+        weight = max(1, 4 - index)
+        if text == normalized_query:
+            score += 120 * weight
+        elif text.startswith(normalized_query):
+            score += 80 * weight
+        elif normalized_query in text:
+            score += 45 * weight
+        score += sum(10 * weight for token in tokens if token in text)
+    return score
+
+
+def clip_search_items(items, query, limit):
+    if query:
+        items.sort(key=lambda item: item.get('_score', 0), reverse=True)
+    clipped = []
+    for item in items[:limit]:
+        clipped.append({key: value for key, value in item.items() if key != '_score'})
+    return clipped
+
+
+def build_card_search_item(card, query, owned_ids):
+    card_id = str(card.get('id') or card.get('cardAdId') or card.get('card_ad_id') or '')
+    title = card.get('name') or card.get('cardName') or card.get('card_name') or '카드'
+    issuer = card.get('issuer') or card.get('issuerName') or card.get('issuer_name') or ''
+    benefit = card.get('benefitSummary') or card.get('titleDescription') or card.get('title_description') or ''
+    owned = card_id in owned_ids
+    return {
+        'id': card_id,
+        'type': 'card',
+        'title': title,
+        'description': join_search_parts(issuer, benefit),
+        'path': f'/cards/{card_id}' if owned else f'/cards/apply/{card_id}',
+        'badge': '보유 카드' if owned else '카드 후보',
+        'imageUrl': card.get('imageUrl') or card.get('image_url') or '',
+        'meta': {
+            'issuer': issuer,
+            'benefitSummary': benefit,
+            'owned': owned,
+        },
+        '_score': search_score(query, title, issuer, benefit, card_id) + (90 if owned else 0),
+    }
+
+
+def build_transaction_search_item(tx, query):
+    amount = int(tx.get('amount') or tx.get('amt') or 0)
+    title = tx.get('merchant') or tx.get('merchantName') or '거래내역'
+    category = tx.get('category') or tx.get('cat') or ''
+    date = tx.get('date') or ''
+    amount_text = f'{abs(amount):,}원'
+    direction = '입금' if amount > 0 else '결제'
+    return {
+        'id': tx.get('id'),
+        'type': 'transaction',
+        'title': title,
+        'description': join_search_parts(category, date, amount_text),
+        'path': f"/transactions/{tx.get('id')}",
+        'badge': direction,
+        'meta': {
+            'category': category,
+            'date': date,
+            'amount': amount,
+        },
+        '_score': search_score(query, title, category, date, amount_text, tx.get('address') or tx.get('addr')),
+    }
+
+
+def build_community_search_item(post, query):
+    tags = post.get('tags') or []
+    tag_text = ' '.join(tags)
+    title = post.get('title') or '커뮤니티 글'
+    body = post.get('body') or ''
+    author = post.get('author') or ''
+    return {
+        'id': post.get('id'),
+        'type': 'community',
+        'title': title,
+        'description': compact_search_text(author, body[:45]),
+        'path': f"/community/{post.get('id')}",
+        'badge': f"댓글 {post.get('comments') or post.get('commentCount') or 0}",
+        'meta': {
+            'author': author,
+            'tags': tags,
+        },
+        '_score': search_score(query, title, body, author, tag_text),
+    }
+
+
+def search_items(request):
+    query = (request.GET.get('q') or request.GET.get('search') or '').strip()
+    search_type = (request.GET.get('type') or 'all').strip()
+    if search_type not in {'all', 'card', 'transaction', 'community'}:
+        search_type = 'all'
+
+    limit = search_limit(request)
+    per_section_limit = limit if search_type != 'all' else min(5, limit)
+    sections = []
+    items = []
+
+    ensure_owned_cards_seeded()
+    owned_cards = list(OwnedCard.objects.all())
+    owned_ids = {str(item.card_id) for item in owned_cards}
+
+    if search_type in {'all', 'card'}:
+        card_candidates = []
+        if query:
+            card_candidates = fetch_cards(request, limit=limit * 3, search=query)
+            for owned_card in owned_cards:
+                already_included = any(
+                    str(card.get('cardAdId') or card.get('id')) == str(owned_card.card_id)
+                    for card in card_candidates
+                )
+                if already_included or not str(owned_card.card_id).isdigit():
+                    continue
+                card = fetch_card(int(owned_card.card_id), request)
+                if card and search_score(query, card.get('cardName'), card.get('issuerName'), card.get('benefitSummary')) > 0:
+                    card_candidates.append(card)
+        else:
+            if search_type == 'card':
+                card_candidates = fetch_cards(request, limit=limit * 2)
+            else:
+                for owned_card in owned_cards:
+                    card = serialize_owned_card(owned_card, request)
+                    if card:
+                        card_candidates.append(card)
+                if not card_candidates:
+                    card_candidates = fetch_cards(request, limit=per_section_limit, active_only=True)
+
+        card_items = clip_search_items(
+            [build_card_search_item(card, query, owned_ids) for card in card_candidates],
+            query,
+            per_section_limit,
+        )
+        sections.append({'type': 'card', 'title': '카드', 'count': len(card_items), 'items': card_items})
+        items.extend(card_items)
+
+    if search_type in {'all', 'transaction'}:
+        tx_queryset = transaction_queryset()
+        if query:
+            tx_queryset = tx_queryset.filter(
+                Q(merchant_name__icontains=query)
+                | Q(category__icontains=query)
+                | Q(address__icontains=query)
+                | Q(source_text__icontains=query)
+                | Q(card_id__icontains=query)
+            )
+        tx_rows = [serialize_transaction(tx) for tx in tx_queryset[: limit * 3]]
+        tx_items = clip_search_items(
+            [build_transaction_search_item(tx, query) for tx in tx_rows],
+            query,
+            per_section_limit,
+        )
+        sections.append({'type': 'transaction', 'title': '거래', 'count': len(tx_items), 'items': tx_items})
+        items.extend(tx_items)
+
+    if search_type in {'all', 'community'}:
+        ensure_community_seeded()
+        posts = CommunityPost.objects.all()
+        if query:
+            posts = posts.filter(Q(title__icontains=query) | Q(body__icontains=query) | Q(author__icontains=query))
+        post_rows = [serialize_community_post(post) for post in posts[: limit * 3]]
+        community_items = clip_search_items(
+            [build_community_search_item(post, query) for post in post_rows],
+            query,
+            per_section_limit,
+        )
+        sections.append({'type': 'community', 'title': '커뮤니티', 'count': len(community_items), 'items': community_items})
+        items.extend(community_items)
+
+    return json_response(
+        {
+            'query': query,
+            'type': search_type,
+            'count': len(items),
+            'sections': [section for section in sections if section['items']],
+            'results': items[:limit],
+        }
+    )
+
+
 def card_list(request):
     ids = [value.strip() for value in request.GET.get('ids', '').split(',') if value.strip()]
     if ids:
@@ -1172,7 +1378,7 @@ def fallback_chat_response(message, context):
         quick_replies = ['큰 지출 계획 만들기', '취업 준비 예시', '카드 추천해줘']
     else:
         reply = f"현재 데이터에서는 {top_category['category']} 지출이 가장 크게 보여요. 먼저 상위 카테고리를 확인하고, 자주 쓰는 카드가 그 지출에 맞는 혜택을 주는지 비교해보면 좋겠습니다."
-        route = '/analytics/cards'
+        route = '/analytics'
         quick_replies = ['이번 달 소비 분석해줘', '카드 추천해줘', '결제내역 추가할래']
 
     return {
@@ -1640,7 +1846,7 @@ def fallback_spending_analysis(summary):
                 'reason': 'AI 호출 실패 시 기본 규칙으로 만든 안내입니다.',
                 'action': '상위 지출 카테고리의 반복 결제를 확인하세요.',
                 'severity': 'info',
-                'route': '/analytics/cards',
+                'route': '/analytics',
             }
         ],
         'categoryInsights': [
@@ -1655,7 +1861,7 @@ def fallback_spending_analysis(summary):
         'warnings': ['실제 카드 혜택과 전월 실적 조건은 카드사 안내를 최종 확인해야 합니다.'],
         'nextActions': ['상위 지출 확인', '카드 혜택 비교'],
         'actionButtons': [
-            {'label': '소비 분석 보기', 'route': '/analytics/cards', 'intent': 'open-analysis'},
+            {'label': '소비 분석 보기', 'route': '/analytics', 'intent': 'open-analysis'},
             {'label': '카드 추천 보기', 'route': '/recommendations/new', 'intent': 'recommendation'},
         ],
         'aiMode': 'mock',
@@ -1689,7 +1895,7 @@ def fallback_chat_response(message, context):
         chips = [{'label': '관리 방식', 'value': '선택 가능', 'tone': 'gold'}]
     else:
         reply = f'현재 데이터에서는 {top_category_name} 지출이 가장 크게 보여요. 먼저 상위 지출을 확인하고, 자주 쓰는 카드가 그 소비에 맞는 혜택을 주는지 비교하면 좋습니다.'
-        route = '/analytics/cards'
+        route = '/analytics'
         message_type = 'spending-analysis'
         quick_replies = ['이번 달 소비 분석해줘', '카드 추천해줘', '결제내역 추가할래']
         chips = [{'label': '우선 확인', 'value': str(top_category_name), 'tone': 'teal'}]
@@ -1755,7 +1961,7 @@ def ai_contract(request):
                         'summaryChips': [],
                         'quickReplies': [],
                         'actionButtons': [],
-                        'relatedRoute': '/analytics/cards',
+                        'relatedRoute': '/analytics',
                         'confidence': 0.78,
                     },
                 },

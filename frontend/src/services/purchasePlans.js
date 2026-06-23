@@ -119,36 +119,38 @@ const buildScenarios = (plan) => {
 }
 
 export async function parsePurchasePlan(payload) {
+  if (useMockApi) {
+    await delay(900)
+    const text = payload.rawPrompt || payload.prompt || ''
+    const type = inferType(text)
+    const title = type === '큰 지출' ? '새 목표 지출 계획' : `${type} 지출 계획`
+    const startMonth = payload.startMonth || '2026-07'
+    const endMonth = payload.endMonth || '2026-08'
+    const templates = itemTemplates[type] || itemTemplates['취업 준비']
+
+    return {
+      title,
+      type,
+      expenseMode: payload.expenseMode || 'planned-extra',
+      totalBudget: Number(payload.budget || 800000),
+      startMonth,
+      endMonth,
+      items: templates.map(([name, category, amount], index) => ({
+        id: `i${Date.now()}${index + 1}`,
+        name,
+        category,
+        amount,
+        targetMonth: index < 2 ? startMonth : endMonth,
+        required: index < 3,
+        flexible: index !== 0,
+      })),
+    }
+  }
+
   try {
     return await request(api.post('/api/v1/purchase-plans/parse/', payload, { timeout: AI_REQUEST_TIMEOUT_MS }))
   } catch (error) {
-    if (!useMockApi) throw error
-  }
-
-  await delay(900)
-  const text = payload.rawPrompt || payload.prompt || ''
-  const type = inferType(text)
-  const title = type === '큰 지출' ? '새 목표 지출 계획' : `${type} 지출 계획`
-  const startMonth = payload.startMonth || '2026-07'
-  const endMonth = payload.endMonth || '2026-08'
-  const templates = itemTemplates[type] || itemTemplates['취업 준비']
-
-  return {
-    title,
-    type,
-    expenseMode: payload.expenseMode || 'planned-extra',
-    totalBudget: Number(payload.budget || 800000),
-    startMonth,
-    endMonth,
-    items: templates.map(([name, category, amount], index) => ({
-      id: `i${Date.now()}${index + 1}`,
-      name,
-      category,
-      amount,
-      targetMonth: index < 2 ? startMonth : endMonth,
-      required: index < 3,
-      flexible: index !== 0,
-    })),
+    throw error
   }
 }
 

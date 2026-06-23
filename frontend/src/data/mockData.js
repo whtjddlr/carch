@@ -55,7 +55,7 @@ export const cards = [
     benefits: ['온라인 쇼핑 10% 할인', '오프라인 쇼핑 10% 할인', '쇼핑멤버십 50% 할인'],
     annualFee: 28000,
     previousMonthMinSpend: 500000,
-    imageUrl: '/card-images/10612.png',
+    imageUrl: '/card-images/2978card.png',
     num: '5412 **** **** 3345',
     exp: '08/26',
     holder: 'NAM JUHYUN',
@@ -132,7 +132,7 @@ export const notifications = [
 ]
 
 export const recommendations = [
-  { id: 'r1', cardAdId: 10612, issuer: '우리카드', name: '카드의정석2 SHOPPER', match: 94, benefit: '온라인·오프라인 쇼핑 최대 15% 할인', annualFee: 28000, previousMonthMinSpend: 500000, tags: ['쇼핑', '간편결제'], grad: 'purple', imageUrl: '/card-images/10612.png', highlights: ['온라인 쇼핑 10% 할인', '오프라인 쇼핑 10% 할인', '쇼핑멤버십 50% 할인', '전월 실적 50만원'] },
+  { id: 'r1', cardAdId: 10612, issuer: '우리카드', name: '카드의정석2 SHOPPER', match: 94, benefit: '온라인·오프라인 쇼핑 최대 15% 할인', annualFee: 28000, previousMonthMinSpend: 500000, tags: ['쇼핑', '간편결제'], grad: 'purple', imageUrl: '/card-images/2978card.png', highlights: ['온라인 쇼핑 10% 할인', '오프라인 쇼핑 10% 할인', '쇼핑멤버십 50% 할인', '전월 실적 50만원'] },
   { id: 'r2', cardAdId: 10029, issuer: '롯데카드', name: 'LOCA 100', match: 89, benefit: '일상 가맹점 언제나 1.5% 할인', annualFee: 20000, previousMonthMinSpend: 750000, tags: ['생활', '교통'], grad: 'blue', imageUrl: '/card-images/10029.png', highlights: ['언제나 1.5% 할인', '주유소 최대 1% 할인', '대중교통 최대 1% 할인', '전월 실적 75만원'] },
   { id: 'r3', cardAdId: 10609, issuer: '신한카드', name: '이마트 신한카드', match: 84, benefit: '이마트 계열 이용금액 15% 할인', annualFee: 18000, previousMonthMinSpend: 400000, tags: ['마트', '신한카드'], grad: 'teal', imageUrl: '/card-images/10609.png', highlights: ['이마트 계열 15% 할인', '국내외 가맹점 0.5% 적립', '전월 실적 40만원', 'VISA 연회비 18,000원'] },
 ]
