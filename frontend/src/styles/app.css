@@ -201,8 +201,9 @@ a {
   .detail-header,
   .editor-header
 ) {
-  background: var(--carch-page) !important;
-  color: var(--carch-ink) !important;
+  background: linear-gradient(180deg, #2c4e72 0%, #2a486b 32%, #324f70 48%, #45617f 62%, #6883a1 74%, #9db1c5 85%, #d4dde6 93%, var(--carch-page) 100%) !important;
+  color: #fff !important;
+  padding-bottom: clamp(34px, 9vw, 50px) !important;
 }
 
 .app-backdrop .phone-shell :is(
@@ -218,7 +219,7 @@ a {
   .detail-header,
   .editor-header
 ) :is(h1, h2, h3, strong, b) {
-  color: var(--carch-ink) !important;
+  color: #fff !important;
   font-weight: 900;
   letter-spacing: 0;
 }
@@ -236,7 +237,7 @@ a {
   .detail-header,
   .editor-header
 ) :is(p, span, small) {
-  color: var(--carch-muted) !important;
+  color: rgba(255, 255, 255, 0.74) !important;
 }
 
 .app-backdrop .phone-shell :is(
@@ -252,11 +253,11 @@ a {
   .detail-header,
   .editor-header
 ) :is(a, button, .back-link, .back-button) {
-  border: 1px solid var(--carch-control-border) !important;
-  background: transparent !important;
-  color: var(--carch-ink) !important;
+  border: 0 !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #fff !important;
   box-shadow: none !important;
-  backdrop-filter: blur(16px) saturate(1.1);
+  backdrop-filter: blur(10px) saturate(1.08);
 }
 
 .header-spacer {
@@ -274,34 +275,48 @@ a {
 }
 
 .app-card {
-  border: 1px solid var(--carch-surface-border);
-  border-radius: 16px;
-  background: var(--carch-surface-bg);
-  box-shadow: var(--carch-surface-shadow);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   animation: card-enter 260ms ease both;
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
-  backdrop-filter: blur(18px) saturate(1.08);
+  backdrop-filter: none;
 }
 
 .app-card-sm {
-  border: 1px solid var(--carch-surface-border);
-  border-radius: 16px;
-  background: var(--carch-surface-bg);
-  box-shadow: var(--carch-surface-shadow);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   animation: card-enter 240ms ease both;
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
-  backdrop-filter: blur(18px) saturate(1.08);
+  backdrop-filter: none;
 }
 
 .app-backdrop .phone-shell :is(.app-card, .app-card-sm) {
-  border-color: var(--carch-surface-border) !important;
-  background: var(--carch-surface-bg) !important;
-  box-shadow: var(--carch-surface-shadow) !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
 }
 
 .app-backdrop .phone-shell :is(
   .search-box,
   .notice-card,
+  .chat-composer,
+  .composer,
+  .input-panel,
+  .prompt-card
+) {
+  border: 1px solid var(--carch-surface-border) !important;
+  background: var(--carch-surface-bg) !important;
+  box-shadow: var(--carch-surface-shadow) !important;
+  color: var(--carch-ink) !important;
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.app-backdrop .phone-shell :is(
   .empty-card,
   .mode-card,
   .current-summary,
@@ -314,24 +329,21 @@ a {
   .chart-card,
   .recommend-card,
   .message-card,
-  .chat-composer,
-  .composer,
-  .input-panel,
   .timeline-card,
   .allocation-card,
   .scenario-card,
   .usage-card,
-  .prompt-card,
   .example-card,
   .entry-card,
   .warning-card,
   .role-card
 ) {
-  border: 1px solid var(--carch-surface-border) !important;
-  background: var(--carch-surface-bg) !important;
-  box-shadow: var(--carch-surface-shadow) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
   color: var(--carch-ink) !important;
-  backdrop-filter: blur(18px) saturate(1.08);
+  backdrop-filter: none !important;
 }
 
 .app-backdrop .phone-shell .budget-list-header .current-summary {
@@ -377,8 +389,8 @@ a {
   .compact-list li,
   .record-list li
 ) {
-  border: 1px solid var(--carch-surface-border) !important;
-  background: rgba(248, 251, 253, 0.28) !important;
+  border: 0 !important;
+  background: transparent !important;
   box-shadow: none !important;
 }
 
@@ -407,11 +419,15 @@ a {
   .insight-card,
   .action-card
 ) {
-  border-color: var(--carch-surface-border) !important;
-  border-radius: 14px !important;
-  background: var(--carch-surface-bg) !important;
-  box-shadow: var(--carch-surface-shadow) !important;
-  backdrop-filter: blur(18px) saturate(1.08);
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.app-backdrop .phone-shell :is(.post-card, .notification-card, .search-result) {
+  border-bottom: 1px solid rgba(32, 36, 42, 0.08) !important;
 }
 
 .app-backdrop .phone-shell :is(
@@ -839,9 +855,14 @@ a {
 
 .bottom-nav-link.router-link-active,
 .bottom-nav-link.active {
-  color: var(--carch-ink);
-  background: var(--carch-glass);
-  box-shadow: inset 0 0 0 1px var(--carch-glass-border), inset 0 1px 0 var(--carch-glass-highlight), var(--carch-shadow-soft);
+  color: #1c3149;
+  background: transparent;
+  box-shadow: none;
+  font-weight: 900;
+}
+
+.bottom-nav-link.active .bottom-nav-icon svg {
+  stroke-width: 2.6;
 }
 
 .bottom-nav-link.is-ai {
@@ -852,13 +873,21 @@ a {
 }
 
 .bottom-nav-link.is-ai .bottom-nav-icon {
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
+  overflow: hidden;
   border: 4px solid var(--carch-page);
-  border-radius: 999px;
+  border-radius: 16px;
   background: rgba(36, 54, 79, 0.94);
   color: #fff;
-  box-shadow: 0 14px 26px rgba(36, 54, 79, 0.18), 0 0 0 1px rgba(248, 251, 253, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  box-shadow: 0 14px 26px rgba(36, 54, 79, 0.2), 0 0 0 1px rgba(248, 251, 253, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.magpie-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 42%;
 }
 
 .app-backdrop .phone-shell :is(.section-head a, .selector-head a, .profile-summary a) {
@@ -969,7 +998,7 @@ a:active,
 
 .app-card:hover,
 .app-card-sm:hover {
-  box-shadow: 0 12px 34px rgba(36, 54, 79, 0.06);
+  box-shadow: none;
 }
 
 .page-slide-enter-active,

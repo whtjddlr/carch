@@ -2,6 +2,17 @@
   <section class="screen">
     <header class="utility-header blue-gradient">
       <AppBackButton :fallback="backFallback" />
+      <button
+        v-if="isCardDetail && selectedCard"
+        type="button"
+        class="card-delete-button"
+        style="background: #e5484d !important; color: #fff !important; border: 0 !important; box-shadow: 0 6px 16px rgba(217, 45, 32, 0.36) !important;"
+        :disabled="isDeletingCard"
+        aria-label="카드 삭제"
+        @click="deleteCard"
+      >
+        <Trash2 :size="18" />
+      </button>
       <h1>{{ pageTitle }}</h1>
       <p>{{ pageDescription }}</p>
     </header>
@@ -336,6 +347,7 @@ import {
   Settings,
   ShieldCheck,
   Target,
+  Trash2,
   User,
   WalletCards,
 } from 'lucide-vue-next'
@@ -349,7 +361,7 @@ import {
   user,
 } from '@/data/mockData'
 import AppBackButton from '@/components/AppBackButton.vue'
-import { fetchCard, fetchTransactions, normalizeCard } from '@/services/api'
+import { deleteOwnedCard, fetchCard, fetchTransactions, normalizeCard } from '@/services/api'
 
 const props = defineProps({
   type: { type: String, default: 'default' },
@@ -388,6 +400,20 @@ const selectedCard = computed(() => {
   if (!needsCard.value) return null
   return apiCard.value || cards.find((card) => card.id === route.params.id)
 })
+
+const isDeletingCard = ref(false)
+async function deleteCard() {
+  if (!selectedCard.value || isDeletingCard.value) return
+  if (!window.confirm(`${selectedCard.value.name} 카드를 보유 목록에서 삭제할까요?`)) return
+  isDeletingCard.value = true
+  try {
+    await deleteOwnedCard(selectedCard.value.id)
+    router.push('/cards')
+  } catch (error) {
+    isDeletingCard.value = false
+    window.alert('카드를 삭제하지 못했습니다.')
+  }
+}
 
 const selectedTransaction = computed(() => {
   if (props.type !== 'transaction') return null
@@ -613,8 +639,36 @@ onMounted(async () => {
 
 <style scoped>
 .utility-header {
+  position: relative;
   padding: 24px 20px;
   color: #fff;
+}
+
+.card-delete-button {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 2;
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: #e5484d !important;
+  color: #fff !important;
+  box-shadow: 0 6px 16px rgba(217, 45, 32, 0.34) !important;
+  cursor: pointer;
+  transition: transform 150ms ease, background-color 150ms ease;
+}
+
+.card-delete-button:active {
+  transform: scale(0.94);
+}
+
+.card-delete-button:disabled {
+  opacity: 0.5;
 }
 
 .utility-header h1 {
@@ -700,13 +754,14 @@ onMounted(async () => {
 }
 
 .detail-card-art {
+  position: relative;
   display: flex;
-  height: 190px;
+  height: 200px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 12px;
-  padding: 18px;
+  border-radius: 14px;
+  padding: 0;
   background: #e7edf4;
   color: #0f5fae;
 }
@@ -718,6 +773,18 @@ onMounted(async () => {
   height: 100%;
   object-fit: contain;
   filter: drop-shadow(0 12px 20px rgba(16, 24, 40, 0.16));
+}
+
+.card-detail-card .detail-card-art img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 174px;
+  height: 276px;
+  object-fit: cover;
+  border-radius: 12px;
+  transform: translate(-50%, -50%) rotate(90deg);
+  filter: drop-shadow(0 16px 24px rgba(16, 24, 40, 0.22));
 }
 
 .detail-head {

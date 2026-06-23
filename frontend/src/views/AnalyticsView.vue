@@ -1143,4 +1143,51 @@ h2 {
     flex-basis: 36px;
   }
 }
+
+/* ── 카드 메인 페이지 톤 통일 (플랫/헤어라인) ── */
+.metric-card,
+.trend-card,
+.ai-card,
+.empty-analysis-card,
+.card-switch-card,
+.chart-card,
+.insight-card,
+.trend-primary,
+.primary-insight,
+.ai-summary-card,
+.switch-card-fallback {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.trend-metrics li,
+.signal-grid li,
+.compact-list li,
+.switch-metrics span {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.trend-card,
+.ai-card,
+.empty-analysis-card,
+.card-switch-card,
+.chart-card,
+.insight-card {
+  margin-top: 14px !important;
+  border-top: 1px solid rgba(32, 36, 42, 0.085) !important;
+  padding: 16px 0 2px !important;
+}
+
+.metric-card {
+  padding: 4px 0 !important;
+}
+
+.switch-link {
+  background: linear-gradient(150deg, #2c4e72, #1c3149) !important;
+}
 </style>

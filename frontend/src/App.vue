@@ -18,7 +18,8 @@
               :to="item.path"
             >
               <span class="bottom-nav-icon">
-                <component :is="item.icon" :size="item.primary ? 20 : 19" />
+                <component v-if="!item.primary" :is="item.icon" :size="19" />
+                <img v-else class="magpie-icon" src="/card-images/magpie-face.png" alt="AI" />
               </span>
               <span>{{ item.label }}</span>
             </RouterLink>
@@ -32,13 +33,13 @@
 <script setup>
 import { nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { BarChart3, Bot, CreditCard, Target, Users } from 'lucide-vue-next'
+import { BarChart3, CreditCard, Target, Users } from 'lucide-vue-next'
 
 const currentRoute = useRoute()
 const navItems = [
   { path: '/cards', icon: CreditCard, label: '카드', matches: ['/cards', '/recommendations'] },
   { path: '/analytics/cards', icon: BarChart3, label: '소비분석', matches: ['/analytics'] },
-  { path: '/chat', icon: Bot, label: 'AI', primary: true },
+  { path: '/chat', icon: null, label: 'AI', primary: true },
   { path: '/budget', icon: Target, label: '예산', matches: ['/budget'] },
   { path: '/community', icon: Users, label: '커뮤니티', matches: ['/community'] },
 ]

@@ -25,95 +25,61 @@
 
     <div class="screen-scroll scrollbar-hide dashboard-body">
       <div class="month-summary">
-        <div>
+        <div class="greet">
+          <span class="greet-avatar"><User :size="22" /></span>
+          <div class="greet-copy">
+            <span>반가워요</span>
+            <strong>{{ user.name }}님</strong>
+          </div>
+        </div>
+        <div class="spend-figure">
           <span>이번 달 총 지출</span>
           <strong>{{ totalSpendLabel }}</strong>
-        </div>
-        <i />
-        <div>
-          <span>보유 카드</span>
-          <strong>{{ cards.length }}장</strong>
         </div>
       </div>
 
       <div class="card-carousel" :class="[{ 'is-gliding': isCarouselGliding }, `glide-${carouselDirection}`]">
         <div
-          ref="cardStackRef"
-          class="card-stack"
-          :class="{ 'is-gliding': isCarouselGliding }"
-          @scroll.passive="syncActiveCard"
+          class="card-stage"
+          @pointerdown="onDragStart"
+          @pointermove="onDragMove"
+          @pointerup="onDragEnd"
+          @pointercancel="onDragEnd"
         >
-          <article
+          <button
             v-for="(card, index) in cards"
             :key="card.id"
-            class="pay-card"
-            :class="[
-              `card-tone-${card.grad}`,
-              { 'is-active': activeCardIndex === index, 'is-motion-target': motionTargetIndex === index },
-            ]"
-            @click="!isCarouselGliding && router.push(`/cards/${card.id}`)"
+            type="button"
+            class="slide-card"
+            :class="[`card-tone-${card.grad}`, { 'is-active': activeCardIndex === index }]"
+            :style="slideCardStyle(index)"
+            :aria-label="activeCardIndex === index ? `${card.name} 상세 보기` : `${card.name} 선택`"
+            @click="onSlideClick(index)"
           >
-            <div class="card-art" v-if="card.imageUrl">
-              <button
-                v-if="cards.length > 1 && activeCardIndex === index && previousPreviewCard?.imageUrl"
-                type="button"
-                class="side-card-preview side-card-preview-left"
-                aria-label="이전 카드 보기"
-                :disabled="isCarouselGliding"
-                @click.stop="moveCard(-1)"
-              >
-                <img
-                  :src="previousPreviewCard.imageUrl"
-                  :alt="previousPreviewCard.name"
-                  :class="cardImageClass(previousPreviewCard)"
-                  @load="setImageOrientation(previousPreviewCard.id, $event)"
-                />
-              </button>
-              <button
-                v-if="cards.length > 1 && activeCardIndex === index && nextPreviewCard?.imageUrl"
-                type="button"
-                class="side-card-preview side-card-preview-right"
-                aria-label="다음 카드 보기"
-                :disabled="isCarouselGliding"
-                @click.stop="moveCard(1)"
-              >
-                <img
-                  :src="nextPreviewCard.imageUrl"
-                  :alt="nextPreviewCard.name"
-                  :class="cardImageClass(nextPreviewCard)"
-                  @load="setImageOrientation(nextPreviewCard.id, $event)"
-                />
-              </button>
+            <span class="fan-card-media">
               <img
+                v-if="card.imageUrl"
                 :src="card.imageUrl"
                 :alt="card.name"
                 :class="cardImageClass(card)"
                 @load="setImageOrientation(card.id, $event)"
               />
-            </div>
-          </article>
-        </div>
+            </span>
+          </button>
 
-        <button
-          v-if="cards.length > 1"
-          type="button"
-          class="carousel-edge-button carousel-edge-left"
-          aria-label="이전 카드"
-          :disabled="isCarouselGliding"
-          @click="moveCard(-1)"
-        >
-          <ChevronLeft :size="18" />
-        </button>
-        <button
-          v-if="cards.length > 1"
-          type="button"
-          class="carousel-edge-button carousel-edge-right"
-          aria-label="다음 카드"
-          :disabled="isCarouselGliding"
-          @click="moveCard(1)"
-        >
-          <ChevronRight :size="18" />
-        </button>
+          <button
+            type="button"
+            class="slide-card slide-add"
+            :class="{ 'is-active': activeCardIndex === cards.length }"
+            :style="slideCardStyle(cards.length)"
+            aria-label="카드 추가"
+            @click="onSlideClick(cards.length)"
+          >
+            <span class="fan-card-media slide-add-media">
+              <PlusCircle :size="48" :stroke-width="1.8" />
+            </span>
+          </button>
+        </div>
 
         <div class="card-detail-stage">
           <Transition name="card-detail-spin">
@@ -163,47 +129,11 @@
             </div>
           </div>
           </Transition>
-        </div>
 
-        <div v-if="cards.length > 1" class="card-carousel-controls" aria-label="보유 카드 이동">
-          <div class="card-dots">
-            <button
-              v-for="(_, index) in cards"
-              :key="index"
-              type="button"
-              :class="{ active: activeCardIndex === index }"
-              :aria-label="`${index + 1}번째 카드 보기`"
-              :disabled="isCarouselGliding"
-              @click="goToCard(index)"
-            />
-          </div>
-        </div>
-
-        <div class="card-manage-toolbar" aria-label="보유 카드 관리">
-          <button
-            type="button"
-            class="wallet-icon-button"
-            aria-label="보유 카드 관리 메뉴"
-            :aria-expanded="isCardManageMenuOpen"
-            @click.stop="toggleCardManageMenu"
-          >
-            <MoreHorizontal :size="20" />
-          </button>
-          <div v-if="isCardManageMenuOpen" class="card-manage-menu" role="menu" aria-label="보유 카드 관리 메뉴">
-            <button type="button" role="menuitem" @click.stop="openCardPickerFromMenu">
-              <PlusCircle :size="15" />
-              <span>카드 추가</span>
-            </button>
-            <button
-              type="button"
-              class="danger"
-              role="menuitem"
-              :disabled="!activeCard || isDeletingCard"
-              @click.stop="deleteActiveCardFromMenu"
-            >
-              <Trash2 :size="15" />
-              <span>{{ isDeletingCard ? '삭제 중' : '카드 삭제' }}</span>
-            </button>
+          <div v-if="activeCardIndex >= cards.length" class="add-card-prompt">
+            <strong>새 카드 추가</strong>
+            <p>보유 카드를 등록해 한눈에 관리하세요</p>
+            <button type="button" @click="openCardPicker">카드 추가하기</button>
           </div>
         </div>
 
@@ -229,13 +159,22 @@
           <h2>최근 거래</h2>
           <RouterLink to="/transactions">전체보기</RouterLink>
         </div>
-        <article class="app-card tx-card">
+        <article class="tx-card">
           <button v-for="tx in transactions.slice(0, 5)" :key="tx.id" type="button" @click="router.push(`/transactions/${tx.id}`)">
             <span>{{ tx.icon }}</span>
             <div>
               <strong>{{ tx.merchant }}</strong>
               <small>{{ tx.cat }} · {{ tx.time }}</small>
             </div>
+            <span class="tx-mini-card">
+              <img
+                v-if="txCard(tx)"
+                :src="txCard(tx).imageUrl"
+                :alt="txCard(tx).name"
+                :class="cardImageClass(txCard(tx))"
+                @load="setImageOrientation(txCard(tx).id, $event)"
+              />
+            </span>
             <b :class="{ plus: tx.amt > 0 }">{{ tx.amt > 0 ? '+' : '-' }}{{ krw(tx.amt) }}</b>
           </button>
         </article>
@@ -302,18 +241,16 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { BarChart3, Bell, CalendarDays, Check, ChevronLeft, ChevronRight, MoreHorizontal, PlusCircle, Search, Settings, Sparkles, Trash2, X } from 'lucide-vue-next'
-import { cards as mockCards, krw, transactions as mockTransactions } from '@/data/mockData'
+import { Bell, CalendarDays, Check, MoreHorizontal, PlusCircle, Search, Settings, Sparkles, Trash2, User, X } from 'lucide-vue-next'
+import { cards as mockCards, krw, transactions as mockTransactions, user } from '@/data/mockData'
 import { addOwnedCard, deleteOwnedCard, fetchCards, fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
 
 const router = useRouter()
 const cards = ref(mockCards)
 const transactions = ref(mockTransactions)
-const cardStackRef = ref(null)
 const activeCardIndex = ref(0)
 const isCarouselGliding = ref(false)
 const carouselDirection = ref('next')
-const motionTargetIndex = ref(null)
 const imageOrientations = ref({})
 const isCardPickerOpen = ref(false)
 const isCardManageMenuOpen = ref(false)
@@ -326,73 +263,69 @@ const isDeletingCard = ref(false)
 const isAddingCardId = ref('')
 const totalSpent = computed(() => cards.value.reduce((sum, card) => sum + card.spent, 0))
 const totalSpendLabel = computed(() => krw(totalSpent.value))
-const activeCard = computed(() => cards.value[activeCardIndex.value] || cards.value[0] || null)
-const detailCard = computed(() => {
-  if (isCarouselGliding.value && motionTargetIndex.value !== null) {
-    return cards.value[motionTargetIndex.value] || activeCard.value
-  }
-  return activeCard.value
-})
-const previousPreviewCard = computed(() => {
-  if (cards.value.length < 2) return null
-  return cards.value[(activeCardIndex.value - 1 + cards.value.length) % cards.value.length]
-})
-const nextPreviewCard = computed(() => {
-  if (cards.value.length < 2) return null
-  return cards.value[(activeCardIndex.value + 1) % cards.value.length]
-})
+const activeCard = computed(() => cards.value[activeCardIndex.value] || null)
+const detailCard = computed(() => activeCard.value)
 const quickActions = [
   { label: '결제 추가', path: '/transactions/new', icon: PlusCircle, color: '#0f5fae' },
-  { label: '소비 분석', path: '/analytics/cards', icon: BarChart3, color: '#20242a' },
   { label: '카드 추천', path: '/recommendations/new', icon: Sparkles, color: '#008c95' },
   { label: '목표 지출', path: '/plans/new', icon: CalendarDays, color: '#24364f' },
 ]
 let cardGlideTimer = null
 let cardSearchTimer = null
 
-function syncActiveCard() {
-  const stack = cardStackRef.value
-  if (!stack || isCarouselGliding.value) return
-
-  const stackRect = stack.getBoundingClientRect()
-  const stackCenter = stackRect.left + stackRect.width / 2
-  const items = [...stack.querySelectorAll('.pay-card')]
-  const closest = items.reduce(
-    (best, item, index) => {
-      const itemRect = item.getBoundingClientRect()
-      const distance = Math.abs(itemRect.left + itemRect.width / 2 - stackCenter)
-      return distance < best.distance ? { index, distance } : best
-    },
-    { index: activeCardIndex.value, distance: Number.POSITIVE_INFINITY },
-  )
-  activeCardIndex.value = closest.index
+function focusCard(index) {
+  if (index < 0 || index === activeCardIndex.value) return
+  // 항상 오른쪽 → 왼쪽으로 전환 (그래프/상세 방향 통일)
+  carouselDirection.value = 'next'
+  activeCardIndex.value = index
 }
 
-function goToCard(index, direction = index > activeCardIndex.value ? 'next' : 'prev') {
-  const stack = cardStackRef.value
-  const target = stack?.querySelectorAll('.pay-card')[index]
-  if (!stack || !target || index === activeCardIndex.value || isCarouselGliding.value) return
+const dragStartX = ref(null)
+const wasDragged = ref(false)
 
-  window.clearTimeout(cardGlideTimer)
-  carouselDirection.value = direction
-  motionTargetIndex.value = index
-  isCarouselGliding.value = true
-  stack.scrollTo({
-    left: target.offsetLeft - stack.offsetLeft,
-    behavior: 'smooth',
-  })
-  cardGlideTimer = window.setTimeout(() => {
-    activeCardIndex.value = index
-    isCarouselGliding.value = false
-    motionTargetIndex.value = null
-  }, 740)
+function slideCardStyle(index) {
+  const offset = index - activeCardIndex.value
+  const abs = Math.abs(offset)
+  const x = offset * 112
+  const scale = Math.max(0.72, 1 - abs * 0.14)
+  const opacity = offset === 0 ? 1 : Math.max(0.1, 0.32 - (abs - 1) * 0.22)
+  return {
+    transform: `translate(calc(-50% + ${x}%), 0) scale(${scale})`,
+    opacity,
+    zIndex: 20 - abs,
+    pointerEvents: abs > 2 ? 'none' : 'auto',
+  }
 }
 
-function moveCard(direction) {
-  if (!cards.value.length || isCarouselGliding.value) return
+function onSlideClick(index) {
+  if (wasDragged.value) return
+  if (index === activeCardIndex.value) {
+    if (index >= cards.value.length) {
+      openCardPicker()
+      return
+    }
+    router.push(`/cards/${cards.value[index].id}`)
+    return
+  }
+  focusCard(index)
+}
 
-  const nextIndex = (activeCardIndex.value + direction + cards.value.length) % cards.value.length
-  goToCard(nextIndex, direction > 0 ? 'next' : 'prev')
+function onDragStart(event) {
+  dragStartX.value = event.clientX
+  wasDragged.value = false
+}
+
+function onDragMove(event) {
+  if (dragStartX.value === null) return
+  if (Math.abs(event.clientX - dragStartX.value) > 8) wasDragged.value = true
+}
+
+function onDragEnd(event) {
+  if (dragStartX.value === null) return
+  const dx = event.clientX - dragStartX.value
+  dragStartX.value = null
+  if (dx <= -36 && activeCardIndex.value < cards.value.length) focusCard(activeCardIndex.value + 1)
+  else if (dx >= 36 && activeCardIndex.value > 0) focusCard(activeCardIndex.value - 1)
 }
 
 function spendProgress(card) {
@@ -418,6 +351,10 @@ function cardImageClass(card) {
     'is-landscape': orientation === 'landscape',
     'is-portrait': orientation === 'portrait',
   }
+}
+
+function txCard(tx) {
+  return cards.value.find((card) => String(card.id) === String(tx.cardId)) || null
 }
 
 function benefitTags(card) {
@@ -500,7 +437,7 @@ async function handleAddCandidate(candidate) {
     await loadWalletData()
     await loadCandidateCards()
     const addedIndex = cards.value.findIndex((card) => String(card.id) === id)
-    if (addedIndex >= 0) goToCard(addedIndex)
+    if (addedIndex >= 0) focusCard(addedIndex)
   } catch (error) {
     cardManageError.value = '카드를 추가하지 못했습니다.'
   } finally {
@@ -547,23 +484,24 @@ onMounted(async () => {
   flex-shrink: 0;
   overflow: visible;
   border-radius: 0;
-  padding: clamp(16px, 4.7vw, 22px) clamp(16px, 4.8vw, 20px) 8px;
-  color: #20242a;
-  background: #f3f6f8 !important;
+  padding: clamp(18px, 5vw, 24px) clamp(16px, 4.8vw, 20px) clamp(40px, 10vw, 56px);
+  color: #fff;
+  background: linear-gradient(180deg, #2c4e72 0%, #2a486b 32%, #324f70 48%, #45617f 62%, #6883a1 74%, #9db1c5 85%, #d4dde6 93%, #f3f6f8 100%) !important;
+  box-shadow: none;
   isolation: isolate;
 }
 
 :global(.app-backdrop .phone-shell .dashboard-header) {
-  background: #f3f6f8 !important;
-  color: #20242a !important;
+  background: linear-gradient(180deg, #2c4e72 0%, #2a486b 32%, #324f70 48%, #45617f 62%, #6883a1 74%, #9db1c5 85%, #d4dde6 93%, #f3f6f8 100%) !important;
+  color: #fff !important;
 }
 
 :global(.app-backdrop .phone-shell .dashboard-header :is(h1, h2, h3, strong, b)) {
-  color: #20242a !important;
+  color: #fff !important;
 }
 
 :global(.app-backdrop .phone-shell .dashboard-header :is(p, span, small)) {
-  color: #6e6e73 !important;
+  color: rgba(255, 255, 255, 0.74) !important;
 }
 
 .dashboard-header::before,
@@ -608,11 +546,12 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   border-radius: 13px;
-  background: #20242a;
+  background: rgba(255, 255, 255, 0.15);
   color: #fff !important;
   font-size: 19px;
   font-weight: 950;
-  box-shadow: 0 12px 24px rgba(36, 54, 79, 0.13), inset -7px -7px 0 rgba(0, 140, 149, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.26), inset -7px -7px 0 rgba(0, 140, 149, 0.34);
+  backdrop-filter: blur(8px);
 }
 
 .brand-mark::after {
@@ -628,7 +567,7 @@ onMounted(async () => {
 
 .header-top h1 {
   margin: 0;
-  color: #20242a;
+  color: #fff;
   font-size: 24px;
   font-weight: 900;
   letter-spacing: 0;
@@ -636,7 +575,7 @@ onMounted(async () => {
 
 .header-top p {
   margin: 3px 0 0;
-  color: #6e6e73 !important;
+  color: rgba(255, 255, 255, 0.72) !important;
   font-size: 10.5px;
   font-weight: 800;
   line-height: 1.25;
@@ -656,59 +595,98 @@ onMounted(async () => {
 .header-actions .icon-button {
   width: 42px;
   height: 42px;
-  border: 1px solid rgba(36, 54, 79, 0.11) !important;
-  background: transparent !important;
-  color: #24364f !important;
+  border-radius: 13px !important;
+  border: 0 !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #fff !important;
   box-shadow: none !important;
-  backdrop-filter: blur(16px) saturate(1.08);
+  backdrop-filter: blur(10px) saturate(1.08);
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+
+.header-actions .icon-button:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+  transform: translateY(-1px);
+}
+
+.header-actions .icon-button:active {
+  transform: translateY(0) scale(0.96);
 }
 
 :global(.app-backdrop .phone-shell .dashboard-header .header-actions .icon-button) {
-  border: 1px solid rgba(36, 54, 79, 0.11) !important;
-  background: transparent !important;
-  color: #24364f !important;
+  border-radius: 13px !important;
+  border: 0 !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #fff !important;
   box-shadow: none !important;
-  backdrop-filter: blur(16px) saturate(1.08);
+  backdrop-filter: blur(10px) saturate(1.08);
 }
 
 .month-summary {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: 1fr 1px 1fr;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 16px;
-  overflow: visible;
-  border-block: 1px solid rgba(32, 36, 42, 0.085);
-  border-inline: 0;
-  border-radius: 0;
+  border-top: 0;
+  border-bottom: 1px solid rgba(32, 36, 42, 0.085);
   margin: 0 0 8px;
-  padding: 12px 4px;
+  padding: 6px 2px 14px;
   background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
 }
 
-.month-summary::before,
-.month-summary::after {
-  display: none;
+.greet {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
 }
 
-.month-summary i {
-  align-self: center;
-  height: 30px;
-  background: rgba(32, 36, 42, 0.1);
+.greet-avatar {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  background: linear-gradient(155deg, #2c4e72, #1b2f47);
+  color: #fff !important;
+  font-size: 16px;
+  font-weight: 900;
+  box-shadow: 0 7px 16px rgba(27, 47, 71, 0.24);
 }
 
-.month-summary span {
+.greet-copy span {
   display: block;
-  color: #6e6e73 !important;
-  font-size: 10px;
+  color: #8a96a3 !important;
+  font-size: 10.5px;
   font-weight: 800;
 }
 
-.month-summary strong {
+.greet-copy strong {
   display: block;
-  margin-top: 4px;
+  margin-top: 2px;
+  color: #1b2f47;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.spend-figure {
+  text-align: right;
+}
+
+.spend-figure span {
+  display: block;
+  color: #8a96a3 !important;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.spend-figure strong {
+  display: block;
+  margin-top: 3px;
   color: #20242a;
   font-size: clamp(18px, 4.9vw, 21px);
   font-weight: 900;
@@ -754,6 +732,132 @@ onMounted(async () => {
 .card-carousel.is-gliding.glide-prev::after {
   animation-name: carousel-light-sweep-reverse;
 }
+
+.card-stage {
+  --card-w: clamp(154px, 43.5vw, 174px);
+  --card-h: clamp(244px, 69vw, 276px);
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: var(--card-h);
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.slide-card {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: var(--card-w);
+  height: var(--card-h);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  transform-origin: center center;
+  transition: transform 480ms cubic-bezier(0.2, 0.85, 0.25, 1), opacity 400ms ease;
+  will-change: transform, opacity;
+}
+
+.slide-card::before {
+  content: '';
+  position: absolute;
+  inset: -14% -10% -8%;
+  z-index: -1;
+  background: radial-gradient(58% 48% at 50% 44%, color-mix(in srgb, var(--accent, #2c4e72) 30%, transparent), transparent 72%);
+  filter: blur(16px);
+  opacity: 0;
+  transition: opacity 400ms ease;
+  pointer-events: none;
+}
+
+.slide-card.is-active::before {
+  opacity: 0.7;
+}
+
+.fan-card-media.slide-add-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed rgba(44, 78, 114, 0.34);
+  background: rgba(255, 255, 255, 0.46);
+  color: #2c4e72;
+  box-shadow: none;
+}
+
+.add-card-prompt {
+  display: flex;
+  width: 100%;
+  min-height: 250px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.add-card-prompt strong {
+  color: #1c3149;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.add-card-prompt p {
+  margin: 3px 0 14px;
+  color: #6e6e73;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.add-card-prompt button {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 24px;
+  background: linear-gradient(150deg, #2c4e72, #1c3149);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.fan-card-media {
+  position: relative;
+  display: block;
+  width: var(--card-w);
+  height: var(--card-h);
+  overflow: hidden;
+  border-radius: clamp(13px, 3.6vw, 17px);
+  background: transparent;
+  box-shadow: 0 18px 32px rgba(36, 54, 79, 0.22);
+}
+
+.fan-card-media img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+.fan-card-media img.is-landscape {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: var(--card-h);
+  height: var(--card-w);
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.fan-card-media img.is-ready {
+  opacity: 1;
+}
+
 
 .card-stack {
   display: flex;
@@ -873,7 +977,7 @@ onMounted(async () => {
 .card-manage-toolbar {
   position: absolute;
   top: clamp(6px, 2.8vw, 12px);
-  right: clamp(10px, 4.8vw, 20px);
+  left: clamp(6px, 3vw, 14px);
   z-index: 8;
   display: flex;
   justify-content: center;
@@ -917,7 +1021,7 @@ onMounted(async () => {
 .card-manage-menu {
   position: absolute;
   top: 38px;
-  right: 0;
+  left: 0;
   display: grid;
   min-width: 136px;
   gap: 2px;
@@ -1374,9 +1478,8 @@ onMounted(async () => {
   transform-style: preserve-3d;
 }
 
-.card-detail-spin-enter-active,
-.card-detail-spin-leave-active {
-  transition: opacity 420ms ease, transform 740ms cubic-bezier(0.2, 0.78, 0.2, 1), filter 420ms ease;
+.card-detail-spin-enter-active {
+  transition: opacity 240ms ease, transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .card-detail-spin-leave-active {
@@ -1384,27 +1487,25 @@ onMounted(async () => {
   inset: 0;
   margin-inline: auto;
   pointer-events: none;
+  transition: opacity 150ms ease, transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .card-detail-spin-enter-from,
 .card-carousel.glide-prev .card-detail-spin-leave-to {
   opacity: 0;
-  filter: blur(0.4px) saturate(0.88);
-  transform: translate3d(52px, -4px, -54px) rotateY(-34deg) rotateZ(1.4deg) scale(0.94);
+  transform: translateX(20px);
 }
 
 .card-detail-spin-enter-to,
 .card-detail-spin-leave-from {
   opacity: 1;
-  filter: blur(0);
-  transform: translate3d(0, 0, 0) rotateY(0deg) rotateZ(0deg) scale(1);
+  transform: translateX(0);
 }
 
 .card-carousel.glide-next .card-detail-spin-leave-to,
 .card-carousel.glide-prev .card-detail-spin-enter-from {
   opacity: 0;
-  filter: blur(0.4px) saturate(0.88);
-  transform: translate3d(-52px, -4px, -54px) rotateY(34deg) rotateZ(-1.4deg) scale(0.94);
+  transform: translateX(-20px);
 }
 
 .card-info {
@@ -1512,7 +1613,7 @@ onMounted(async () => {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #0f5fae;
+  background: linear-gradient(90deg, #2c4e72, #1c3149);
 }
 
 .progress-meta {
@@ -1551,7 +1652,6 @@ onMounted(async () => {
 
 .progress-meta span:last-child {
   align-items: flex-end;
-  border-left: 1px solid rgba(32, 36, 42, 0.1);
   text-align: right;
 }
 
@@ -1591,14 +1691,20 @@ onMounted(async () => {
 }
 
 .benefit-chips span + span {
-  border-left: 1px solid rgba(32, 36, 42, 0.12);
+  border-left: 0;
 }
 
 .quick-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin-top: 16px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  margin-top: 14px;
+  padding: 12px 0;
+  border-block: 1px solid rgba(32, 36, 42, 0.085);
+}
+
+.dashboard-body .quick-grid .quick-action + .quick-action {
+  border-left: 1px solid rgba(32, 36, 42, 0.14) !important;
 }
 
 .quick-action {
@@ -1616,16 +1722,20 @@ onMounted(async () => {
   word-break: keep-all;
 }
 
-.quick-action.app-card-sm {
-  border-color: rgba(36, 54, 79, 0.1) !important;
+.dashboard-body .quick-grid .quick-action {
+  border-radius: 0 !important;
+  border-top: 0 !important;
+  border-right: 0 !important;
+  border-bottom: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
-  backdrop-filter: blur(16px) saturate(1.08);
+  backdrop-filter: none !important;
 }
 
-.quick-action.app-card-sm:hover {
-  background: rgba(248, 251, 253, 0.34) !important;
+.dashboard-body .quick-grid .quick-action:hover {
+  background: transparent !important;
   box-shadow: none !important;
+  backdrop-filter: none !important;
 }
 
 .quick-action svg {
@@ -1660,28 +1770,32 @@ onMounted(async () => {
 }
 
 .tx-card {
-  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .tx-card button {
   display: grid;
   width: 100%;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 42px minmax(0, 1fr) 24px 92px;
   align-items: center;
   gap: 12px;
-  border-bottom: 1px solid rgba(32, 36, 42, 0.075);
-  padding: 13px 14px;
+  border-bottom: 1px solid rgba(32, 36, 42, 0.08);
+  padding: 14px 2px;
   background: transparent;
   text-align: left;
 }
 
 .tx-card button > span:first-child {
   display: inline-flex;
-  width: 32px;
-  height: 32px;
+  width: 42px;
+  height: 42px;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 24px;
   line-height: 1;
 }
 
@@ -1702,11 +1816,41 @@ onMounted(async () => {
   font-weight: 700;
 }
 
+.tx-mini-card {
+  position: relative;
+  display: block;
+  justify-self: center;
+  width: 15px;
+  height: 24px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #e8edf2;
+  box-shadow: 0 1px 3px rgba(36, 54, 79, 0.2);
+}
+
+.tx-mini-card img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tx-mini-card img.is-landscape {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 15px;
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
 .tx-card b {
   color: #20242a;
   font-size: 13px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .tx-card b.plus {
@@ -1976,7 +2120,7 @@ onMounted(async () => {
 
   .card-manage-toolbar {
     top: 4px;
-    right: 8px;
+    left: 8px;
   }
 
   .wallet-icon-button {
@@ -2026,7 +2170,7 @@ onMounted(async () => {
   }
 
   .quick-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 5px;
     margin-top: 10px;
   }

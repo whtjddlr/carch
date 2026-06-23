@@ -656,4 +656,38 @@ ul {
 .outline-button {
   text-decoration: none;
 }
+
+/* ── 카드 메인 페이지 톤 통일 (플랫/헤어라인) ── */
+.result-card,
+.routing-card,
+.profile-card,
+.alert-card,
+.recommend-card,
+.recommendation-art,
+.payback-panel,
+.route-card-mini {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.economics-grid > div,
+.mini-economics > div,
+.routing-metrics li {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.recommendation-art {
+  height: 200px;
+}
+
+.recommend-card {
+  margin-top: 0 !important;
+  border-top: 1px solid rgba(32, 36, 42, 0.085) !important;
+  padding: 14px 0 2px !important;
+}
 </style>

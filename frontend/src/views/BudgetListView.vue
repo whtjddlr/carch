@@ -294,8 +294,8 @@ h1 {
 }
 
 .mode-card.primary {
-  border-color: rgba(15, 95, 174, 0.18) !important;
-  background: rgba(255, 255, 255, 0.82) !important;
+  border-color: rgba(32, 36, 42, 0.06) !important;
+  background: transparent !important;
 }
 
 .mode-card span {
