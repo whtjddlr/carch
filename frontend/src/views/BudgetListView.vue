@@ -4,10 +4,8 @@
       <div class="header-row">
         <AppBackButton fallback="/cards" />
         <div>
-          <p>월 예산과 지출 계획</p>
           <h1>소비계획</h1>
         </div>
-        <span class="header-spacer" aria-hidden="true" />
       </div>
 
       <RouterLink class="current-summary" to="/budget/current" aria-label="6월 예산 상세 보기">
@@ -49,7 +47,7 @@
 
       <section class="section-block">
         <div class="section-head">
-          <h2>예산 내역</h2>
+          <h2>나의 예산</h2>
         </div>
 
         <RouterLink
@@ -58,15 +56,11 @@
           class="app-card budget-history-card"
           :to="item.to"
         >
-          <div class="history-icon" :class="item.tone">
-            <component :is="item.icon" :size="18" />
-          </div>
           <div class="history-content">
             <div class="history-title-row">
               <div>
-                <em class="history-relative" :class="item.tone">{{ item.relativeLabel }}</em>
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.period }}</span>
+                <strong :class="['history-headline', item.tone]">{{ item.relativeLabel }}</strong>
+                <span>{{ item.month }}월 · {{ item.period }}</span>
               </div>
               <ChevronRight :size="17" />
             </div>
@@ -80,9 +74,8 @@
                 <span>예산</span>
                 <b>{{ krw(item.budget) }}</b>
               </div>
-              <div>
-                <span>{{ item.remaining >= 0 ? '잔액' : '초과' }}</span>
-                <b :class="{ danger: item.remaining < 0 }">{{ krw(item.remaining) }}</b>
+              <div class="remaining-cell">
+                <b :class="item.remaining < 0 ? 'neg' : 'pos'">{{ item.remaining < 0 ? '-' : '+' }}{{ krw(item.remaining) }}</b>
               </div>
             </div>
 
@@ -99,7 +92,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { CalendarCheck, CalendarClock, ChevronRight, PiggyBank, WalletCards, Zap } from 'lucide-vue-next'
+import { CalendarClock, ChevronRight, PiggyBank, Zap } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, expenseModes, krw } from '@/data/mockData'
 
@@ -133,6 +126,7 @@ const budgetHistory = computed(() => {
     {
       id: '2026-06',
       relativeLabel: '이번 달',
+      month: 6,
       title: '6월 예산',
       period: '2026.06.01 - 06.30',
       spent: current.spent,
@@ -140,12 +134,12 @@ const budgetHistory = computed(() => {
       remaining: current.remaining,
       percent: current.percent,
       to: '/budget/current',
-      icon: WalletCards,
       tone: 'active',
     },
     {
       id: '2026-05',
       relativeLabel: '지난 달',
+      month: 5,
       title: '5월 예산',
       period: '2026.05.01 - 05.31',
       spent: 620000,
@@ -153,12 +147,12 @@ const budgetHistory = computed(() => {
       remaining: 290000,
       percent: 68,
       to: '/budget/current',
-      icon: CalendarCheck,
       tone: 'done',
     },
     {
       id: '2026-07',
       relativeLabel: '다음 달',
+      month: 7,
       title: '7월 예산',
       period: '2026.07.01 - 07.31',
       spent: 0,
@@ -166,7 +160,6 @@ const budgetHistory = computed(() => {
       remaining: nextBudget,
       percent: 0,
       to: '/budget/current',
-      icon: CalendarClock,
       tone: 'upcoming',
       upcoming: true,
     },
@@ -176,16 +169,16 @@ const budgetHistory = computed(() => {
 
 <style scoped>
 .budget-list-header {
-  padding: 32px 20px 22px;
+  padding: 24px 20px 22px;
   color: #fff;
-  text-align: center;
+  text-align: left;
 }
 
 .header-row {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
   margin-bottom: 20px;
 }
 
@@ -198,14 +191,14 @@ const budgetHistory = computed(() => {
 
 h1 {
   margin: 0;
-  font-size: 32px;
+  font-size: 24px;
   font-weight: 900;
-  line-height: 1.08;
+  line-height: 1.1;
 }
 
 .current-summary {
   display: block;
-  border-block: 1px solid rgba(32, 36, 42, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
   padding: 18px 0 16px;
   background: transparent;
   color: #20242a;
@@ -353,56 +346,10 @@ h1 {
 }
 
 .budget-history-card {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
-  gap: 12px;
+  display: block;
   padding: 15px;
   color: inherit;
   text-decoration: none;
-}
-
-.history-icon {
-  display: inline-flex;
-  width: 40px;
-  height: 40px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 13px;
-  background: rgba(44, 78, 114, 0.1);
-  color: #2c4e72;
-}
-
-.history-icon.done {
-  background: rgba(36, 54, 79, 0.055);
-  color: #6e6e73;
-}
-
-.history-icon.upcoming {
-  background: rgba(44, 78, 114, 0.06);
-  color: #8a9aad;
-}
-
-.history-relative {
-  display: inline-block;
-  margin-bottom: 5px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 900;
-  font-style: normal;
-  letter-spacing: 0.2px;
-  background: rgba(44, 78, 114, 0.1);
-  color: #2c4e72;
-}
-
-.history-relative.done {
-  background: rgba(110, 110, 115, 0.12);
-  color: #6e6e73;
-}
-
-.history-relative.upcoming {
-  background: rgba(138, 154, 173, 0.16);
-  color: #5f6b77;
 }
 
 .history-title-row {
@@ -415,8 +362,12 @@ h1 {
 .history-title-row strong {
   display: block;
   color: #20242a;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
+}
+
+.history-headline.active {
+  color: #2c4e72 !important;
 }
 
 .history-title-row span {
@@ -436,10 +387,15 @@ h1 {
 .history-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
   gap: 8px;
   margin-top: 12px;
   border-top: 1px solid rgba(32, 36, 42, 0.075);
   padding-top: 11px;
+}
+
+.remaining-cell {
+  text-align: right;
 }
 
 .history-metrics span {
@@ -457,7 +413,11 @@ h1 {
   font-weight: 900;
 }
 
-.history-metrics b.danger {
+.history-metrics b.pos {
+  color: #16a34a;
+}
+
+.history-metrics b.neg {
   color: #d92d20;
 }
 

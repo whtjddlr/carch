@@ -268,7 +268,7 @@ const detailCard = computed(() => activeCard.value)
 const quickActions = [
   { label: '결제 추가', path: '/transactions/new', icon: PlusCircle, color: '#0f5fae' },
   { label: '카드 추천', path: '/recommendations/new', icon: Sparkles, color: '#008c95' },
-  { label: '목표 지출', path: '/plans/new', icon: CalendarDays, color: '#24364f' },
+  { label: '지출계획하기', path: '/plans/new', icon: CalendarDays, color: '#24364f' },
 ]
 let cardGlideTimer = null
 let cardSearchTimer = null

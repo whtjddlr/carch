@@ -41,10 +41,10 @@ import { BarChart3, ClipboardList, Code2, CreditCard, Users } from 'lucide-vue-n
 const isDev = import.meta.env.DEV
 const currentRoute = useRoute()
 const navItems = [
-  { path: '/cards', icon: CreditCard, label: '카드', matches: ['/cards', '/recommendations'] },
-  { path: '/analytics/cards', icon: BarChart3, label: '분석', matches: ['/analytics'] },
-  { path: '/chat', icon: null, label: '카치', primary: true },
-  { path: '/budget', icon: ClipboardList, label: '소비계획', matches: ['/budget'] },
+  { path: '/cards', icon: CreditCard, label: '카드', matches: ['/cards', '/recommendations', '/transactions'] },
+  { path: '/analytics/cards', icon: BarChart3, label: '분석', matches: ['/analytics', '/reports'] },
+  { path: '/chat', icon: null, label: '카치', primary: true, matches: ['/chat'] },
+  { path: '/budget', icon: ClipboardList, label: '소비계획', matches: ['/budget', '/plans'] },
   { path: '/community', icon: Users, label: '커뮤니티', matches: ['/community'] },
 ]
 
