@@ -1079,7 +1079,13 @@ def analysis_record_list(request):
 
 def build_chat_context(request):
     transactions = [serialize_transaction(item) for item in transaction_queryset()]
-    expense_rows = [item for item in transactions if item['amount'] < 0]
+    spending_trend = _build_spending_trend(transactions)
+    current_month = spending_trend['currentMonth']
+    current_transactions = [
+        item for item in transactions if _month_key_from_transaction(item) == current_month
+    ]
+    expense_rows = [item for item in current_transactions if item['amount'] < 0]
+    income_rows = [item for item in current_transactions if item['amount'] > 0]
     by_category = defaultdict(int)
     by_card = defaultdict(int)
     for item in expense_rows:
@@ -1089,9 +1095,15 @@ def build_chat_context(request):
 
     summary = {
         'totalExpense': sum(abs(item['amount']) for item in expense_rows),
-        'totalIncome': sum(item['amount'] for item in transactions if item['amount'] > 0),
+        'totalIncome': sum(item['amount'] for item in income_rows),
         'byCategory': [{'category': key, 'amount': value} for key, value in by_category.items()],
         'byCard': [{'cardId': key, 'amount': value} for key, value in by_card.items()],
+        'period': {
+            'currentMonth': current_month,
+            'previousMonth': spending_trend['previousMonth'],
+            'baselineMonths': spending_trend['baselineMonths'],
+        },
+        'spendingTrend': spending_trend,
     }
 
     cards = []
@@ -1116,7 +1128,7 @@ def build_chat_context(request):
     return {
         'today': timezone.localtime().date().isoformat(),
         'summary': summary,
-        'transactions': transactions,
+        'transactions': current_transactions,
         'cards': cards[:6],
         'communityPosts': community_posts,
     }
