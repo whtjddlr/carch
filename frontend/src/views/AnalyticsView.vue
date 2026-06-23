@@ -6,12 +6,18 @@
         <h1>카드 소비 분석</h1>
         <p>최근 결제 내역을 AI가 요약하고 다음 행동을 제안합니다.</p>
       </div>
-      <span v-if="aiAnalysis" class="ai-pill">{{ aiAnalysis.aiMode === 'gms' ? 'AI 분석' : '기본 분석' }}</span>
+      <div class="header-actions">
+        <span v-if="aiAnalysis" class="ai-pill">{{ aiBadgeLabel }}</span>
+        <button class="refresh-analysis-button" type="button" :disabled="isRefreshing" @click="refreshAnalysis">
+          {{ analysisButtonLabel }}
+        </button>
+      </div>
     </header>
 
     <div class="screen-scroll scrollbar-hide page-padding">
       <div v-if="error" class="notice-card">{{ error }}</div>
-      <div v-if="isLoading" class="notice-card">분석 결과를 불러오는 중입니다.</div>
+      <div v-if="isLoading" class="notice-card">저장된 분석을 불러오는 중입니다.</div>
+      <div v-if="isRefreshing" class="notice-card">새 AI 분석을 만들고 DB에 저장하는 중입니다.</div>
 
       <div class="metric-grid">
         <article class="app-card">
@@ -40,7 +46,7 @@
       <article v-if="aiAnalysis" class="app-card ai-card">
         <div class="section-title">
           <span>{{ aiAnalysis.summaryTitle }}</span>
-          <small>신뢰도 {{ Math.round(Number(aiAnalysis.confidence || 0) * 100) }}%</small>
+          <small>{{ analysisSourceLabel || `신뢰도 ${Math.round(Number(aiAnalysis.confidence || 0) * 100)}%` }}</small>
         </div>
         <div v-if="aiAnalysis.primaryInsight" class="primary-insight" :class="`severity-${aiAnalysis.primaryInsight.severity || 'info'}`">
           <div>
@@ -61,6 +67,14 @@
             <em>{{ item.action }}</em>
           </li>
         </ul>
+      </article>
+      <article v-else class="app-card empty-analysis-card">
+        <span>저장된 분석이 아직 없어요</span>
+        <strong>버튼을 누르면 한 번만 AI 분석하고 저장해둘게요.</strong>
+        <p>다음부터는 다시 분석을 누르기 전까지 저장된 결과를 그대로 보여줍니다.</p>
+        <button class="refresh-analysis-button inline" type="button" :disabled="isRefreshing" @click="refreshAnalysis">
+          {{ analysisButtonLabel }}
+        </button>
       </article>
 
       <article v-if="recommendationAlert?.show && topRecommendation" class="app-card card-switch-card">
@@ -157,6 +171,7 @@ const summary = ref(null)
 const analysisRecords = ref([])
 const recommendationBundle = ref(null)
 const isLoading = ref(false)
+const isRefreshing = ref(false)
 const error = ref('')
 
 const safeSummary = computed(() => summary.value || { totalExpense: 0, totalIncome: 0, byCategory: [], byCard: [] })
@@ -167,6 +182,20 @@ const expectedSaving = computed(() =>
 )
 const topRecommendation = computed(() => recommendationBundle.value?.results?.[0] || null)
 const recommendationAlert = computed(() => recommendationBundle.value?.alert || null)
+const analysisButtonLabel = computed(() => {
+  if (isRefreshing.value) return '분석 중'
+  return aiAnalysis.value ? '다시 분석' : '분석하기'
+})
+const aiBadgeLabel = computed(() => {
+  if (!aiAnalysis.value) return ''
+  const mode = aiAnalysis.value.aiMode === 'gms' ? 'AI 분석' : '기본 분석'
+  return summary.value?.aiAnalysisCached ? `저장 ${mode}` : `새 ${mode}`
+})
+const analysisSourceLabel = computed(() => {
+  if (!summary.value?.aiAnalysisCreatedAt) return ''
+  const prefix = summary.value?.aiAnalysisCached ? '저장됨' : '방금 저장'
+  return `${prefix} ${formatRecordTime(summary.value.aiAnalysisCreatedAt)}`
+})
 const categoryRows = computed(() => {
   const rows = [...(safeSummary.value.byCategory || [])].sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
   const max = Math.max(...rows.map((item) => Number(item.amount || 0)), 1)
@@ -243,6 +272,20 @@ async function loadSummary() {
   }
 }
 
+async function refreshAnalysis() {
+  if (isRefreshing.value) return
+  isRefreshing.value = true
+  error.value = ''
+  try {
+    summary.value = await fetchSpendingSummary({ ai: true, refresh: true })
+    analysisRecords.value = await fetchAnalysisRecords({ type: 'spending_summary', limit: 3 })
+  } catch {
+    error.value = 'AI 분석을 새로 저장하지 못했어요. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    isRefreshing.value = false
+  }
+}
+
 function formatRecordTime(value) {
   if (!value) return ''
   const date = new Date(value)
@@ -282,6 +325,14 @@ onMounted(loadSummary)
   line-height: 1.45;
 }
 
+.header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
 .ai-pill {
   flex: 0 0 auto;
   border-radius: 999px;
@@ -290,6 +341,30 @@ onMounted(loadSummary)
   color: #fff;
   font-size: 11px;
   font-weight: 900;
+}
+
+.refresh-analysis-button {
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  touch-action: manipulation;
+}
+
+.refresh-analysis-button:disabled {
+  cursor: progress;
+  opacity: 0.58;
+}
+
+.refresh-analysis-button.inline {
+  margin-top: 12px;
+  border-color: rgba(15, 95, 174, 0.16);
+  background: rgba(15, 95, 174, 0.1);
+  color: #0f5fae;
 }
 
 .page-padding {
@@ -434,6 +509,34 @@ onMounted(loadSummary)
 .primary-insight.severity-warning span,
 .primary-insight.severity-warning em {
   color: #dc2626;
+}
+
+.empty-analysis-card {
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.empty-analysis-card span {
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.empty-analysis-card strong {
+  display: block;
+  margin-top: 5px;
+  color: #17202b;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.4;
+}
+
+.empty-analysis-card p {
+  margin: 6px 0 0;
+  color: #5f6b77;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
 }
 
 .card-switch-card {
@@ -693,5 +796,21 @@ h2 {
   font-style: normal;
   font-weight: 800;
   white-space: nowrap;
+}
+
+@media (max-width: 380px) {
+  .simple-header {
+    align-items: stretch;
+  }
+
+  .header-actions {
+    align-items: flex-end;
+  }
+
+  .refresh-analysis-button {
+    min-height: 36px;
+    padding-inline: 10px;
+    font-size: 11px;
+  }
 }
 </style>

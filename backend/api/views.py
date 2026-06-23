@@ -781,7 +781,23 @@ def spending_summary(request):
         'byCard': [{'cardId': key, 'amount': value} for key, value in by_card.items()],
     }
 
-    if request.GET.get('ai') in {'1', 'true', 'yes'}:
+    include_ai = request.GET.get('ai') in {'1', 'true', 'yes'}
+    refresh_ai = request.GET.get('refresh') in {'1', 'true', 'yes'} or request.GET.get('force') in {'1', 'true', 'yes'}
+
+    if include_ai:
+        latest_record = AIAnalysisRecord.objects.filter(analysis_type='spending_summary').first()
+        if latest_record and not refresh_ai:
+            summary['aiAnalysis'] = latest_record.result_payload or fallback_spending_analysis(summary)
+            summary['aiAnalysisRecordId'] = f'a{latest_record.id}'
+            summary['aiAnalysisCached'] = True
+            summary['aiAnalysisCreatedAt'] = timezone.localtime(latest_record.created_at).isoformat()
+            return json_response(summary)
+
+        if not refresh_ai:
+            summary['aiAnalysisStatus'] = 'empty'
+            summary['aiAnalysisCached'] = False
+            return json_response(summary)
+
         cards = []
         for card_id in by_card.keys():
             if str(card_id).isdigit():
@@ -813,6 +829,8 @@ def spending_summary(request):
             summary['aiAnalysis'],
         )
         summary['aiAnalysisRecordId'] = f'a{record.id}'
+        summary['aiAnalysisCached'] = False
+        summary['aiAnalysisCreatedAt'] = timezone.localtime(record.created_at).isoformat()
 
     return json_response(summary)
 

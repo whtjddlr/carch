@@ -115,10 +115,13 @@ export async function fetchCardRecommendations() {
   return data.results || []
 }
 
-export async function fetchSpendingSummary({ ai = false } = {}) {
+export async function fetchSpendingSummary({ ai = false, refresh = false } = {}) {
+  const params = {}
+  if (ai) params.ai = 1
+  if (refresh) params.refresh = 1
   const response = await api.get('/api/analytics/spending-summary/', {
-    params: ai ? { ai: 1 } : {},
-    timeout: ai ? AI_REQUEST_TIMEOUT_MS : DEFAULT_API_TIMEOUT_MS,
+    params,
+    timeout: ai && refresh ? AI_REQUEST_TIMEOUT_MS : DEFAULT_API_TIMEOUT_MS,
   })
   return response.data
 }
