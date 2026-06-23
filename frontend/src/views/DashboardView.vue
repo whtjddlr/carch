@@ -178,6 +178,24 @@
             />
           </div>
         </div>
+
+        <div class="card-manage-toolbar" aria-label="보유 카드 관리">
+          <button type="button" class="wallet-icon-button is-add" aria-label="카드 추가" @click="openCardPicker">
+            <PlusCircle :size="16" />
+          </button>
+          <button
+            type="button"
+            class="wallet-icon-button danger"
+            :aria-label="isDeletingCard ? '카드 삭제 중' : '현재 카드 삭제'"
+            :disabled="!activeCard || isDeletingCard"
+            @click="handleDeleteActiveCard"
+          >
+            <Trash2 :size="16" />
+          </button>
+        </div>
+
+        <p v-if="cardManageMessage" class="card-manage-note">{{ cardManageMessage }}</p>
+        <p v-if="cardManageError" class="card-manage-note error">{{ cardManageError }}</p>
       </div>
 
       <div class="quick-grid">
@@ -211,15 +229,69 @@
       </section>
 
     </div>
+
+    <div v-if="isCardPickerOpen" class="card-picker-backdrop" @click.self="closeCardPicker">
+      <section class="card-picker-sheet" aria-label="카드 추가">
+        <header>
+          <div>
+            <span>카드 추가</span>
+            <h2>목록에서 내 카드를 선택하세요</h2>
+          </div>
+          <button type="button" class="picker-close-button" aria-label="닫기" @click="closeCardPicker">
+            <X :size="18" />
+          </button>
+        </header>
+
+        <form class="card-search-form" @submit.prevent="loadCandidateCards">
+          <Search :size="17" />
+          <input
+            v-model.trim="cardSearch"
+            type="search"
+            placeholder="카드명, 카드사, 혜택 검색"
+            @input="scheduleCandidateSearch"
+          />
+        </form>
+
+        <div class="candidate-card-list scrollbar-hide">
+          <p v-if="isLoadingCandidateCards" class="candidate-empty">카드를 찾는 중입니다.</p>
+          <p v-else-if="candidateCards.length === 0" class="candidate-empty">검색 결과가 없습니다.</p>
+          <template v-else>
+            <article v-for="candidate in candidateCards" :key="candidateCardId(candidate)" class="candidate-card-row">
+              <div class="candidate-card-image">
+                <img
+                  v-if="candidate.imageUrl || candidate.image_url"
+                  :src="candidate.imageUrl || candidate.image_url"
+                  :alt="candidate.name || candidate.cardName || candidate.card_name"
+                />
+              </div>
+              <div class="candidate-card-copy">
+                <span>{{ candidate.issuer || candidate.issuerName || candidate.issuer_name }}</span>
+                <strong>{{ candidate.name || candidate.cardName || candidate.card_name }}</strong>
+                <p>{{ candidate.benefitSummary || candidate.titleDescription || candidate.title_description }}</p>
+              </div>
+              <button
+                type="button"
+                :aria-label="isOwnedCandidate(candidate) ? '이미 보유한 카드' : `${candidate.name || candidate.cardName || candidate.card_name} 추가`"
+                :disabled="isOwnedCandidate(candidate) || isAddingCardId === candidateCardId(candidate)"
+                @click="handleAddCandidate(candidate)"
+              >
+                <Check v-if="isOwnedCandidate(candidate)" :size="16" />
+                <PlusCircle v-else :size="16" />
+              </button>
+            </article>
+          </template>
+        </div>
+      </section>
+    </div>
   </section>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { BarChart3, Bell, CalendarDays, ChevronLeft, ChevronRight, PlusCircle, Search, Settings, Sparkles } from 'lucide-vue-next'
+import { BarChart3, Bell, CalendarDays, Check, ChevronLeft, ChevronRight, PlusCircle, Search, Settings, Sparkles, Trash2, X } from 'lucide-vue-next'
 import { cards as mockCards, krw, transactions as mockTransactions } from '@/data/mockData'
-import { fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
+import { addOwnedCard, deleteOwnedCard, fetchCards, fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
 
 const router = useRouter()
 const cards = ref(mockCards)
@@ -230,6 +302,14 @@ const isCarouselGliding = ref(false)
 const carouselDirection = ref('next')
 const motionTargetIndex = ref(null)
 const imageOrientations = ref({})
+const isCardPickerOpen = ref(false)
+const cardSearch = ref('')
+const candidateCards = ref([])
+const isLoadingCandidateCards = ref(false)
+const cardManageMessage = ref('')
+const cardManageError = ref('')
+const isDeletingCard = ref(false)
+const isAddingCardId = ref('')
 const totalSpent = computed(() => cards.value.reduce((sum, card) => sum + card.spent, 0))
 const totalSpendLabel = computed(() => krw(totalSpent.value))
 const activeCard = computed(() => cards.value[activeCardIndex.value] || cards.value[0] || null)
@@ -254,6 +334,7 @@ const quickActions = [
   { label: '목표 지출', path: '/plans/new', icon: CalendarDays, color: '#24364f' },
 ]
 let cardGlideTimer = null
+let cardSearchTimer = null
 
 function syncActiveCard() {
   const stack = cardStackRef.value
@@ -333,14 +414,99 @@ function benefitTags(card) {
     .slice(0, 2)
 }
 
+function candidateCardId(card) {
+  return String(card.id || card.cardAdId || card.card_ad_id)
+}
+
+function isOwnedCandidate(card) {
+  const id = candidateCardId(card)
+  return cards.value.some((ownedCard) => String(ownedCard.id) === id)
+}
+
+async function loadWalletData() {
+  const [apiTransactions, apiCards] = await Promise.all([fetchTransactions(), fetchOwnedCards()])
+  transactions.value = apiTransactions
+  cards.value = apiCards.map((card, index) => normalizeCard(card, index, apiTransactions))
+  activeCardIndex.value = Math.min(activeCardIndex.value, Math.max(cards.value.length - 1, 0))
+  await nextTick()
+}
+
+async function loadCandidateCards() {
+  isLoadingCandidateCards.value = true
+  cardManageError.value = ''
+  try {
+    candidateCards.value = await fetchCards({
+      search: cardSearch.value,
+      active: 1,
+      limit: 24,
+    })
+  } catch (error) {
+    candidateCards.value = []
+    cardManageError.value = '카드 목록을 불러오지 못했습니다.'
+  } finally {
+    isLoadingCandidateCards.value = false
+  }
+}
+
+function scheduleCandidateSearch() {
+  window.clearTimeout(cardSearchTimer)
+  cardSearchTimer = window.setTimeout(loadCandidateCards, 260)
+}
+
+async function openCardPicker() {
+  isCardPickerOpen.value = true
+  cardManageMessage.value = ''
+  cardManageError.value = ''
+  await loadCandidateCards()
+}
+
+function closeCardPicker() {
+  isCardPickerOpen.value = false
+  window.clearTimeout(cardSearchTimer)
+}
+
+async function handleAddCandidate(candidate) {
+  const id = candidateCardId(candidate)
+  if (!id || isOwnedCandidate(candidate) || isAddingCardId.value) return
+
+  isAddingCardId.value = id
+  cardManageError.value = ''
+  try {
+    await addOwnedCard(id)
+    cardManageMessage.value = '보유 카드에 추가했습니다.'
+    await loadWalletData()
+    await loadCandidateCards()
+    const addedIndex = cards.value.findIndex((card) => String(card.id) === id)
+    if (addedIndex >= 0) goToCard(addedIndex)
+  } catch (error) {
+    cardManageError.value = '카드를 추가하지 못했습니다.'
+  } finally {
+    isAddingCardId.value = ''
+  }
+}
+
+async function handleDeleteActiveCard() {
+  if (!activeCard.value || isDeletingCard.value) return
+  const ok = window.confirm(`${activeCard.value.name} 카드를 보유 목록에서 삭제할까요?`)
+  if (!ok) return
+
+  isDeletingCard.value = true
+  cardManageError.value = ''
+  try {
+    await deleteOwnedCard(activeCard.value.id)
+    cardManageMessage.value = '보유 카드에서 삭제했습니다.'
+    activeCardIndex.value = Math.max(activeCardIndex.value - 1, 0)
+    await loadWalletData()
+  } catch (error) {
+    cardManageError.value = '카드를 삭제하지 못했습니다.'
+  } finally {
+    isDeletingCard.value = false
+  }
+}
+
 onMounted(async () => {
   try {
-    const apiTransactions = await fetchTransactions()
-    const apiCards = await fetchOwnedCards()
-    transactions.value = apiTransactions
-    cards.value = apiCards.map((card, index) => normalizeCard(card, index, apiTransactions))
-    await nextTick()
-    goToCard(0)
+    await loadWalletData()
   } catch (error) {
     console.warn('諛깆뿏??API瑜?遺덈윭?ㅼ? 紐삵빐 mock ?곗씠?곕? ?ъ슜?⑸땲??', error)
   }
@@ -672,6 +838,65 @@ onMounted(async () => {
 
 .card-dots button:disabled {
   cursor: default;
+}
+
+.card-manage-toolbar {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.wallet-icon-button {
+  display: inline-flex;
+  width: 46px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(24, 54, 89, 0.1);
+  border-radius: 50%;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.8);
+  color: #183659;
+  box-shadow: 0 10px 24px rgba(36, 54, 79, 0.06);
+  transition: transform 160ms ease, background-color 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+
+.wallet-icon-button svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.45;
+}
+
+.wallet-icon-button:active {
+  transform: scale(0.96);
+}
+
+.wallet-icon-button.is-add {
+  background: #183659;
+  color: #fff;
+}
+
+.wallet-icon-button.danger {
+  background: rgba(179, 38, 30, 0.08);
+  border-color: rgba(179, 38, 30, 0.14);
+  color: #b3261e;
+}
+
+.wallet-icon-button:disabled {
+  opacity: 0.45;
+}
+
+.card-manage-note {
+  margin: 8px 0 0;
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.card-manage-note.error {
+  color: #d92d20;
 }
 
 .pay-card {
@@ -1393,6 +1618,189 @@ onMounted(async () => {
 
 .tx-card b.plus {
   color: #008c95;
+}
+
+.card-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(20, 28, 38, 0.28);
+  backdrop-filter: blur(10px);
+}
+
+.card-picker-sheet {
+  display: flex;
+  width: 100%;
+  max-height: min(78dvh, 700px);
+  flex-direction: column;
+  border: 1px solid rgba(32, 36, 42, 0.08);
+  border-radius: 28px 28px 0 0;
+  padding: 18px 16px 14px;
+  background: rgba(248, 251, 253, 0.96);
+  box-shadow: 0 -22px 50px rgba(36, 54, 79, 0.18);
+}
+
+.card-picker-sheet header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.card-picker-sheet header span {
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.card-picker-sheet header h2 {
+  margin: 3px 0 0;
+  color: #20242a;
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.picker-close-button {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.86);
+  color: #20242a;
+  box-shadow: 0 8px 20px rgba(36, 54, 79, 0.08);
+}
+
+.card-search-form {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  border: 1px solid rgba(32, 36, 42, 0.08);
+  border-radius: 16px;
+  padding: 0 13px;
+  background: #fff;
+  color: #5f6b77;
+}
+
+.card-search-form input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #20242a;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.card-search-form input::placeholder {
+  color: #8a9aad;
+}
+
+.candidate-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+  padding: 14px 2px 2px;
+}
+
+.candidate-empty {
+  margin: 28px 0 30px;
+  color: #6e6e73;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.candidate-card-row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 96px;
+  border: 1px solid rgba(32, 36, 42, 0.07);
+  border-radius: 20px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 12px 26px rgba(36, 54, 79, 0.06);
+}
+
+.candidate-card-image {
+  display: flex;
+  width: 74px;
+  height: 74px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #f3f6f8;
+}
+
+.candidate-card-image img {
+  max-width: 62px;
+  max-height: 62px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 12px rgba(36, 54, 79, 0.12));
+}
+
+.candidate-card-copy {
+  min-width: 0;
+}
+
+.candidate-card-copy span {
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.candidate-card-copy strong {
+  display: block;
+  margin-top: 3px;
+  color: #20242a;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-card-copy p {
+  display: -webkit-box;
+  margin: 5px 0 0;
+  overflow: hidden;
+  color: #6e6e73;
+  font-size: 11.5px;
+  font-weight: 750;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.candidate-card-row > button {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0;
+  background: #183659;
+  color: #fff;
+}
+
+.candidate-card-row > button:disabled {
+  background: #e6ecf2;
+  color: #7a8795;
 }
 
 @media (max-width: 380px) {
