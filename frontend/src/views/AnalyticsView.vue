@@ -63,6 +63,32 @@
         </ul>
       </article>
 
+      <article v-if="recommendationAlert?.show && topRecommendation" class="app-card card-switch-card">
+        <div class="section-title">
+          <span>카드 교체 인사이트</span>
+          <small>{{ topRecommendation.match }}% 매칭</small>
+        </div>
+        <strong>{{ recommendationAlert.title }}</strong>
+        <p>{{ recommendationAlert.body }}</p>
+        <div class="switch-metrics">
+          <span>
+            <small>월 순혜택 차이</small>
+            <b>{{ krw(topRecommendation.economics.monthlyDelta) }}</b>
+          </span>
+          <span>
+            <small>연간 예상 차이</small>
+            <b>{{ krw(topRecommendation.economics.annualDelta) }}</b>
+          </span>
+          <span>
+            <small>회수 기간</small>
+            <b>{{ topRecommendation.economics.paybackMonths ? `${topRecommendation.economics.paybackMonths}개월` : '즉시 비교' }}</b>
+          </span>
+        </div>
+        <RouterLink class="switch-link" :to="`/recommendations/r1`">
+          추천 카드 자세히 보기
+        </RouterLink>
+      </article>
+
       <article class="app-card chart-card">
         <div class="section-title">
           <span>카테고리별 지출</span>
@@ -124,11 +150,12 @@
 import { computed, onMounted, ref } from 'vue'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { krw, transactions as mockTransactions } from '@/data/mockData'
-import { fetchAnalysisRecords, fetchSpendingSummary } from '@/services/api'
+import { fetchAnalysisRecords, fetchCardRecommendationBundle, fetchSpendingSummary } from '@/services/api'
 
 const colors = ['#0f5fae', '#008c95', '#24364f', '#8a9aad', '#c49a49', '#5f6b77']
 const summary = ref(null)
 const analysisRecords = ref([])
+const recommendationBundle = ref(null)
 const isLoading = ref(false)
 const error = ref('')
 
@@ -138,6 +165,8 @@ const totalExpense = computed(() => Number(safeSummary.value.totalExpense || 0))
 const expectedSaving = computed(() =>
   (aiAnalysis.value?.savingOpportunities || []).reduce((sum, item) => sum + Number(item.amount || 0), 0),
 )
+const topRecommendation = computed(() => recommendationBundle.value?.results?.[0] || null)
+const recommendationAlert = computed(() => recommendationBundle.value?.alert || null)
 const categoryRows = computed(() => {
   const rows = [...(safeSummary.value.byCategory || [])].sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
   const max = Math.max(...rows.map((item) => Number(item.amount || 0)), 1)
@@ -198,10 +227,16 @@ async function loadSummary() {
   error.value = ''
   try {
     summary.value = await fetchSpendingSummary({ ai: true })
-    analysisRecords.value = await fetchAnalysisRecords({ type: 'spending_summary', limit: 3 })
+    const [records, recommendations] = await Promise.all([
+      fetchAnalysisRecords({ type: 'spending_summary', limit: 3 }),
+      fetchCardRecommendationBundle(),
+    ])
+    analysisRecords.value = records
+    recommendationBundle.value = recommendations
   } catch {
     summary.value = buildMockSummary()
     analysisRecords.value = []
+    recommendationBundle.value = null
     error.value = '백엔드 연결 전이라 예시 소비 데이터로 분석을 보여드려요.'
   } finally {
     isLoading.value = false
@@ -399,6 +434,73 @@ onMounted(loadSummary)
 .primary-insight.severity-warning span,
 .primary-insight.severity-warning em {
   color: #dc2626;
+}
+
+.card-switch-card {
+  margin-bottom: 12px;
+  padding: 16px;
+  border-color: rgba(0, 140, 149, 0.18);
+  background: linear-gradient(180deg, rgba(240, 253, 250, 0.82), rgba(255, 255, 255, 0.78));
+}
+
+.card-switch-card > strong {
+  display: block;
+  color: #17202b;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.card-switch-card > p {
+  margin: 6px 0 0;
+  color: #5f6b77;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.switch-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.switch-metrics span {
+  min-width: 0;
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.switch-metrics small {
+  display: block;
+  color: #6e6e73;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.switch-metrics b {
+  display: block;
+  margin-top: 3px;
+  color: #008c95;
+  font-size: 12px;
+  font-weight: 900;
+  word-break: keep-all;
+}
+
+.switch-link {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  margin-top: 13px;
+  padding: 10px 13px;
+  background: #17202b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
 }
 
 .section-title {

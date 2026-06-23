@@ -1,59 +1,109 @@
 <template>
   <section class="screen">
-    <template v-if="isDetail">
-      <header class="recommend-header purple-gradient">
+    <template v-if="isDetail && recommendation">
+      <header class="recommend-header blue-gradient">
         <AppBackButton fallback="/recommendations/new" />
-        <p>AI 분석 결과</p>
+        <p>소비 기반 카드 추천</p>
         <h1>{{ recommendation.name }}</h1>
         <strong>{{ recommendation.match }}% 매칭</strong>
       </header>
+
       <div class="screen-scroll scrollbar-hide recommendation-body">
         <article class="app-card result-card">
           <div v-if="recommendation.imageUrl" class="recommendation-art">
             <img :src="recommendation.imageUrl" :alt="recommendation.name" />
           </div>
+
           <div class="issuer-line">
             <span>{{ recommendation.issuer }}</span>
             <span>{{ recommendation.previousMonthMinSpend ? `전월 ${krw(recommendation.previousMonthMinSpend)}` : '전월실적 없음' }}</span>
           </div>
+
           <h2>{{ recommendation.benefit }}</h2>
-          <p>연회비 {{ krw(recommendation.annualFee) }}</p>
-          <div class="tag-row">
-            <span v-for="tag in recommendation.tags" :key="tag">{{ tag }}</span>
+          <p>{{ recommendation.reason }}</p>
+
+          <div class="economics-grid">
+            <span>
+              <small>예상 월 혜택</small>
+              <b>{{ krw(recommendation.economics.expectedMonthlyBenefit) }}</b>
+            </span>
+            <span>
+              <small>월 환산 연회비</small>
+              <b>{{ krw(recommendation.economics.monthlyAnnualFee) }}</b>
+            </span>
+            <span>
+              <small>월 순혜택</small>
+              <b>{{ krw(recommendation.economics.monthlyNetBenefit) }}</b>
+            </span>
+            <span>
+              <small>현재 카드 대비</small>
+              <b :class="{ positive: recommendation.economics.monthlyDelta > 0 }">
+                {{ signedKrw(recommendation.economics.monthlyDelta) }}
+              </b>
+            </span>
           </div>
+
+          <div class="payback-panel">
+            <span>연회비 회수</span>
+            <strong>{{ recommendation.economics.paybackMonths ? `약 ${recommendation.economics.paybackMonths}개월` : '추가 연회비 부담 낮음' }}</strong>
+            <p>연간 예상 차이 {{ signedKrw(recommendation.economics.annualDelta) }}</p>
+          </div>
+
+          <div class="tag-row">
+            <span v-for="tag in recommendation.spendingFit.styleTags" :key="tag">{{ tag }}</span>
+          </div>
+
           <ul>
             <li v-for="highlight in recommendation.highlights" :key="highlight">{{ highlight }}</li>
           </ul>
-          <button class="primary-button w-100" type="button">추천 카드 확정</button>
-          <RouterLink
-            class="outline-button w-100"
-            :to="{ path: '/plans/new', query: planQuery }"
-          >
-            이 결제를 목표 지출에 추가
-          </RouterLink>
+
+          <RouterLink class="primary-button w-100" to="/cards">내 카드와 비교하기</RouterLink>
+          <RouterLink class="outline-button w-100" to="/analytics/cards">소비분석 다시 보기</RouterLink>
         </article>
       </div>
     </template>
 
     <template v-else>
-      <header class="recommend-header purple-gradient">
+      <header class="recommend-header blue-gradient">
         <AppBackButton fallback="/cards" />
         <p>AI 카드 추천</p>
-        <h1>나에게 맞는<br />카드 찾기</h1>
+        <h1>소비 스타일에 맞는<br />순혜택 카드</h1>
       </header>
+
       <div class="screen-scroll scrollbar-hide recommendation-body">
-        <article class="app-card quiz-card">
-          <h2>{{ questions[step].q }}</h2>
-          <button
-            v-for="option in questions[step].opts"
-            :key="option"
-            class="option-button"
-            type="button"
-            @click="next"
-          >
-            {{ option }}
-          </button>
+        <article v-if="bundle?.profile" class="app-card profile-card">
+          <div>
+            <span>소비 스타일</span>
+            <strong>{{ bundle.profile.styleTags?.join(' · ') || '소비 분석 중' }}</strong>
+            <p>총 지출 {{ krw(bundle.profile.totalExpense) }} 기준으로 연회비를 반영한 순혜택을 계산했어요.</p>
+          </div>
         </article>
+
+        <article v-if="bundle?.alert?.show && recommendationItems[0]" class="app-card alert-card">
+          <span>추천 알림</span>
+          <strong>{{ bundle.alert.title }}</strong>
+          <p>{{ bundle.alert.body }}</p>
+        </article>
+
+        <div class="recommend-list">
+          <article
+            v-for="item in recommendationItems"
+            :key="item.id"
+            class="app-card recommend-card"
+            @click="router.push(`/recommendations/${item.id}`)"
+          >
+            <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.name" />
+            <div>
+              <span>{{ item.issuer }}</span>
+              <h2>{{ item.name }}</h2>
+              <p>{{ item.reason }}</p>
+              <div class="mini-economics">
+                <b>{{ signedKrw(item.economics.monthlyDelta) }}</b>
+                <small>월 순혜택 차이</small>
+              </div>
+            </div>
+          </article>
+        </div>
       </div>
     </template>
   </section>
@@ -64,51 +114,66 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { krw, recommendations } from '@/data/mockData'
-import { fetchCardRecommendations } from '@/services/api'
+import { fetchCardRecommendationBundle } from '@/services/api'
 
 const route = useRoute()
 const router = useRouter()
-const step = ref(0)
-const recommendationItems = ref(recommendations)
+const bundle = ref(null)
+const defaultEconomics = {
+  expectedMonthlyBenefit: 0,
+  monthlyAnnualFee: 0,
+  monthlyNetBenefit: 0,
+  monthlyDelta: 0,
+  annualDelta: 0,
+  paybackMonths: null,
+}
+
+const recommendationItems = ref(recommendations.map(normalizeRecommendation))
 const isDetail = computed(() => Boolean(route.params.id))
 const recommendation = computed(() => recommendationItems.value.find((item) => item.id === route.params.id) || recommendationItems.value[0])
-const planQuery = computed(() => ({
-  merchantName: route.query.merchantName || recommendation.value.name,
-  category: route.query.category || recommendation.value.tags[0],
-  amount: route.query.amount || recommendation.value.annualFee,
-}))
 
-const questions = [
-  { q: '주로 어디서 많이 소비하시나요?', opts: ['온라인 쇼핑', '식비 / 외식', '교통 / 주유', '여행 / 해외'] },
-  { q: '월 카드 사용액은?', opts: ['30만원 미만', '30~50만원', '50~100만원', '100만원 이상'] },
-  { q: '선호하는 혜택 유형은?', opts: ['현금 캐시백', '포인트 적립', '즉시 할인', '상관없음'] },
-]
+function signedKrw(value) {
+  const amount = Number(value || 0)
+  return `${amount > 0 ? '+' : amount < 0 ? '-' : ''}${krw(Math.abs(amount))}`
+}
 
-const next = () => {
-  if (step.value < questions.length - 1) {
-    step.value += 1
-    return
+function normalizeRecommendation(item) {
+  return {
+    ...item,
+    benefit: item.benefit || item.benefitSummary || '소비 패턴에 맞춘 혜택 카드',
+    highlights: item.highlights?.length ? item.highlights : item.benefits || item.tags || [],
+    reason: item.reason || '소비 스타일과 주요 지출 카테고리를 기준으로 추천했어요.',
+    economics: { ...defaultEconomics, ...(item.economics || {}) },
+    spendingFit: item.spendingFit || { styleTags: item.tags || [] },
+    notification: item.notification || {},
   }
-  router.push('/recommendations/r1')
+}
+
+function mapRecommendation(card, index) {
+  return normalizeRecommendation({
+    id: `r${index + 1}`,
+    cardAdId: card.cardAdId,
+    issuer: card.issuer,
+    name: card.name,
+    match: card.match,
+    benefit: card.benefitSummary,
+    annualFee: card.annualFee,
+    previousMonthMinSpend: card.previousMonthMinSpend,
+    tags: card.spendingFit?.styleTags || [card.issuer],
+    imageUrl: card.imageUrl,
+    highlights: card.highlights?.length ? card.highlights : card.benefits,
+    reason: card.reason,
+    economics: card.economics,
+    spendingFit: card.spendingFit || { styleTags: [] },
+    notification: card.notification || {},
+  })
 }
 
 onMounted(async () => {
   try {
-    const apiRecommendations = await fetchCardRecommendations()
-    recommendationItems.value = apiRecommendations.map((card, index) => ({
-      id: `r${index + 1}`,
-      cardAdId: card.cardAdId,
-      issuer: card.issuer,
-      name: card.name,
-      match: card.match,
-      benefit: card.benefitSummary,
-      annualFee: card.annualFee,
-      previousMonthMinSpend: card.previousMonthMinSpend,
-      tags: [card.issuer, card.previousMonthMinSpend ? `전월 ${krw(card.previousMonthMinSpend)}` : '무실적'],
-      grad: card.grad || ['blue', 'purple', 'teal'][index % 3],
-      imageUrl: card.imageUrl,
-      highlights: card.highlights?.length ? card.highlights : card.benefits,
-    }))
+    const data = await fetchCardRecommendationBundle()
+    bundle.value = data
+    recommendationItems.value = (data.results || []).map(mapRecommendation)
   } catch (error) {
     console.warn('카드 추천 API를 불러오지 못해 mock 데이터를 사용합니다.', error)
   }
@@ -149,29 +214,96 @@ onMounted(async () => {
   padding: 20px;
 }
 
-.quiz-card,
-.result-card {
-  padding: 20px;
+.profile-card,
+.alert-card,
+.result-card,
+.recommend-card {
+  padding: 18px;
 }
 
-h2 {
-  margin: 0 0 18px;
-  color: #17202b;
-  font-size: 19px;
+.profile-card span,
+.alert-card span,
+.recommend-card span {
+  color: #0f5fae;
+  font-size: 11px;
   font-weight: 900;
 }
 
-.option-button {
-  width: 100%;
-  border: 1px solid #dbe4ee;
-  border-radius: 14px;
-  margin-bottom: 10px;
-  padding: 14px;
-  background: #fff;
+.profile-card strong,
+.alert-card strong {
+  display: block;
+  margin-top: 5px;
   color: #17202b;
-  font-size: 14px;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.profile-card p,
+.alert-card p,
+.result-card p,
+.recommend-card p {
+  margin: 6px 0 0;
+  color: #5f6b77;
+  font-size: 12px;
   font-weight: 800;
-  text-align: left;
+  line-height: 1.5;
+}
+
+.alert-card {
+  margin-top: 12px;
+  border-color: rgba(0, 140, 149, 0.18);
+  background: rgba(240, 253, 250, 0.82);
+}
+
+.recommend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.recommend-card {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.recommend-card img {
+  width: 82px;
+  height: 112px;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 18px rgba(16, 24, 40, 0.12));
+}
+
+.recommend-card h2,
+.result-card h2 {
+  margin: 3px 0 0;
+  color: #17202b;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.mini-economics {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 9px;
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: #edf7f6;
+}
+
+.mini-economics b,
+.economics-grid b.positive {
+  color: #008c95;
+}
+
+.mini-economics small {
+  color: #5f6b77;
+  font-size: 10px;
+  font-weight: 900;
 }
 
 .result-card {
@@ -188,7 +320,7 @@ h2 {
   overflow: hidden;
   border-radius: 16px;
   padding: 16px;
-  background: #e7edf4;
+  background: #eef3f7;
 }
 
 .recommendation-art img {
@@ -199,13 +331,15 @@ h2 {
   filter: drop-shadow(0 12px 20px rgba(16, 24, 40, 0.16));
 }
 
-.issuer-line {
+.issuer-line,
+.tag-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.issuer-line span {
+.issuer-line span,
+.tag-row span {
   border-radius: 999px;
   padding: 5px 9px;
   background: #e8f1ff;
@@ -214,26 +348,38 @@ h2 {
   font-weight: 900;
 }
 
-.result-card p {
-  margin: 0;
+.economics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.economics-grid span,
+.payback-panel {
+  border-radius: 14px;
+  padding: 12px;
+  background: #f6f8fb;
+}
+
+.economics-grid small,
+.payback-panel span {
+  display: block;
   color: #6e6e73;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.tag-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.tag-row span {
-  border-radius: 999px;
-  padding: 5px 9px;
-  background: #f5f3ff;
-  color: #24364f;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
+}
+
+.economics-grid b,
+.payback-panel strong {
+  display: block;
+  margin-top: 4px;
+  color: #17202b;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.payback-panel p {
+  margin-top: 4px;
 }
 
 ul {
@@ -245,6 +391,7 @@ ul {
   line-height: 1.8;
 }
 
+.primary-button,
 .outline-button {
   text-decoration: none;
 }

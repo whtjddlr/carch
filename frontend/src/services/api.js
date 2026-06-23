@@ -105,9 +105,14 @@ export async function createTransaction(payload) {
   return normalizeTransaction(response.data)
 }
 
-export async function fetchCardRecommendations() {
+export async function fetchCardRecommendationBundle() {
   const response = await api.get('/api/recommendations/cards/')
-  return response.data.results || []
+  return response.data
+}
+
+export async function fetchCardRecommendations() {
+  const data = await fetchCardRecommendationBundle()
+  return data.results || []
 }
 
 export async function fetchSpendingSummary({ ai = false } = {}) {
