@@ -69,12 +69,9 @@
         </ul>
       </article>
       <article v-else class="app-card empty-analysis-card">
-        <span>저장된 분석이 아직 없어요</span>
-        <strong>버튼을 누르면 한 번만 AI 분석하고 저장해둘게요.</strong>
-        <p>다음부터는 다시 분석을 누르기 전까지 저장된 결과를 그대로 보여줍니다.</p>
-        <button class="refresh-analysis-button inline" type="button" :disabled="isRefreshing" @click="refreshAnalysis">
-          {{ analysisButtonLabel }}
-        </button>
+        <span>분석 준비 중</span>
+        <strong>잠시만 기다리면 소비 진단을 바로 보여드릴게요.</strong>
+        <p>저장된 결과가 없을 때만 새 분석을 만들고, 이후에는 저장된 결과를 재사용합니다.</p>
       </article>
 
       <article v-if="recommendationAlert?.show && topRecommendation" class="app-card card-switch-card">
@@ -127,32 +124,15 @@
         </ul>
       </article>
 
-      <article v-if="aiAnalysis?.nextActions?.length || aiAnalysis?.actionButtons?.length" class="app-card action-card">
+      <article v-if="nextActionItems.length" class="app-card next-summary-card">
         <div class="section-title">
-          <span>다음 행동</span>
+          <span>한눈에 체크</span>
+          <small>추천 순서</small>
         </div>
-        <div class="action-chips">
-          <span v-for="action in aiAnalysis.nextActions" :key="action">{{ action }}</span>
-        </div>
-        <div v-if="aiAnalysis.actionButtons?.length" class="action-buttons">
-          <RouterLink v-for="button in aiAnalysis.actionButtons" :key="`${button.label}-${button.route}`" :to="button.route">
-            {{ button.label }}
-          </RouterLink>
-        </div>
-      </article>
-
-      <article v-if="analysisRecords.length" class="app-card record-card">
-        <div class="section-title">
-          <span>저장된 AI 분석</span>
-          <small>DB 저장 {{ analysisRecords.length }}건</small>
-        </div>
-        <ul class="record-list">
-          <li v-for="record in analysisRecords" :key="record.id">
-            <div>
-              <strong>{{ record.title || '카드 소비 분석' }}</strong>
-              <span>{{ record.resultPayload?.headline || '분석 결과가 저장되었습니다.' }}</span>
-            </div>
-            <em>{{ formatRecordTime(record.createdAt) }}</em>
+        <ul class="next-summary-list">
+          <li v-for="(action, index) in nextActionItems" :key="`${action}-${index}`">
+            <span>{{ index + 1 }}</span>
+            <strong>{{ action }}</strong>
           </li>
         </ul>
       </article>
@@ -164,11 +144,10 @@
 import { computed, onMounted, ref } from 'vue'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { krw, transactions as mockTransactions } from '@/data/mockData'
-import { fetchAnalysisRecords, fetchCardRecommendationBundle, fetchSpendingSummary } from '@/services/api'
+import { fetchCardRecommendationBundle, fetchSpendingSummary } from '@/services/api'
 
 const colors = ['#0f5fae', '#008c95', '#24364f', '#8a9aad', '#c49a49', '#5f6b77']
 const summary = ref(null)
-const analysisRecords = ref([])
 const recommendationBundle = ref(null)
 const isLoading = ref(false)
 const isRefreshing = ref(false)
@@ -196,6 +175,7 @@ const analysisSourceLabel = computed(() => {
   const prefix = summary.value?.aiAnalysisCached ? '저장됨' : '방금 저장'
   return `${prefix} ${formatRecordTime(summary.value.aiAnalysisCreatedAt)}`
 })
+const nextActionItems = computed(() => (aiAnalysis.value?.nextActions || []).slice(0, 3))
 const categoryRows = computed(() => {
   const rows = [...(safeSummary.value.byCategory || [])].sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
   const max = Math.max(...rows.map((item) => Number(item.amount || 0)), 1)
@@ -256,15 +236,13 @@ async function loadSummary() {
   error.value = ''
   try {
     summary.value = await fetchSpendingSummary({ ai: true })
-    const [records, recommendations] = await Promise.all([
-      fetchAnalysisRecords({ type: 'spending_summary', limit: 3 }),
-      fetchCardRecommendationBundle(),
-    ])
-    analysisRecords.value = records
+    if (!summary.value?.aiAnalysis && summary.value?.aiAnalysisStatus === 'empty') {
+      summary.value = await fetchSpendingSummary({ ai: true, refresh: true })
+    }
+    const recommendations = await fetchCardRecommendationBundle()
     recommendationBundle.value = recommendations
   } catch {
     summary.value = buildMockSummary()
-    analysisRecords.value = []
     recommendationBundle.value = null
     error.value = '백엔드 연결 전이라 예시 소비 데이터로 분석을 보여드려요.'
   } finally {
@@ -278,7 +256,6 @@ async function refreshAnalysis() {
   error.value = ''
   try {
     summary.value = await fetchSpendingSummary({ ai: true, refresh: true })
-    analysisRecords.value = await fetchAnalysisRecords({ type: 'spending_summary', limit: 3 })
   } catch {
     error.value = 'AI 분석을 새로 저장하지 못했어요. 잠시 후 다시 시도해 주세요.'
   } finally {
@@ -360,13 +337,6 @@ onMounted(loadSummary)
   opacity: 0.58;
 }
 
-.refresh-analysis-button.inline {
-  margin-top: 12px;
-  border-color: rgba(15, 95, 174, 0.16);
-  background: rgba(15, 95, 174, 0.1);
-  color: #0f5fae;
-}
-
 .page-padding {
   padding: 18px 20px 28px;
 }
@@ -392,7 +362,7 @@ onMounted(loadSummary)
 .chart-card,
 .ai-card,
 .insight-card,
-.action-card {
+.next-summary-card {
   padding: 16px;
 }
 
@@ -678,8 +648,7 @@ h2 {
 
 .chart-card,
 .insight-card,
-.action-card,
-.record-card {
+.next-summary-card {
   margin-top: 12px;
 }
 
@@ -716,86 +685,43 @@ h2 {
   text-align: right;
 }
 
-.action-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.action-chips span {
-  border-radius: 999px;
-  padding: 8px 10px;
-  background: #f4f7ff;
-  color: #0f5fae;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.action-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.action-buttons a {
-  min-height: 38px;
-  border-radius: 999px;
-  padding: 10px 12px;
-  background: #17202b;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 900;
-  text-decoration: none;
-}
-
-.record-list {
+.next-summary-list {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 0;
+  gap: 10px;
   margin: 0;
+  padding: 0;
   list-style: none;
 }
 
-.record-list li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+.next-summary-list li {
+  display: flex;
+  align-items: center;
   gap: 10px;
-  align-items: start;
-  border-radius: 10px;
-  padding: 11px 12px;
-  background: #f6f8fb;
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(246, 248, 251, 0.78);
 }
 
-.record-list strong {
-  display: block;
-  overflow: hidden;
-  color: #17202b;
-  font-size: 12px;
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.record-list span {
-  display: -webkit-box;
-  margin-top: 3px;
-  overflow: hidden;
-  color: #5f6b77;
+.next-summary-list span {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(15, 95, 174, 0.12);
+  color: #0f5fae;
   font-size: 11px;
-  font-weight: 700;
-  line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  font-weight: 900;
 }
 
-.record-list em {
-  color: #6e6e73;
-  font-size: 10px;
-  font-style: normal;
+.next-summary-list strong {
+  color: #17202b;
+  font-size: 13px;
   font-weight: 800;
-  white-space: nowrap;
+  line-height: 1.4;
 }
 
 @media (max-width: 380px) {
