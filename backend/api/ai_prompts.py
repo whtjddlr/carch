@@ -185,7 +185,7 @@ Rules:
 - savingOpportunities[].amount may be 0 when a numeric saving cannot be inferred.
 - severity must be one of info, attention, warning.
 - tone must be one of navy, teal, blue, gray, gold, danger.
-- actionButtons[].route must be one of /cards, /transactions, /transactions/new, /budget, /recommendations/new, /analytics/cards, /plans, /plans/new.
+- actionButtons[].route must be one of /cards, /transactions, /transactions/new, /budget, /recommendations/new, /analytics, /plans, /plans/new.
 - nextActions should be short Korean action labels, no more than 16 Korean characters each when possible.
 - Keep Korean copy polished, direct, and suitable for a formal finance app.
 - Use a refined financial-service tone. Avoid casual endings and prefer precise formal phrasing such as "권장합니다", "필요합니다", "예상됩니다", "유리합니다".
@@ -305,7 +305,7 @@ Rules:
 - Do not invent exact card benefits, limits, or transaction facts outside the supplied JSON.
 - messageType must be one of general, spending-analysis, card-recommendation, transaction-help, purchase-plan, navigation.
 - tone must be one of navy, teal, blue, gray, gold, danger.
-- actionButtons[].route must be one of /cards, /transactions, /transactions/new, /budget, /recommendations/new, /analytics/cards, /community, /plans, /plans/new.
+- actionButtons[].route must be one of /cards, /transactions, /transactions/new, /budget, /recommendations/new, /analytics, /community, /plans, /plans/new.
 - quickReplies should be 2 to 4 short Korean follow-up buttons.
 
 Return this exact JSON shape:
@@ -319,9 +319,9 @@ Return this exact JSON shape:
   ],
   "quickReplies": ["이번 달 소비 분석해줘", "카드 추천해줘", "결제내역 추가할래"],
   "actionButtons": [
-    {{"label": "소비 분석 보기", "route": "/analytics/cards", "intent": "open-analysis"}}
+    {{"label": "소비 분석 보기", "route": "/analytics", "intent": "open-analysis"}}
   ],
-  "relatedRoute": "/analytics/cards",
+  "relatedRoute": "/analytics",
   "confidence": 0.78
 }}
 """.strip()

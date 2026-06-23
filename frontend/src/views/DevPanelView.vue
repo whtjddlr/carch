@@ -97,7 +97,7 @@ const groups = [
     title: 'AI · 분석',
     items: [
       { label: '카치 AI 채팅', path: '/chat' },
-      { label: '분석', path: '/analytics/cards' },
+      { label: '분석', path: '/analytics' },
       { label: '월간 리포트', path: '/reports/monthly' },
     ],
   },

@@ -37,7 +37,7 @@ ALLOWED_AI_ROUTES = {
     '/transactions/new',
     '/budget',
     '/recommendations/new',
-    '/analytics/cards',
+    '/analytics',
     '/community',
     '/plans',
     '/plans/new',

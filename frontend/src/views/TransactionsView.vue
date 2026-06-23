@@ -41,7 +41,7 @@ import { useRouter } from 'vue-router'
 import { Plus } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { cards as mockCards, krw, transactions as mockTransactions } from '@/data/mockData'
-import { fetchTransactions } from '@/services/api'
+import { fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
 
 const router = useRouter()
 const transactions = ref(mockTransactions)
@@ -59,7 +59,7 @@ function setImageOrientation(cardId, event) {
 }
 
 function cardImageClass(card) {
-  const orientation = imageOrientations.value[card.id]
+  const orientation = imageOrientations.value[card.id] || card.imageOrientation
   return {
     'is-ready': Boolean(orientation),
     'is-landscape': orientation === 'landscape',
@@ -69,7 +69,9 @@ function cardImageClass(card) {
 
 onMounted(async () => {
   try {
-    transactions.value = await fetchTransactions()
+    const [apiTransactions, apiCards] = await Promise.all([fetchTransactions(), fetchOwnedCards()])
+    transactions.value = apiTransactions
+    cards.value = apiCards.map((card, index) => normalizeCard(card, index, apiTransactions))
   } catch (error) {
     console.warn('거래내역 API를 불러오지 못해 mock 데이터를 사용합니다.', error)
   }
