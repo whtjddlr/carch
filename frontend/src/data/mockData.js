@@ -18,10 +18,10 @@ export const colors = {
 }
 
 export const user = {
-  name: '김지훈',
-  email: 'jihun@carch.kr',
-  phone: '010-1234-5678',
-  initials: '김',
+  name: '남주현',
+  email: 'juhyun@carch.kr',
+  phone: '010-2577-0623',
+  initials: '남',
 }
 
 export const cards = [
@@ -38,9 +38,9 @@ export const cards = [
     imageUrl: '/card-images/10029.png',
     num: '4521 **** **** 7892',
     exp: '12/27',
-    holder: 'KIM JIHUN',
+    holder: 'NAM JUHYUN',
     limit: 5000000,
-    spent: 485000,
+    spent: 72750,
     grad: 'blue',
     brand: 'VISA',
     lastSpent: 620000,
@@ -58,9 +58,9 @@ export const cards = [
     imageUrl: '/card-images/10612.png',
     num: '5412 **** **** 3345',
     exp: '08/26',
-    holder: 'KIM JIHUN',
+    holder: 'NAM JUHYUN',
     limit: 3000000,
-    spent: 210000,
+    spent: 269800,
     grad: 'purple',
     brand: 'MASTERCARD',
     lastSpent: 380000,
@@ -78,9 +78,9 @@ export const cards = [
     imageUrl: '/card-images/10609.png',
     num: '3591 **** **** 8810',
     exp: '03/28',
-    holder: 'KIM JIHUN',
+    holder: 'NAM JUHYUN',
     limit: 2000000,
-    spent: 89000,
+    spent: 163500,
     grad: 'teal',
     brand: 'VISA',
     lastSpent: 142000,
@@ -88,28 +88,35 @@ export const cards = [
 ]
 
 export const transactions = [
-  { id: 't1', cardId: '10029', merchant: '스타벅스 강남역점', cat: '카페', amt: -5500, date: '2026-06-22', time: '09:14', icon: '☕', addr: '서울 강남구 강남대로 396' },
-  { id: 't2', cardId: '10612', merchant: '쿠팡', cat: '쇼핑', amt: -89000, date: '2026-06-22', time: '01:33', icon: '📦', addr: '온라인 결제' },
-  { id: 't3', cardId: '10612', merchant: 'GS25', cat: '편의점', amt: -3200, date: '2026-06-21', time: '22:48', icon: '🏪', addr: '서울 서초구 서초대로 77' },
-  { id: 't4', cardId: '10612', merchant: '올리브영', cat: '뷰티', amt: -32500, date: '2026-06-21', time: '14:22', icon: '💄', addr: '서울 강남구 테헤란로 231' },
-  { id: 't5', cardId: '10029', merchant: '맥도날드', cat: '식비', amt: -8700, date: '2026-06-21', time: '12:05', icon: '🍔', addr: '서울 강남구 강남대로 112' },
-  { id: 't6', cardId: '10609', merchant: 'CGV 강남', cat: '문화', amt: -15000, date: '2026-06-20', time: '19:30', icon: '🎬', addr: '서울 강남구 강남대로 438' },
-  { id: 't7', cardId: '10609', merchant: '이마트', cat: '마트', amt: -67800, date: '2026-06-20', time: '16:14', icon: '🛒', addr: '서울 강남구 양재대로 2' },
-  { id: 't8', cardId: '10029', merchant: '카카오택시', cat: '교통', amt: -12500, date: '2026-06-19', time: '23:45', icon: '🚕', addr: '강남역 → 합정역' },
-  { id: 't9', cardId: '10029', merchant: '배달의민족', cat: '식비', amt: -24000, date: '2026-06-19', time: '20:02', icon: '🍕', addr: '온라인 결제' },
-  { id: 't10', cardId: '10612', merchant: '넷플릭스', cat: '구독', amt: -17000, date: '2026-06-18', time: '00:00', icon: '📺', addr: '온라인 결제' },
-  { id: 't11', cardId: '10029', merchant: '급여 입금', cat: '수입', amt: 3200000, date: '2026-06-17', time: '09:00', icon: '💰', addr: '-' },
-  { id: 't12', cardId: '10612', merchant: '편의점 CU', cat: '편의점', amt: -4800, date: '2026-06-16', time: '08:31', icon: '🏪', addr: '서울 강남구 선릉로 100' },
+  { id: 't1', cardId: '10029', merchant: '컴포즈커피 역삼센터필드점', cat: '카페', amt: -3800, date: '2026-06-23', time: '08:42', icon: '☕', addr: '서울 강남구 테헤란로 231' },
+  { id: 't2', cardId: '10029', merchant: '샐러디 역삼점', cat: '식비', amt: -10900, date: '2026-06-23', time: '12:18', icon: '🥗', addr: '서울 강남구 테헤란로 152' },
+  { id: 't3', cardId: '10612', merchant: '스포애니 봉천점', cat: '헬스', amt: -59000, date: '2026-06-22', time: '21:20', icon: '🏋️', addr: '서울 관악구 봉천로 463' },
+  { id: 't4', cardId: '10029', merchant: '카카오T 봉천→역삼', cat: '교통', amt: -13600, date: '2026-06-22', time: '08:06', icon: '🚕', addr: '봉천동 → 역삼동' },
+  { id: 't5', cardId: '10612', merchant: '올리브영 강남타운점', cat: '뷰티', amt: -38500, date: '2026-06-21', time: '18:34', icon: '💄', addr: '서울 강남구 강남대로 408' },
+  { id: 't6', cardId: '10609', merchant: 'CGV 용산아이파크몰', cat: '문화', amt: -32000, date: '2026-06-21', time: '20:10', icon: '🎬', addr: '서울 용산구 한강대로23길 55' },
+  { id: 't7', cardId: '10612', merchant: '무신사 스토어', cat: '쇼핑', amt: -86400, date: '2026-06-20', time: '23:41', icon: '🛍️', addr: '온라인 결제' },
+  { id: 't8', cardId: '10612', merchant: '쿠팡 로켓배송', cat: '쇼핑', amt: -74200, date: '2026-06-20', time: '00:27', icon: '📦', addr: '온라인 결제' },
+  { id: 't9', cardId: '10029', merchant: '인하대학교 생활협동조합', cat: '식비', amt: -7800, date: '2026-06-19', time: '13:05', icon: '🍱', addr: '인천 미추홀구 인하로 100' },
+  { id: 't10', cardId: '10029', merchant: '공항철도·수도권전철', cat: '교통', amt: -6250, date: '2026-06-19', time: '09:12', icon: '🚇', addr: '봉천역 ↔ 인하대역' },
+  { id: 't11', cardId: '10029', merchant: '스타벅스 인하대점', cat: '카페', amt: -5900, date: '2026-06-19', time: '15:36', icon: '☕', addr: '인천 미추홀구 인하로 67' },
+  { id: 't12', cardId: '10612', merchant: 'GS25 봉천역점', cat: '편의점', amt: -6800, date: '2026-06-18', time: '23:12', icon: '🏪', addr: '서울 관악구 남부순환로 1728' },
+  { id: 't13', cardId: '10029', merchant: '배달의민족 봉천동', cat: '식비', amt: -24500, date: '2026-06-18', time: '20:28', icon: '🍕', addr: '온라인 결제' },
+  { id: 't14', cardId: '10612', merchant: '네이버플러스 멤버십', cat: '구독', amt: -4900, date: '2026-06-18', time: '00:10', icon: '📱', addr: '온라인 결제' },
+  { id: 't15', cardId: '10609', merchant: '토익스피킹 응시료', cat: '교육', amt: -84000, date: '2026-06-17', time: '16:22', icon: '📚', addr: '온라인 결제' },
+  { id: 't16', cardId: '10609', merchant: '링글 영어회화', cat: '교육', amt: -29000, date: '2026-06-17', time: '10:15', icon: '🗣️', addr: '온라인 결제' },
+  { id: 't17', cardId: '10609', merchant: '교보문고 강남점', cat: '교육', amt: -18500, date: '2026-06-16', time: '19:04', icon: '📖', addr: '서울 강남구 강남대로 465' },
+  { id: 't18', cardId: '10029', merchant: '단기 알바비 입금', cat: '수입', amt: 860000, date: '2026-06-16', time: '09:00', icon: '💰', addr: '-' },
 ]
 
 export const budgetCategories = [
-  { id: 'b1', name: '식비', icon: '🍔', budget: 300000, spent: 210000, color: '#D92D20' },
-  { id: 'b2', name: '쇼핑', icon: '🛍️', budget: 200000, spent: 89000, color: '#24364f' },
-  { id: 'b3', name: '교통', icon: '🚕', budget: 100000, spent: 87500, color: '#0B63CE' },
-  { id: 'b4', name: '카페', icon: '☕', budget: 80000, spent: 45500, color: '#C49A49' },
-  { id: 'b5', name: '문화', icon: '🎬', budget: 100000, spent: 15000, color: '#008E98' },
-  { id: 'b6', name: '구독', icon: '📺', budget: 50000, spent: 17000, color: '#8A9AAD' },
-  { id: 'b7', name: '뷰티', icon: '💄', budget: 80000, spent: 32500, color: '#C49A49' },
+  { id: 'b1', name: '식비', icon: '🥗', budget: 260000, spent: 43200, color: '#D92D20' },
+  { id: 'b2', name: '쇼핑', icon: '🛍️', budget: 180000, spent: 160600, color: '#24364f' },
+  { id: 'b3', name: '교통', icon: '🚇', budget: 80000, spent: 19850, color: '#0B63CE' },
+  { id: 'b4', name: '카페', icon: '☕', budget: 70000, spent: 9700, color: '#C49A49' },
+  { id: 'b5', name: '헬스', icon: '🏋️', budget: 80000, spent: 59000, color: '#008E98' },
+  { id: 'b6', name: '교육', icon: '📚', budget: 150000, spent: 131500, color: '#8A9AAD' },
+  { id: 'b7', name: '데이트·문화', icon: '🎬', budget: 120000, spent: 70500, color: '#C49A49' },
+  { id: 'b8', name: '구독', icon: '📱', budget: 30000, spent: 4900, color: '#5B6777' },
 ]
 
 export const communityPosts = [
@@ -119,9 +126,9 @@ export const communityPosts = [
 ]
 
 export const notifications = [
-  { id: 'n1', type: 'payment', title: '결제 알림', body: '스타벅스 강남역점에서 5,500원이 결제되었습니다.', time: '방금 전', read: false },
-  { id: 'n2', type: 'budget', title: '예산 경고', body: '교통 예산의 87.5%를 사용했습니다. 잔여 12,500원', time: '1시간 전', read: false },
-  { id: 'n3', type: 'recommend', title: '새로운 카드 추천', body: '지출 패턴 분석 결과 맞춤 카드 2종이 추천되었습니다.', time: '3시간 전', read: false },
+  { id: 'n1', type: 'payment', title: '결제 알림', body: '컴포즈커피 역삼센터필드점에서 3,800원이 결제되었습니다.', time: '방금 전', read: false },
+  { id: 'n2', type: 'budget', title: '쇼핑 예산 점검', body: '면접 준비 쇼핑 지출이 예산의 89%에 도달했습니다.', time: '1시간 전', read: false },
+  { id: 'n3', type: 'recommend', title: '카드 교체 인사이트', body: '역삼 생활권과 온라인 쇼핑 비중을 반영한 추천이 갱신되었습니다.', time: '3시간 전', read: false },
 ]
 
 export const recommendations = [
@@ -130,7 +137,7 @@ export const recommendations = [
   { id: 'r3', cardAdId: 10609, issuer: '신한카드', name: '이마트 신한카드', match: 84, benefit: '이마트 계열 이용금액 15% 할인', annualFee: 18000, previousMonthMinSpend: 400000, tags: ['마트', '신한카드'], grad: 'teal', imageUrl: '/card-images/10609.png', highlights: ['이마트 계열 15% 할인', '국내외 가맹점 0.5% 적립', '전월 실적 40만원', 'VISA 연회비 18,000원'] },
 ]
 
-export const planTypes = ['혼수', '이사', '여행', '육아', '기타']
+export const planTypes = ['큰 지출', '취업 준비', '여행', '기념일', '운동', '전자기기', '학업', '기타']
 export const strategies = ['혜택 최대화', '예산 안정', '카드 실적 균형']
 export const expenseModes = [
   {
@@ -154,95 +161,100 @@ export const expenseModes = [
 ]
 
 export const exampleChips = [
-  { label: '혼수가전 700만 원', text: '10월 결혼 예정이고 혼수가전 예산은 700만 원이에요.\n7월부터 9월까지 냉장고, TV, 세탁기와 건조기를 구매하고 싶어요.' },
-  { label: '이사 가구 500만 원', text: '새 집으로 이사를 가는데 가구 예산이 500만 원이에요.\n8월부터 10월 사이에 소파, 침대, 식탁을 구매할 계획입니다.' },
-  { label: '유럽여행 400만 원', text: '11월 유럽여행 예산은 400만 원이에요.\n9월에 항공권, 10월에 숙박과 여행자보험을 준비하려고 합니다.' },
-  { label: '출산 준비 300만 원', text: '내년 3월 출산 예정이고 준비 예산은 300만 원이에요.\n12월부터 2월까지 유모차, 카시트, 아기용품을 구매할 계획입니다.' },
+  { label: '취업 준비 80만 원', text: '7월부터 취업 준비 예산 80만 원을 관리하고 싶어요.\n정장 셔츠, 구두, 증명사진, 토익스피킹 응시료를 순서대로 결제할 예정입니다.' },
+  { label: '기념일 데이트 45만 원', text: '다음 달 여자친구와 기념일이 있어서 45만 원 정도 준비하려고 해요.\n식사, 영화, 작은 선물까지 포함해서 카드 혜택을 보고 싶습니다.' },
+  { label: '헬스 3개월 35만 원', text: '헬스장 3개월권과 보충제, 운동복을 합쳐 35만 원 안에서 계획하고 싶어요.\n정기 지출과 쇼핑 지출을 나눠서 보고 싶습니다.' },
+  { label: '노트북 교체 140만 원', text: '코딩 테스트와 과제용 노트북을 140만 원 안에서 교체하려고 해요.\n카드 혜택과 전월 실적을 같이 보면서 결제 월을 정하고 싶습니다.' },
 ]
 
 export const mockPlans = [
   {
     id: 'p1',
-    title: '혼수가전 구매 계획',
-    type: '혼수',
-    totalBudget: 7000000,
+    title: '취업 준비 지출 계획',
+    type: '취업 준비',
+    totalBudget: 800000,
     startMonth: '2026-07',
-    endMonth: '2026-09',
+    endMonth: '2026-08',
     status: '선택 완료',
     selectedScenarioId: 'sc1',
-    createdAt: '2026-06-20',
+    createdAt: '2026-06-23',
     progress: 0,
     items: [
-      { id: 'i1', name: '냉장고', category: '가전', amount: 2500000, targetMonth: '2026-07', required: true, flexible: false },
-      { id: 'i2', name: '세탁기', category: '가전', amount: 1200000, targetMonth: '2026-08', required: true, flexible: true },
-      { id: 'i3', name: '건조기', category: '가전', amount: 1000000, targetMonth: '2026-08', required: true, flexible: true },
-      { id: 'i4', name: 'TV', category: '가전', amount: 1800000, targetMonth: '2026-09', required: false, flexible: true },
+      { id: 'i1', name: '정장 셔츠·슬랙스', category: '쇼핑', amount: 210000, targetMonth: '2026-07', required: true, flexible: false },
+      { id: 'i2', name: '구두', category: '쇼핑', amount: 160000, targetMonth: '2026-07', required: true, flexible: true },
+      { id: 'i3', name: '증명사진', category: '취업', amount: 50000, targetMonth: '2026-07', required: true, flexible: false },
+      { id: 'i4', name: '어학 응시료', category: '교육', amount: 84000, targetMonth: '2026-08', required: true, flexible: false },
+      { id: 'i5', name: '면접 교통비', category: '교통', amount: 90000, targetMonth: '2026-08', required: false, flexible: true },
     ],
     scenarios: [
       {
         id: 'sc1',
         type: '혜택 최대화',
         recommended: true,
-        totalAmount: 6500000,
-        totalBenefit: 75000,
-        budgetDiff: 500000,
-        maxMonthlySpend: 2500000,
+        totalAmount: 594000,
+        totalBenefit: 39520,
+        budgetDiff: 206000,
+        maxMonthlySpend: 420000,
         achievedCards: 2,
-        reasons: ['7월 LOCA 100 생활 할인 우선 활용', '8월 카드의정석2 SHOPPER 쇼핑 혜택 집중'],
+        reasons: ['쇼핑 결제는 카드의정석2 SHOPPER로 집중', '교통과 카페는 LOCA 100으로 일상 할인 유지'],
         warning: null,
         monthlyPlan: [
-          { month: '2026-07', items: [{ name: '냉장고', amount: 2500000, card: 'LOCA 100', benefit: 30000, note: '큰 금액 결제 전 실적 조건을 함께 확인합니다.', status: '구매 예정' }] },
-          { month: '2026-08', items: [
-            { name: '세탁기', amount: 1200000, card: '카드의정석2 SHOPPER', benefit: 25000, note: '쇼핑 혜택을 받을 수 있는 결제처를 우선 검토합니다.', status: '구매 예정' },
-            { name: '건조기', amount: 1000000, card: '카드의정석2 SHOPPER', benefit: 0, note: '동일 카드 월 혜택 한도 초과 여부를 확인해야 합니다.', status: '구매 예정' },
+          { month: '2026-07', items: [
+            { name: '정장 셔츠·슬랙스', amount: 210000, card: '카드의정석2 SHOPPER', benefit: 21000, note: '온라인 쇼핑 혜택과 실적을 함께 반영합니다.', status: '구매 예정' },
+            { name: '구두', amount: 160000, card: '카드의정석2 SHOPPER', benefit: 16000, note: '쇼핑 지출을 한 카드에 모아 혜택 누락을 줄입니다.', status: '구매 예정' },
+            { name: '증명사진', amount: 50000, card: 'LOCA 100', benefit: 750, note: '소액 오프라인 결제는 기본 할인 카드로 처리합니다.', status: '예약 예정' },
           ] },
-          { month: '2026-09', items: [{ name: 'TV', amount: 1800000, card: 'LOCA 100', benefit: 20000, note: '월 혜택 한도가 초기화된 이후 사용하는 계획입니다.', status: '구매 예정' }] },
+          { month: '2026-08', items: [
+            { name: '어학 응시료', amount: 84000, card: '이마트 신한카드', benefit: 420, note: '교육비는 혜택보다 지출 기록의 분류 정확도를 우선합니다.', status: '결제 예정' },
+            { name: '면접 교통비', amount: 90000, card: 'LOCA 100', benefit: 900, note: '면접 동선이 늘어나는 달에는 교통비를 따로 추적합니다.', status: '사용 예정' },
+          ] },
         ],
         cardSummary: [
-          { cardName: 'LOCA 100', totalAmount: 4300000, benefit: 50000, achieved: true, remainingLimit: 100000, itemCount: 2 },
-          { cardName: '카드의정석2 SHOPPER', totalAmount: 2200000, benefit: 25000, achieved: true, remainingLimit: 0, itemCount: 2 },
+          { cardName: 'LOCA 100', totalAmount: 140000, benefit: 1650, achieved: false, remainingLimit: 608350, itemCount: 2 },
+          { cardName: '카드의정석2 SHOPPER', totalAmount: 370000, benefit: 37000, achieved: true, remainingLimit: 0, itemCount: 2 },
+          { cardName: '이마트 신한카드', totalAmount: 84000, benefit: 420, achieved: false, remainingLimit: 315580, itemCount: 1 },
         ],
-        aiExplanation: '7월과 9월에는 LOCA 100을 큰 결제에 배정하고, 8월에는 카드의정석2 SHOPPER의 쇼핑 혜택을 우선 확인하는 방식입니다. 실제 카드 DB의 전월 실적과 혜택 유형을 기준으로 더 정교하게 확장할 수 있습니다.',
+        aiExplanation: '취업 준비 지출은 쇼핑과 교육으로 나뉩니다. 쇼핑 결제는 SHOPPER에 모아 혜택을 선명하게 만들고, 교통·소액 결제는 LOCA 100으로 정리하는 구성이 적합합니다.',
       },
       {
         id: 'sc2',
         type: '예산 안정',
         recommended: false,
-        totalAmount: 6500000,
-        totalBenefit: 55000,
-        budgetDiff: 500000,
-        maxMonthlySpend: 2200000,
+        totalAmount: 594000,
+        totalBenefit: 18400,
+        budgetDiff: 206000,
+        maxMonthlySpend: 300000,
         achievedCards: 1,
-        reasons: ['월별 지출이 220만원 이하로 분산', '예산 초과 위험 최소화'],
+        reasons: ['7월과 8월 지출을 나누어 현금 흐름 안정', '필수 항목 우선 결제로 예산 초과 위험 축소'],
         warning: null,
         monthlyPlan: [
-          { month: '2026-07', items: [{ name: '냉장고', amount: 2200000, card: 'LOCA 100', benefit: 25000, note: '예산 분산을 위해 일부 비용을 8월로 이연합니다.', status: '구매 예정' }] },
-          { month: '2026-08', items: [{ name: '세탁기·건조기', amount: 2200000, card: '카드의정석2 SHOPPER', benefit: 20000, note: '세트 구매로 배송비를 절감할 수 있습니다.', status: '구매 예정' }] },
-          { month: '2026-09', items: [{ name: 'TV', amount: 1800000, card: 'LOCA 100', benefit: 10000, note: '추가 할인 이벤트 기간에 구매를 권장합니다.', status: '구매 예정' }] },
+          { month: '2026-07', items: [{ name: '셔츠·증명사진', amount: 260000, card: '카드의정석2 SHOPPER', benefit: 16000, note: '필수 준비물을 먼저 결제합니다.', status: '구매 예정' }] },
+          { month: '2026-08', items: [{ name: '구두·응시료·교통비', amount: 334000, card: 'LOCA 100', benefit: 2400, note: '다음 달 지출로 나누어 부담을 낮춥니다.', status: '구매 예정' }] },
         ],
         cardSummary: [
-          { cardName: 'LOCA 100', totalAmount: 4000000, benefit: 35000, achieved: true, remainingLimit: 150000, itemCount: 2 },
-          { cardName: '카드의정석2 SHOPPER', totalAmount: 2200000, benefit: 20000, achieved: false, remainingLimit: 50000, itemCount: 1 },
+          { cardName: 'LOCA 100', totalAmount: 334000, benefit: 2400, achieved: false, remainingLimit: 413600, itemCount: 3 },
+          { cardName: '카드의정석2 SHOPPER', totalAmount: 260000, benefit: 16000, achieved: false, remainingLimit: 240000, itemCount: 2 },
         ],
-        aiExplanation: '지출을 3개월에 균등하게 배분하여 특정 월에 지출이 몰리지 않도록 계획했습니다. 예산 초과 위험이 낮고 현금 흐름 관리에 유리합니다.',
+        aiExplanation: '혜택 규모는 조금 줄어들지만 취준 기간의 월별 부담을 고르게 유지합니다. 다음 달 면접 일정이 확정될 때 교통비만 조정하면 됩니다.',
       },
       {
         id: 'sc3',
         type: '실적 균형',
         recommended: false,
-        totalAmount: 6500000,
-        totalBenefit: 65000,
-        budgetDiff: 500000,
-        maxMonthlySpend: 2300000,
+        totalAmount: 594000,
+        totalBenefit: 21870,
+        budgetDiff: 206000,
+        maxMonthlySpend: 360000,
         achievedCards: 2,
-        reasons: ['두 카드 모두 월 실적 조건 충족 가능', '혜택 한도 미소진 카드 없음'],
-        warning: '9월 LOCA 100 월 혜택 한도 소진 가능성 있음',
+        reasons: ['보유 카드 실적을 고르게 관리', '교육·교통·쇼핑 지출이 한쪽으로 몰리지 않음'],
+        warning: 'LOCA 100은 전월 실적까지 아직 여유가 있습니다.',
         monthlyPlan: [],
         cardSummary: [
-          { cardName: 'LOCA 100', totalAmount: 3700000, benefit: 40000, achieved: true, remainingLimit: 0, itemCount: 2 },
-          { cardName: '카드의정석2 SHOPPER', totalAmount: 2800000, benefit: 25000, achieved: true, remainingLimit: 30000, itemCount: 2 },
+          { cardName: 'LOCA 100', totalAmount: 230000, benefit: 3450, achieved: false, remainingLimit: 516550, itemCount: 2 },
+          { cardName: '카드의정석2 SHOPPER', totalAmount: 280000, benefit: 18000, achieved: false, remainingLimit: 220000, itemCount: 2 },
+          { cardName: '이마트 신한카드', totalAmount: 84000, benefit: 420, achieved: false, remainingLimit: 315580, itemCount: 1 },
         ],
-        aiExplanation: '두 카드의 실적 조건을 함께 고려해 각 월에 최적 카드를 배정했습니다. 한 카드에 지출이 편중되지 않아 다음 달 혜택 한도도 고르게 유지됩니다.',
+        aiExplanation: '세 카드 모두에 지출을 나누어 다음 달 혜택 조건을 준비합니다. 다만 현재 소비 규모에서는 SHOPPER 중심 전략이 더 높은 절감 효과를 냅니다.',
       },
     ],
   },

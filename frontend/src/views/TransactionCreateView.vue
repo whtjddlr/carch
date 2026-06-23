@@ -121,7 +121,7 @@ import { createTransaction, fetchOwnedCards, normalizeCard, parseTransaction } f
 
 const router = useRouter()
 const sourceMode = ref('text')
-const rawText = ref('오늘 스타벅스 강남역점에서 5500원 LOCA 100으로 결제했어')
+const rawText = ref('오늘 컴포즈커피 역삼센터필드점에서 3800원 LOCA 100으로 결제했어')
 const isParsing = ref(false)
 const isSaving = ref(false)
 const confidence = ref(0)
@@ -129,27 +129,27 @@ const imagePreview = ref('')
 const imageName = ref('')
 const cards = ref(mockCards)
 
-const categories = ['카페', '쇼핑', '편의점', '뷰티', '식비', '마트', '교통', '문화', '구독', '기타']
+const categories = ['카페', '식비', '쇼핑', '교통', '헬스', '교육', '편의점', '뷰티', '문화', '구독', '기타']
 const examples = [
-  '오늘 스타벅스 강남역점에서 5500원 LOCA 100으로 결제했어',
-  '신한카드 06/22 14:30 이마트 67,800원 승인',
+  '오늘 컴포즈커피 역삼센터필드점에서 3800원 LOCA 100으로 결제했어',
+  '우리카드 06/20 23:41 무신사 스토어 86,400원 승인',
 ]
 
 const form = reactive({
   merchantName: '',
-  amount: -5500,
+  amount: -3800,
   category: '카페',
   cardId: '10029',
-  date: '2026-06-22',
-  time: '14:30',
-  address: '직접 입력',
-  icon: '💳',
+  date: '2026-06-23',
+  time: '08:42',
+  address: '서울 강남구 테헤란로 231',
+  icon: '☕',
 })
 
 const placeholder = computed(() => (
   sourceMode.value === 'capture'
-    ? '[신한카드] 06/22 14:30 이마트 67,800원 승인'
-    : '오늘 스타벅스 강남역점에서 5500원 LOCA 100으로 결제했어'
+    ? '[우리카드] 06/20 23:41 무신사 스토어 86,400원 승인'
+    : '오늘 컴포즈커피 역삼센터필드점에서 3800원 LOCA 100으로 결제했어'
 ))
 
 const canSave = computed(() => form.merchantName.trim() && Number(form.amount) !== 0 && form.cardId && form.date && form.time)
@@ -204,7 +204,7 @@ const onImageChange = (event) => {
   imageName.value = file.name
   imagePreview.value = URL.createObjectURL(file)
   if (!rawText.value.trim()) {
-    rawText.value = '[카드앱] 06/22 14:30 이마트 67,800원 승인'
+    rawText.value = '[우리카드] 06/20 23:41 무신사 스토어 86,400원 승인'
   }
 }
 

@@ -136,14 +136,15 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 PROJECT_ROOT = BASE_DIR.parent
-DATA_BUNDLE_DIR = Path(os.environ.get('CARD_DATA_BUNDLE_DIR', ''))
-if not str(DATA_BUNDLE_DIR):
+raw_data_bundle_dir = os.environ.get('CARD_DATA_BUNDLE_DIR')
+DATA_BUNDLE_DIR = Path(raw_data_bundle_dir) if raw_data_bundle_dir else None
+if DATA_BUNDLE_DIR is None:
     repo_bundle = PROJECT_ROOT / 'pjt-08-db-bundle-20260529'
     local_bundle = PROJECT_ROOT.parent / 'pjt-08-db-bundle-20260529'
     DATA_BUNDLE_DIR = repo_bundle if repo_bundle.exists() else local_bundle
 
-CARD_MASTER_DB = Path(os.environ.get('CARD_MASTER_DB', DATA_BUNDLE_DIR / 'card_master_api.sqlite'))
-CARD_IMAGE_DIR = Path(os.environ.get('CARD_IMAGE_DIR', DATA_BUNDLE_DIR / 'card_images'))
+CARD_MASTER_DB = Path(os.environ.get('CARD_MASTER_DB') or (DATA_BUNDLE_DIR / 'card_master_api.sqlite'))
+CARD_IMAGE_DIR = Path(os.environ.get('CARD_IMAGE_DIR') or (DATA_BUNDLE_DIR / 'card_images'))
 
 AI_MODE = os.environ.get('AI_MODE', 'mock').lower()
 GMS_API_KEY = os.environ.get('GMS_API_KEY') or os.environ.get('OPENAI_API_KEY') or ''

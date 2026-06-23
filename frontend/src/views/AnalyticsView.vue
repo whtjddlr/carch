@@ -4,25 +4,61 @@
       <AppBackButton fallback="/cards" />
       <div>
         <h1>카드 소비 분석</h1>
-        <p>최근 결제 내역을 AI가 요약하고 다음 행동을 제안합니다.</p>
+        <p>소비·혜택 요약</p>
       </div>
-      <span v-if="aiAnalysis" class="ai-pill">{{ aiAnalysis.aiMode === 'gms' ? 'AI 분석' : '기본 분석' }}</span>
+      <button
+        class="refresh-analysis-button"
+        type="button"
+        :disabled="isRefreshing"
+        :aria-label="analysisButtonLabel"
+        :title="analysisButtonLabel"
+        @click="refreshAnalysis"
+      >
+        <RefreshCw :size="15" :stroke-width="2.2" :class="{ spinning: isRefreshing }" />
+      </button>
     </header>
 
     <div class="screen-scroll scrollbar-hide page-padding">
       <div v-if="error" class="notice-card">{{ error }}</div>
-      <div v-if="isLoading" class="notice-card">분석 결과를 불러오는 중입니다.</div>
+      <div v-if="isLoading" class="notice-card">최신 소비 인사이트를 준비하고 있습니다.</div>
+      <div v-if="isRefreshing" class="notice-card">새로운 소비 인사이트를 정리하고 있습니다.</div>
 
       <div class="metric-grid">
-        <article class="app-card">
-          <span>총 지출</span>
-          <strong>{{ krw(totalExpense) }}</strong>
+        <article class="app-card metric-card metric-card-total">
+          <span>지출</span>
+          <strong class="metric-value">{{ krw(totalExpense) }}</strong>
         </article>
-        <article class="app-card">
-          <span>예상 절감</span>
-          <strong class="success">{{ krw(expectedSaving) }}</strong>
+        <article class="app-card metric-card metric-card-saving">
+          <span>절감</span>
+          <strong class="metric-value success">{{ krw(expectedSaving) }}</strong>
         </article>
       </div>
+
+      <article v-if="spendingTrend" class="app-card trend-card">
+        <div class="section-title">
+          <span>흐름</span>
+          <small>{{ trendPeriodLabel }}</small>
+        </div>
+        <div v-if="primaryTrendChange" class="trend-primary">
+          <strong>{{ trendPrimaryTitle }}</strong>
+          <p>{{ trendPrimaryCopy }}</p>
+        </div>
+        <ul class="trend-metrics">
+          <li v-for="item in trendHighlights" :key="item.label">
+            <small>{{ item.label }}</small>
+            <strong :class="{ success: item.tone === 'success', attention: item.tone === 'attention' }">
+              {{ item.value }}
+            </strong>
+            <span>{{ item.caption }}</span>
+          </li>
+        </ul>
+        <div v-if="oneTimeCandidates.length" class="one-time-strip">
+          <span>일회성 후보</span>
+          <b v-for="item in oneTimeCandidates.slice(0, 2)" :key="item.category">
+            {{ item.category }} {{ krw(item.currentAmount) }}
+          </b>
+        </div>
+      </article>
 
       <div v-if="aiAnalysis?.summaryCards?.length" class="ai-summary-grid">
         <article
@@ -31,122 +67,245 @@
           class="app-card ai-summary-card"
           :class="`tone-${card.tone || 'gray'}`"
         >
-          <span>{{ card.label }}</span>
-          <strong>{{ card.value }}</strong>
-          <small v-if="card.caption">{{ card.caption }}</small>
+          <span>{{ compactSummaryLabel(card.label) }}</span>
+          <strong class="summary-value">{{ card.value }}</strong>
         </article>
       </div>
 
       <article v-if="aiAnalysis" class="app-card ai-card">
         <div class="section-title">
-          <span>{{ aiAnalysis.summaryTitle }}</span>
-          <small>신뢰도 {{ Math.round(Number(aiAnalysis.confidence || 0) * 100) }}%</small>
+          <span>진단</span>
+          <small>신뢰도 <b>{{ Math.round(Number(aiAnalysis.confidence || 0) * 100) }}%</b></small>
         </div>
-        <div v-if="aiAnalysis.primaryInsight" class="primary-insight" :class="`severity-${aiAnalysis.primaryInsight.severity || 'info'}`">
+        <div class="primary-insight compact" :class="`severity-${aiAnalysis.primaryInsight?.severity || 'info'}`">
           <div>
-            <span>{{ aiAnalysis.primaryInsight.label }}</span>
-            <strong>{{ aiAnalysis.primaryInsight.title }}</strong>
-            <p>{{ aiAnalysis.primaryInsight.body }}</p>
+            <span>{{ conciseDiagnosis.label }}</span>
+            <strong>{{ conciseDiagnosis.title }}</strong>
           </div>
-          <em v-if="aiAnalysis.primaryInsight.metricValue">
-            {{ krw(aiAnalysis.primaryInsight.metricValue) }}
+          <em v-if="conciseDiagnosis.amount">
+            {{ krw(conciseDiagnosis.amount) }}
           </em>
         </div>
-        <h2>{{ aiAnalysis.headline }}</h2>
-        <p v-if="aiAnalysis.narrative" class="ai-narrative">{{ aiAnalysis.narrative }}</p>
-        <ul class="insight-list">
-          <li v-for="item in aiAnalysis.savingOpportunities" :key="item.title">
-            <strong>{{ item.title }}</strong>
-            <span>{{ item.reason }}</span>
-            <em>{{ item.action }}</em>
+        <ul class="signal-grid">
+          <li v-for="item in analysisSignals" :key="`${item.label}-${item.value}`">
+            <small>{{ item.label }}</small>
+            <strong>{{ item.value }}</strong>
           </li>
         </ul>
+      </article>
+      <article v-else class="app-card empty-analysis-card">
+        <span>대기</span>
+        <strong>준비 중</strong>
+      </article>
+
+      <article v-if="recommendationAlert?.show && topRecommendation" class="app-card card-switch-card">
+        <div class="section-title">
+          <span>교체</span>
+          <small>매칭 <b>{{ topRecommendation.match }}%</b></small>
+        </div>
+        <div class="switch-hero">
+          <div class="switch-card-preview">
+            <img v-if="topRecommendation.imageUrl" :src="topRecommendation.imageUrl" :alt="topRecommendation.name" />
+            <div v-else class="switch-card-fallback">
+              <small>{{ topRecommendation.issuer }}</small>
+              <strong>{{ topRecommendation.name }}</strong>
+            </div>
+          </div>
+          <div>
+            <strong>{{ cardSwitchTitle }}</strong>
+          </div>
+        </div>
+        <div class="switch-metrics">
+          <span>
+            <small>월</small>
+            <b>{{ signedKrw(topRecommendation.economics.monthlyDelta) }}</b>
+          </span>
+          <span>
+            <small>연</small>
+            <b>{{ signedKrw(topRecommendation.economics.annualDelta) }}</b>
+          </span>
+          <span>
+            <small>기준</small>
+            <b>연회비</b>
+          </span>
+        </div>
+        <RouterLink class="switch-link" :to="`/recommendations/r1`">
+          비교
+        </RouterLink>
       </article>
 
       <article class="app-card chart-card">
         <div class="section-title">
-          <span>카테고리별 지출</span>
-          <small>{{ categoryRows.length }}개 항목</small>
+          <span>분포</span>
+          <small>{{ categoryRows.length }}개</small>
         </div>
-        <div v-for="category in categoryRows" :key="category.category" class="bar-row">
-          <span>{{ category.category }}</span>
-          <div><i :style="{ width: `${category.percent}%`, background: category.color }" /></div>
-          <strong>{{ krw(category.amount) }}</strong>
+        <div class="donut-panel">
+          <div class="category-donut" :style="categoryChartStyle" role="img" :aria-label="categoryChartLabel">
+            <div class="donut-hole">
+              <span>최다</span>
+              <strong>{{ topCategory?.category || '-' }}</strong>
+              <small>{{ topCategory ? `${topCategory.percent}%` : '0%' }}</small>
+            </div>
+          </div>
+          <ul class="donut-legend">
+            <li v-for="category in categoryRows" :key="category.category">
+              <i :style="{ background: category.color }"></i>
+              <div>
+                <strong>{{ category.category }}</strong>
+                <small>{{ category.percent }}%</small>
+              </div>
+              <b>{{ krw(category.amount) }}</b>
+            </li>
+          </ul>
         </div>
       </article>
 
       <article v-if="aiAnalysis?.categoryInsights?.length" class="app-card insight-card">
         <div class="section-title">
-          <span>AI 카테고리 해석</span>
+          <span>해석</span>
+          <small>TOP 3</small>
         </div>
         <ul class="compact-list">
-          <li v-for="item in aiAnalysis.categoryInsights" :key="`${item.category}-${item.amount}`">
-            <strong>{{ item.category }}</strong>
-            <span>{{ item.insight }}</span>
-          </li>
-        </ul>
-      </article>
-
-      <article v-if="aiAnalysis?.nextActions?.length || aiAnalysis?.actionButtons?.length" class="app-card action-card">
-        <div class="section-title">
-          <span>다음 행동</span>
-        </div>
-        <div class="action-chips">
-          <span v-for="action in aiAnalysis.nextActions" :key="action">{{ action }}</span>
-        </div>
-        <div v-if="aiAnalysis.actionButtons?.length" class="action-buttons">
-          <RouterLink v-for="button in aiAnalysis.actionButtons" :key="`${button.label}-${button.route}`" :to="button.route">
-            {{ button.label }}
-          </RouterLink>
-        </div>
-      </article>
-
-      <article v-if="analysisRecords.length" class="app-card record-card">
-        <div class="section-title">
-          <span>저장된 AI 분석</span>
-          <small>DB 저장 {{ analysisRecords.length }}건</small>
-        </div>
-        <ul class="record-list">
-          <li v-for="record in analysisRecords" :key="record.id">
+          <li v-for="(item, index) in aiAnalysis.categoryInsights.slice(0, 3)" :key="`${item.category}-${item.amount}`">
             <div>
-              <strong>{{ record.title || '카드 소비 분석' }}</strong>
-              <span>{{ record.resultPayload?.headline || '분석 결과가 저장되었습니다.' }}</span>
+              <strong>{{ item.category }}</strong>
+              <small class="amount-highlight">{{ krw(item.amount) }}</small>
             </div>
-            <em>{{ formatRecordTime(record.createdAt) }}</em>
+            <span>{{ categorySignal(index) }}</span>
           </li>
         </ul>
       </article>
+
     </div>
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { RefreshCw } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { krw, transactions as mockTransactions } from '@/data/mockData'
-import { fetchAnalysisRecords, fetchSpendingSummary } from '@/services/api'
+import { fetchCardRecommendationBundle, fetchSpendingSummary } from '@/services/api'
 
 const colors = ['#0f5fae', '#008c95', '#24364f', '#8a9aad', '#c49a49', '#5f6b77']
 const summary = ref(null)
-const analysisRecords = ref([])
+const recommendationBundle = ref(null)
 const isLoading = ref(false)
+const isRefreshing = ref(false)
 const error = ref('')
 
 const safeSummary = computed(() => summary.value || { totalExpense: 0, totalIncome: 0, byCategory: [], byCard: [] })
 const aiAnalysis = computed(() => safeSummary.value.aiAnalysis || null)
+const spendingTrend = computed(() => safeSummary.value.spendingTrend || null)
 const totalExpense = computed(() => Number(safeSummary.value.totalExpense || 0))
 const expectedSaving = computed(() =>
   (aiAnalysis.value?.savingOpportunities || []).reduce((sum, item) => sum + Number(item.amount || 0), 0),
 )
+const topRecommendation = computed(() => recommendationBundle.value?.results?.[0] || null)
+const recommendationAlert = computed(() => recommendationBundle.value?.alert || null)
+const trendPeriodLabel = computed(() => {
+  const currentMonth = spendingTrend.value?.currentMonth
+  return currentMonth ? `${currentMonth.replace('-', '.')} 기준` : '최근 6개월'
+})
+const oneTimeCandidates = computed(() => spendingTrend.value?.oneTimeCandidates || [])
+const primaryTrendChange = computed(() => {
+  const oneTime = oneTimeCandidates.value[0]
+  if (oneTime) return oneTime
+  return (spendingTrend.value?.categoryChanges || []).find((item) => Number(item.currentAmount || 0) > 0) || null
+})
+const trendPrimaryTitle = computed(() => {
+  const item = primaryTrendChange.value
+  if (!item) return '안정'
+  if (item.oneTimeCandidate) return `${item.category} 급증`
+  if (Number(item.deltaFromBaseline || 0) > 0) return `${item.category} 증가`
+  if (Number(item.deltaFromBaseline || 0) < 0) return `${item.category} 감소`
+  return `${item.category} 안정`
+})
+const trendPrimaryCopy = computed(() => {
+  const item = primaryTrendChange.value
+  if (!item) return '반복 소비 기준선을 쌓고 있습니다.'
+  const base = krw(item.baselineReference || item.baselineAverage || 0)
+  if (item.oneTimeCandidate) {
+    return `평소 ${base} 수준으로 보정해 추천에 반영합니다.`
+  }
+  return `평소 ${base} 기준으로 변화를 확인했습니다.`
+})
+const trendHighlights = computed(() => {
+  const total = spendingTrend.value?.total || {}
+  return [
+    {
+      label: '전월',
+      value: signedKrw(total.deltaFromPrevious),
+      caption: '지난달 대비',
+      tone: Number(total.deltaFromPrevious || 0) > 0 ? 'attention' : 'success',
+    },
+    {
+      label: '평소',
+      value: signedKrw(total.deltaFromBaseline),
+      caption: '6개월 평균 대비',
+      tone: Number(total.deltaFromBaseline || 0) > 0 ? 'attention' : 'success',
+    },
+    {
+      label: '추천 반영',
+      value: krw(total.adjustedForRecommendation),
+      caption: '일회성 보정',
+      tone: 'success',
+    },
+  ]
+})
+const analysisButtonLabel = computed(() => {
+  if (isRefreshing.value) return '분석 중'
+  return aiAnalysis.value ? '인사이트 갱신' : '인사이트 생성'
+})
 const categoryRows = computed(() => {
   const rows = [...(safeSummary.value.byCategory || [])].sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
-  const max = Math.max(...rows.map((item) => Number(item.amount || 0)), 1)
+  const total = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0)
   return rows.map((item, index) => ({
     ...item,
-    percent: Math.max(6, Math.round((Number(item.amount || 0) / max) * 100)),
+    percent: total ? Math.max(1, Math.round((Number(item.amount || 0) / total) * 100)) : 0,
+    share: total ? (Number(item.amount || 0) / total) * 100 : 0,
     color: colors[index % colors.length],
   }))
 })
+const topCategory = computed(() => categoryRows.value[0] || null)
+const categoryChartStyle = computed(() => {
+  if (!categoryRows.value.length) {
+    return { background: '#e7edf4' }
+  }
+  let cursor = 0
+  const segments = categoryRows.value.map((item, index) => {
+    const start = cursor
+    const end = index === categoryRows.value.length - 1 ? 360 : cursor + item.share * 3.6
+    cursor = end
+    return `${item.color} ${start.toFixed(2)}deg ${end.toFixed(2)}deg`
+  })
+  return { background: `conic-gradient(${segments.join(', ')})` }
+})
+const categoryChartLabel = computed(() => {
+  if (!topCategory.value) return '카테고리별 지출 데이터 없음'
+  return `카테고리별 지출. 가장 큰 항목은 ${topCategory.value.category}, ${topCategory.value.percent}%입니다.`
+})
+const conciseDiagnosis = computed(() => {
+  const primary = aiAnalysis.value?.primaryInsight || {}
+  const top = categoryRows.value[0]
+  return {
+    label: '집중',
+    title: top ? `${top.category}` : (primary.title || '점검'),
+    amount: primary.metricValue || top?.amount || 0,
+  }
+})
+const analysisSignals = computed(() => {
+  const items = []
+  const top = categoryRows.value[0]
+  const second = categoryRows.value[1]
+  if (top) items.push({ label: '집중', value: top.category })
+  if (second) items.push({ label: '보조', value: second.category })
+  if (topRecommendation.value?.economics?.monthlyDelta > 0) {
+    items.push({ label: '절감', value: signedKrw(topRecommendation.value.economics.monthlyDelta) })
+  }
+  return items.slice(0, 3)
+})
+const cardSwitchTitle = computed(() => topRecommendation.value?.name || '추천 카드')
 
 function buildMockSummary() {
   const expenses = mockTransactions.filter((tx) => Number(tx.amt) < 0)
@@ -168,7 +327,7 @@ function buildMockSummary() {
       aiMode: 'mock',
       summaryTitle: '예시 분석',
       confidence: 0.78,
-      headline: '쇼핑과 마트 지출 비중이 높아 카드 혜택 점검 여지가 있어요.',
+      headline: '쇼핑과 마트 지출 비중이 높아 카드 혜택 조건 점검이 필요합니다.',
       savingOpportunities: [
         {
           title: '쇼핑 결제 카드 재배치',
@@ -198,26 +357,49 @@ async function loadSummary() {
   error.value = ''
   try {
     summary.value = await fetchSpendingSummary({ ai: true })
-    analysisRecords.value = await fetchAnalysisRecords({ type: 'spending_summary', limit: 3 })
+    if (!summary.value?.aiAnalysis && summary.value?.aiAnalysisStatus === 'empty') {
+      summary.value = await fetchSpendingSummary({ ai: true, refresh: true })
+    }
+    const recommendations = await fetchCardRecommendationBundle()
+    recommendationBundle.value = recommendations
   } catch {
     summary.value = buildMockSummary()
-    analysisRecords.value = []
-    error.value = '백엔드 연결 전이라 예시 소비 데이터로 분석을 보여드려요.'
+    recommendationBundle.value = null
+    error.value = '백엔드 연결 전이므로 예시 소비 데이터 기반 인사이트를 제공합니다.'
   } finally {
     isLoading.value = false
   }
 }
 
-function formatRecordTime(value) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  return new Intl.DateTimeFormat('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
+async function refreshAnalysis() {
+  if (isRefreshing.value) return
+  isRefreshing.value = true
+  error.value = ''
+  try {
+    summary.value = await fetchSpendingSummary({ ai: true, refresh: true })
+  } catch {
+    error.value = '새 인사이트를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    isRefreshing.value = false
+  }
+}
+
+function signedKrw(value) {
+  const amount = Number(value || 0)
+  return `${amount > 0 ? '+' : amount < 0 ? '-' : ''}${krw(Math.abs(amount))}`
+}
+
+function compactSummaryLabel(label) {
+  const text = String(label || '')
+  if (text.includes('지출')) return '지출'
+  if (text.includes('절감')) return '절감'
+  if (text.includes('점검')) return '점검'
+  if (text.includes('카드')) return '카드'
+  return text.replace(/이번 달|예상|기준|분석/g, '').trim() || '요약'
+}
+
+function categorySignal(index) {
+  return ['집중', '비교', '관리'][index] || '점검'
 }
 
 onMounted(loadSummary)
@@ -247,14 +429,40 @@ onMounted(loadSummary)
   line-height: 1.45;
 }
 
-.ai-pill {
-  flex: 0 0 auto;
-  border-radius: 999px;
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.18);
+.refresh-analysis-button {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.12);
   color: #fff;
-  font-size: 11px;
-  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(7, 15, 28, 0.14);
+  backdrop-filter: blur(12px);
+  touch-action: manipulation;
+}
+
+.refresh-analysis-button:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.refresh-analysis-button:disabled {
+  cursor: progress;
+  opacity: 0.58;
+}
+
+.refresh-analysis-button .spinning {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .page-padding {
@@ -282,8 +490,29 @@ onMounted(loadSummary)
 .chart-card,
 .ai-card,
 .insight-card,
-.action-card {
+.trend-card {
   padding: 16px;
+}
+
+.metric-card {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(36, 54, 79, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.metric-card::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: #24364f;
+  content: '';
+}
+
+.metric-card-saving::before {
+  background: #008c95;
 }
 
 .metric-grid span {
@@ -295,12 +524,116 @@ onMounted(loadSummary)
 .metric-grid strong {
   display: block;
   color: #17202b;
-  font-size: 19px;
+  font-size: 23px;
   font-weight: 900;
+  line-height: 1.12;
+}
+
+.metric-value {
+  margin-top: 7px;
+  letter-spacing: 0;
+  text-shadow: 0 8px 22px rgba(15, 95, 174, 0.08);
 }
 
 .success {
   color: #008c95 !important;
+}
+
+.attention {
+  color: #b45309 !important;
+}
+
+.trend-card {
+  margin-bottom: 12px;
+  border-color: rgba(36, 54, 79, 0.1);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.trend-primary {
+  border-radius: 15px;
+  margin-bottom: 10px;
+  padding: 13px;
+  background: rgba(244, 248, 251, 0.88);
+}
+
+.trend-primary strong {
+  display: block;
+  color: #17202b;
+  font-size: 20px;
+  font-weight: 950;
+  line-height: 1.18;
+}
+
+.trend-primary p {
+  margin: 6px 0 0;
+  color: #5f6b77;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+  word-break: keep-all;
+}
+
+.trend-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.trend-metrics li {
+  min-width: 0;
+  border-radius: 13px;
+  padding: 11px 10px;
+  background: rgba(251, 253, 255, 0.82);
+}
+
+.trend-metrics small,
+.trend-metrics span {
+  display: block;
+  color: #8a9aad;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.trend-metrics strong {
+  display: block;
+  margin: 5px 0 3px;
+  color: #17202b;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.one-time-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.one-time-strip span,
+.one-time-strip b {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.one-time-strip span {
+  background: rgba(36, 54, 79, 0.08);
+  color: #5f6b77;
+}
+
+.one-time-strip b {
+  background: rgba(180, 83, 9, 0.09);
+  color: #b45309;
 }
 
 .ai-summary-grid {
@@ -323,7 +656,8 @@ onMounted(loadSummary)
   font-weight: 900;
 }
 
-.ai-summary-card strong {
+.ai-summary-card strong,
+.summary-value {
   display: block;
   margin-top: 4px;
   color: #17202b;
@@ -359,7 +693,11 @@ onMounted(loadSummary)
   background: rgba(232, 241, 255, 0.62);
 }
 
-.primary-insight span {
+.primary-insight.compact {
+  margin-bottom: 10px;
+}
+
+.primary-insight > div > span {
   color: #0f5fae;
   font-size: 10px;
   font-weight: 900;
@@ -369,12 +707,12 @@ onMounted(loadSummary)
   display: block;
   margin-top: 3px;
   color: #17202b;
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 900;
+  line-height: 1.12;
 }
 
-.primary-insight p,
-.ai-narrative {
+.primary-insight p {
   margin: 4px 0 0;
   color: #5f6b77;
   font-size: 12px;
@@ -384,8 +722,12 @@ onMounted(loadSummary)
 }
 
 .primary-insight em {
+  align-self: start;
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: rgba(15, 95, 174, 0.1);
   color: #0f5fae;
-  font-size: 13px;
+  font-size: 16px;
   font-style: normal;
   font-weight: 900;
   white-space: nowrap;
@@ -399,6 +741,192 @@ onMounted(loadSummary)
 .primary-insight.severity-warning span,
 .primary-insight.severity-warning em {
   color: #dc2626;
+}
+
+.signal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.signal-grid li {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(246, 248, 251, 0.82);
+}
+
+.signal-grid small {
+  color: #8a9aad;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.signal-grid strong {
+  overflow: hidden;
+  color: #17202b;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty-analysis-card {
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.empty-analysis-card span {
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.empty-analysis-card strong {
+  display: block;
+  margin-top: 5px;
+  color: #17202b;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.4;
+}
+
+.empty-analysis-card p {
+  margin: 6px 0 0;
+  color: #5f6b77;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.card-switch-card {
+  margin-bottom: 12px;
+  padding: 16px;
+  border-color: rgba(0, 140, 149, 0.18);
+  background: linear-gradient(180deg, rgba(240, 253, 250, 0.82), rgba(255, 255, 255, 0.78));
+}
+
+.switch-hero {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 13px;
+  align-items: center;
+}
+
+.switch-card-preview {
+  display: flex;
+  min-height: 96px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.switch-card-preview img {
+  width: 56px;
+  height: 88px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 14px rgba(16, 24, 40, 0.18));
+}
+
+.switch-card-fallback {
+  display: flex;
+  width: 56px;
+  height: 88px;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: 9px;
+  padding: 9px 7px;
+  background: #24364f;
+  color: #fff;
+  box-shadow: 0 10px 14px rgba(16, 24, 40, 0.18);
+}
+
+.switch-card-fallback small,
+.switch-card-fallback strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switch-card-fallback small {
+  font-size: 8px;
+  font-weight: 800;
+  opacity: 0.76;
+}
+
+.switch-card-fallback strong {
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.switch-hero strong {
+  display: block;
+  color: #17202b;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.switch-hero p {
+  margin: 6px 0 0;
+  color: #5f6b77;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.switch-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.switch-metrics span {
+  min-width: 0;
+  border: 1px solid rgba(0, 140, 149, 0.08);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.switch-metrics small {
+  display: block;
+  color: #6e6e73;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.switch-metrics b {
+  display: block;
+  margin-top: 3px;
+  color: #008c95;
+  font-size: 15px;
+  font-weight: 900;
+  word-break: keep-all;
+}
+
+.switch-link {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  margin-top: 13px;
+  padding: 10px 13px;
+  background: #17202b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
 }
 
 .section-title {
@@ -421,6 +949,12 @@ onMounted(loadSummary)
   font-weight: 800;
 }
 
+.section-title small b {
+  color: #008c95;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 h2 {
   margin: 0 0 12px;
   color: #17202b;
@@ -429,7 +963,6 @@ h2 {
   line-height: 1.4;
 }
 
-.insight-list,
 .compact-list {
   display: flex;
   flex-direction: column;
@@ -439,132 +972,134 @@ h2 {
   list-style: none;
 }
 
-.insight-list li,
 .compact-list li {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
   border-radius: 12px;
   padding: 11px 12px;
   background: #fbfdff;
 }
 
-.insight-list strong,
 .compact-list strong {
   color: #17202b;
   font-size: 12px;
   font-weight: 900;
 }
 
-.insight-list span,
-.compact-list span {
-  color: #5f6b77;
+.compact-list .amount-highlight {
+  color: #008c95;
   font-size: 12px;
-  font-weight: 700;
-  line-height: 1.45;
+  font-weight: 900;
 }
 
-.insight-list em {
+.compact-list span {
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: rgba(15, 95, 174, 0.08);
   color: #0f5fae;
   font-size: 11px;
-  font-style: normal;
   font-weight: 900;
+  white-space: nowrap;
 }
 
 .chart-card,
-.insight-card,
-.action-card,
-.record-card {
+.insight-card {
   margin-top: 12px;
 }
 
-.bar-row {
+.donut-panel {
   display: grid;
-  grid-template-columns: 54px 1fr 84px;
+  grid-template-columns: minmax(138px, 158px) minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  color: #6e6e73;
-  font-size: 12px;
-  font-weight: 800;
+  gap: 16px;
 }
 
-.bar-row:last-child {
-  margin-bottom: 0;
+.category-donut {
+  position: relative;
+  width: min(158px, 100%);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(23, 32, 43, 0.04), 0 18px 38px rgba(15, 95, 174, 0.1);
 }
 
-.bar-row div {
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #e7edf4;
-}
-
-.bar-row i {
-  display: block;
-  height: 100%;
+.category-donut::after {
+  position: absolute;
+  inset: 15px;
+  border: 1px solid rgba(219, 228, 238, 0.74);
   border-radius: inherit;
+  background: rgba(251, 253, 255, 0.96);
+  content: '';
 }
 
-.bar-row strong {
+.donut-hole {
+  position: absolute;
+  inset: 32px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  text-align: center;
+}
+
+.donut-hole span {
+  color: #7a8593;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.donut-hole strong {
+  max-width: 72px;
+  overflow: hidden;
   color: #17202b;
-  text-align: right;
-}
-
-.action-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.action-chips span {
-  border-radius: 999px;
-  padding: 8px 10px;
-  background: #f4f7ff;
-  color: #0f5fae;
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 900;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.action-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.action-buttons a {
-  min-height: 38px;
-  border-radius: 999px;
-  padding: 10px 12px;
-  background: #17202b;
-  color: #fff;
-  font-size: 12px;
+.donut-hole small {
+  color: #008c95;
+  font-size: 18px;
   font-weight: 900;
-  text-decoration: none;
+  line-height: 1;
 }
 
-.record-list {
+.donut-legend {
   display: flex;
   flex-direction: column;
   gap: 9px;
-  padding: 0;
   margin: 0;
+  padding: 0;
   list-style: none;
 }
 
-.record-list li {
+.donut-legend li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: start;
-  border-radius: 10px;
-  padding: 11px 12px;
-  background: #f6f8fb;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
 }
 
-.record-list strong {
-  display: block;
+.donut-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(23, 32, 43, 0.04);
+}
+
+.donut-legend div {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.donut-legend strong {
   overflow: hidden;
   color: #17202b;
   font-size: 12px;
@@ -573,23 +1108,39 @@ h2 {
   white-space: nowrap;
 }
 
-.record-list span {
-  display: -webkit-box;
-  margin-top: 3px;
-  overflow: hidden;
-  color: #5f6b77;
+.donut-legend small {
+  flex: 0 0 auto;
+  color: #008c95;
   font-size: 11px;
-  font-weight: 700;
-  line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  font-weight: 900;
 }
 
-.record-list em {
-  color: #6e6e73;
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 800;
+.donut-legend b {
+  color: #17202b;
+  font-size: 13px;
+  font-weight: 900;
+  text-align: right;
   white-space: nowrap;
+}
+
+@media (max-width: 380px) {
+  .simple-header {
+    align-items: stretch;
+  }
+
+  .donut-panel {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .donut-legend {
+    width: 100%;
+  }
+
+  .refresh-analysis-button {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
 }
 </style>

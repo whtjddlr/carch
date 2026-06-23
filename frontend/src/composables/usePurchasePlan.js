@@ -15,10 +15,10 @@ const currentStep = ref(0)
 const rawPrompt = ref('')
 const planForm = reactive({
   title: '',
-  type: '혼수',
-  budget: 7000000,
+  type: '큰 지출',
+  budget: 800000,
   startMonth: '2026-07',
-  endMonth: '2026-09',
+  endMonth: '2026-08',
   strategy: '혜택 최대화',
   expenseMode: 'planned-extra',
 })
@@ -124,10 +124,10 @@ export function usePurchasePlan() {
     rawPrompt.value = ''
     Object.assign(planForm, {
       title: '',
-      type: '혼수',
-      budget: 7000000,
+      type: '큰 지출',
+      budget: 800000,
       startMonth: '2026-07',
-      endMonth: '2026-09',
+      endMonth: '2026-08',
       strategy: '혜택 최대화',
       expenseMode: 'planned-extra',
     })

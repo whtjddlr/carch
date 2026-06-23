@@ -44,7 +44,7 @@ export const normalizeCard = (card, index = 0, transactions = []) => {
     limit: card.limit || 5000000,
     num: card.num || `${id.slice(-4)} **** **** ${String(7000 + index * 137).slice(-4)}`,
     exp: card.exp || '12/27',
-    holder: card.holder || 'KIM JIHUN',
+    holder: card.holder || 'NAM JUHYUN',
     lastSpent: card.lastSpent || spent,
   }
 }
@@ -105,15 +105,23 @@ export async function createTransaction(payload) {
   return normalizeTransaction(response.data)
 }
 
-export async function fetchCardRecommendations() {
+export async function fetchCardRecommendationBundle() {
   const response = await api.get('/api/recommendations/cards/')
-  return response.data.results || []
+  return response.data
 }
 
-export async function fetchSpendingSummary({ ai = false } = {}) {
+export async function fetchCardRecommendations() {
+  const data = await fetchCardRecommendationBundle()
+  return data.results || []
+}
+
+export async function fetchSpendingSummary({ ai = false, refresh = false } = {}) {
+  const params = {}
+  if (ai) params.ai = 1
+  if (refresh) params.refresh = 1
   const response = await api.get('/api/analytics/spending-summary/', {
-    params: ai ? { ai: 1 } : {},
-    timeout: ai ? AI_REQUEST_TIMEOUT_MS : DEFAULT_API_TIMEOUT_MS,
+    params,
+    timeout: ai && refresh ? AI_REQUEST_TIMEOUT_MS : DEFAULT_API_TIMEOUT_MS,
   })
   return response.data
 }

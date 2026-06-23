@@ -13,18 +13,22 @@ from django.views.decorators.csrf import csrf_exempt
 from .ai_service import chat_with_ai, analyze_spending_with_ai, get_ai_status, parse_purchase_plan_with_ai, parse_transaction_with_ai
 from .card_repository import fetch_card, fetch_cards
 from .models import AIAnalysisRecord, CommunityComment, CommunityPost, OwnedCard, PurchasePlan, Transaction
-from .seed_data import TRANSACTIONS
+from .seed_data import PURCHASE_PLANS, TRANSACTIONS
 
 
 MERCHANT_HINTS = [
+    ('컴포즈커피', '카페', '☕'),
     ('스타벅스', '카페', '☕'),
     ('투썸', '카페', '☕'),
     ('메가커피', '카페', '☕'),
+    ('샐러디', '식비', '🥗'),
     ('쿠팡', '쇼핑', '📦'),
+    ('무신사', '쇼핑', '🛍️'),
     ('마켓컬리', '쇼핑', '📦'),
     ('GS25', '편의점', '🏪'),
     ('CU', '편의점', '🏪'),
     ('세븐일레븐', '편의점', '🏪'),
+    ('스포애니', '헬스', '🏋️'),
     ('올리브영', '뷰티', '💄'),
     ('이마트', '마트', '🛒'),
     ('홈플러스', '마트', '🛒'),
@@ -32,9 +36,14 @@ MERCHANT_HINTS = [
     ('배달의민족', '식비', '🍕'),
     ('요기요', '식비', '🍕'),
     ('카카오택시', '교통', '🚕'),
+    ('카카오T', '교통', '🚕'),
     ('택시', '교통', '🚕'),
     ('CGV', '문화', '🎬'),
     ('넷플릭스', '구독', '📺'),
+    ('네이버플러스', '구독', '📱'),
+    ('토익스피킹', '교육', '📚'),
+    ('링글', '교육', '🗣️'),
+    ('교보문고', '교육', '📖'),
 ]
 
 CARD_HINTS = [
@@ -144,11 +153,11 @@ def serialize_transaction(transaction):
 
 
 def ensure_transactions_seeded():
-    if Transaction.objects.exists():
-        return
-
+    existing_ids = set(Transaction.objects.values_list('public_id', flat=True))
     rows = []
     for item in TRANSACTIONS:
+        if item['id'] in existing_ids:
+            continue
         rows.append(
             Transaction(
                 public_id=item['id'],
@@ -161,12 +170,162 @@ def ensure_transactions_seeded():
                 address=item.get('address') or '-',
             )
         )
-    Transaction.objects.bulk_create(rows, ignore_conflicts=True)
+    if rows:
+        Transaction.objects.bulk_create(rows, ignore_conflicts=True)
+
+
+def ensure_purchase_plans_seeded():
+    if PurchasePlan.objects.exists():
+        return
+
+    for item in PURCHASE_PLANS:
+        PurchasePlan.objects.create(
+            title=item['title'][:120],
+            plan_type=item.get('type', '큰 지출')[:40],
+            expense_mode=item.get('expenseMode', 'planned-extra')[:40],
+            total_budget=int(item.get('totalBudget') or 0),
+            start_month=item.get('startMonth', '2026-07')[:7],
+            end_month=item.get('endMonth', '2026-08')[:7],
+            status=item.get('status', '선택 완료')[:30],
+            selected_scenario_id=item.get('selectedScenarioId') or '',
+            progress=int(item.get('progress') or 0),
+            items=item.get('items') or [],
+            scenarios=item.get('scenarios') or [],
+        )
 
 
 def transaction_queryset():
     ensure_transactions_seeded()
     return Transaction.objects.all()
+
+
+def _month_key_from_transaction(item):
+    date_text = str(item.get('date') or item.get('approvedAt') or item.get('approved_at') or '')
+    return date_text[:7] if len(date_text) >= 7 else ''
+
+
+def _shift_month(month_key, delta):
+    try:
+        year, month = [int(part) for part in str(month_key).split('-')[:2]]
+    except (TypeError, ValueError):
+        now = timezone.localtime()
+        year, month = now.year, now.month
+    month_index = year * 12 + month - 1 + int(delta)
+    shifted_year = month_index // 12
+    shifted_month = month_index % 12 + 1
+    return f'{shifted_year:04d}-{shifted_month:02d}'
+
+
+def _median(values):
+    clean = sorted(_as_int(value) for value in values)
+    if not clean:
+        return 0
+    middle = len(clean) // 2
+    if len(clean) % 2:
+        return clean[middle]
+    return round((clean[middle - 1] + clean[middle]) / 2)
+
+
+def _pct_change(current, base):
+    current = _as_int(current)
+    base = _as_int(base)
+    if base <= 0:
+        return None
+    return round(((current - base) / base) * 100)
+
+
+def _build_spending_trend(transactions):
+    expenses = [item for item in transactions if _as_int(item.get('amount')) < 0]
+    months = sorted({month for month in (_month_key_from_transaction(item) for item in expenses) if month})
+    current_month = months[-1] if months else timezone.localtime().strftime('%Y-%m')
+    previous_month = _shift_month(current_month, -1)
+    baseline_months = [_shift_month(current_month, -index) for index in range(1, 7)]
+
+    by_month_category = defaultdict(int)
+    by_month_total = defaultdict(int)
+    for item in expenses:
+        month = _month_key_from_transaction(item)
+        if not month:
+            continue
+        amount = abs(_as_int(item.get('amount')))
+        category = item.get('category') or item.get('cat') or '기타'
+        by_month_category[(month, category)] += amount
+        by_month_total[month] += amount
+
+    categories = sorted({category for _, category in by_month_category.keys()})
+    category_changes = []
+    adjusted_total = 0
+
+    for category in categories:
+        current_amount = by_month_category[(current_month, category)]
+        previous_amount = by_month_category[(previous_month, category)]
+        baseline_values = [by_month_category[(month, category)] for month in baseline_months]
+        baseline_average = round(sum(baseline_values) / len(baseline_values)) if baseline_values else 0
+        baseline_median = _median(baseline_values)
+        baseline_reference = max(baseline_median, baseline_average)
+        delta_from_previous = current_amount - previous_amount
+        delta_from_baseline = current_amount - baseline_reference
+        one_time = (
+            current_amount >= 50000
+            and (
+                (baseline_reference > 0 and current_amount >= baseline_reference * 1.75 and delta_from_baseline >= 35000)
+                or (baseline_reference == 0 and current_amount >= 80000)
+            )
+        )
+        if one_time:
+            adjusted_amount = min(current_amount, round(max(baseline_reference, current_amount * 0.45)))
+            status = 'one-time'
+        elif delta_from_baseline >= 30000 and baseline_reference > 0:
+            adjusted_amount = current_amount
+            status = 'increase'
+        elif delta_from_baseline <= -30000 and baseline_reference > 0:
+            adjusted_amount = current_amount
+            status = 'decrease'
+        else:
+            adjusted_amount = current_amount
+            status = 'stable'
+        adjusted_total += adjusted_amount
+        category_changes.append(
+            {
+                'category': category,
+                'currentAmount': current_amount,
+                'previousAmount': previous_amount,
+                'baselineAverage': baseline_average,
+                'baselineMedian': baseline_median,
+                'baselineReference': baseline_reference,
+                'deltaFromPrevious': delta_from_previous,
+                'deltaFromBaseline': delta_from_baseline,
+                'changeRateFromBaseline': _pct_change(current_amount, baseline_reference),
+                'adjustedAmount': adjusted_amount,
+                'recommendationWeight': round(adjusted_amount / current_amount, 2) if current_amount else 0,
+                'status': status,
+                'oneTimeCandidate': one_time,
+            }
+        )
+
+    category_changes.sort(key=lambda item: abs(item['deltaFromBaseline']), reverse=True)
+    current_total = by_month_total[current_month]
+    previous_total = by_month_total[previous_month]
+    baseline_totals = [by_month_total[month] for month in baseline_months]
+    baseline_total_average = round(sum(baseline_totals) / len(baseline_totals)) if baseline_totals else 0
+
+    return {
+        'currentMonth': current_month,
+        'previousMonth': previous_month,
+        'baselineMonths': baseline_months,
+        'basisLabel': '최근 6개월 기준',
+        'total': {
+            'current': current_total,
+            'previous': previous_total,
+            'baselineAverage': baseline_total_average,
+            'deltaFromPrevious': current_total - previous_total,
+            'deltaFromBaseline': current_total - baseline_total_average,
+            'adjustedForRecommendation': adjusted_total,
+        },
+        'categoryChanges': category_changes,
+        'oneTimeCandidates': [item for item in category_changes if item['oneTimeCandidate']][:4],
+        'recurringCategories': [item for item in category_changes if not item['oneTimeCandidate'] and item['currentAmount'] > 0][:5],
+    }
 
 
 def get_transaction_or_404(transaction_id):
@@ -205,7 +364,7 @@ def ensure_community_seeded():
             'likes': 47,
             'liked': False,
             'comments': [
-                {'author': '김지훈', 'avatar': '김', 'body': 'SHOPPER 전월 실적 채우는 게 생각보다 괜찮나요?'},
+                {'author': '남주현', 'avatar': '남', 'body': 'SHOPPER 전월 실적 채우는 게 생각보다 괜찮나요?'},
                 {'author': '박서연', 'avatar': '박', 'body': '쇼핑몰 자주 쓰면 체감 혜택이 꽤 있어요.'},
             ],
         },
@@ -766,7 +925,18 @@ def parse_transaction(request):
 
 def spending_summary(request):
     transactions = [serialize_transaction(item) for item in transaction_queryset()]
-    expense_rows = [item for item in transactions if item['amount'] < 0]
+    spending_trend = _build_spending_trend(transactions)
+    current_month = spending_trend['currentMonth']
+    expense_rows = [
+        item
+        for item in transactions
+        if item['amount'] < 0 and _month_key_from_transaction(item) == current_month
+    ]
+    income_rows = [
+        item
+        for item in transactions
+        if item['amount'] > 0 and _month_key_from_transaction(item) == current_month
+    ]
     by_category = defaultdict(int)
     by_card = defaultdict(int)
     for item in expense_rows:
@@ -776,12 +946,34 @@ def spending_summary(request):
 
     summary = {
         'totalExpense': sum(abs(item['amount']) for item in expense_rows),
-        'totalIncome': sum(item['amount'] for item in transactions if item['amount'] > 0),
+        'totalIncome': sum(item['amount'] for item in income_rows),
         'byCategory': [{'category': key, 'amount': value} for key, value in by_category.items()],
         'byCard': [{'cardId': key, 'amount': value} for key, value in by_card.items()],
+        'period': {
+            'currentMonth': current_month,
+            'previousMonth': spending_trend['previousMonth'],
+            'baselineMonths': spending_trend['baselineMonths'],
+        },
+        'spendingTrend': spending_trend,
     }
 
-    if request.GET.get('ai') in {'1', 'true', 'yes'}:
+    include_ai = request.GET.get('ai') in {'1', 'true', 'yes'}
+    refresh_ai = request.GET.get('refresh') in {'1', 'true', 'yes'} or request.GET.get('force') in {'1', 'true', 'yes'}
+
+    if include_ai:
+        latest_record = AIAnalysisRecord.objects.filter(analysis_type='spending_summary').first()
+        if latest_record and not refresh_ai:
+            summary['aiAnalysis'] = latest_record.result_payload or fallback_spending_analysis(summary)
+            summary['aiAnalysisRecordId'] = f'a{latest_record.id}'
+            summary['aiAnalysisCached'] = True
+            summary['aiAnalysisCreatedAt'] = timezone.localtime(latest_record.created_at).isoformat()
+            return json_response(summary)
+
+        if not refresh_ai:
+            summary['aiAnalysisStatus'] = 'empty'
+            summary['aiAnalysisCached'] = False
+            return json_response(summary)
+
         cards = []
         for card_id in by_card.keys():
             if str(card_id).isdigit():
@@ -793,6 +985,7 @@ def spending_summary(request):
             'totalIncome': summary['totalIncome'],
             'byCategory': summary['byCategory'],
             'byCard': summary['byCard'],
+            'spendingTrend': spending_trend,
         }
         summary['aiAnalysis'] = analyze_spending_with_ai(summary, transactions, cards) or fallback_spending_analysis(summary)
         record = save_analysis_record(
@@ -813,21 +1006,42 @@ def spending_summary(request):
             summary['aiAnalysis'],
         )
         summary['aiAnalysisRecordId'] = f'a{record.id}'
+        summary['aiAnalysisCached'] = False
+        summary['aiAnalysisCreatedAt'] = timezone.localtime(record.created_at).isoformat()
 
     return json_response(summary)
 
 
 def fallback_spending_analysis(summary):
     top_category = max(summary['byCategory'], key=lambda item: item['amount'], default={'category': '기타', 'amount': 0})
+    trend = summary.get('spendingTrend') or {}
+    one_time = (trend.get('oneTimeCandidates') or [None])[0]
+    recurring = (trend.get('recurringCategories') or [None])[0]
+    headline = f"{top_category['category']} 지출 비중이 가장 높습니다."
+    if one_time:
+        headline = f"{one_time['category']} 지출은 평소보다 커 일회성 가능성이 있습니다."
+    elif recurring:
+        headline = f"반복 소비는 {recurring['category']} 중심으로 안정적으로 이어지고 있습니다."
     return {
         'summaryTitle': '이번 달 소비 요약',
-        'headline': f"{top_category['category']} 지출 비중이 가장 높습니다.",
+        'headline': headline,
+        'primaryInsight': {
+            'label': '기준선',
+            'title': one_time['category'] if one_time else top_category['category'],
+            'severity': 'attention' if one_time else 'info',
+            'metricValue': one_time['currentAmount'] if one_time else top_category['amount'],
+        },
+        'summaryCards': [
+            {'label': '이번 달', 'value': _krw((trend.get('total') or {}).get('current')), 'tone': 'blue'},
+            {'label': '6개월 평균', 'value': _krw((trend.get('total') or {}).get('baselineAverage')), 'tone': 'gray'},
+            {'label': '추천 반영', 'value': _krw((trend.get('total') or {}).get('adjustedForRecommendation')), 'tone': 'teal'},
+        ],
         'savingOpportunities': [
             {
                 'title': f"{top_category['category']} 예산 점검",
                 'amount': 0,
-                'reason': 'AI 호출 실패 시 기본 규칙으로 만든 안내입니다.',
-                'action': '상위 지출 카테고리의 반복 결제를 확인하세요.',
+                'reason': '최근 6개월 기준선과 이번 달 소비를 비교했습니다.',
+                'action': '일회성 지출은 추천 판단에서 낮게 반영합니다.',
             }
         ],
         'categoryInsights': [
@@ -922,9 +1136,9 @@ def fallback_chat_response(message, context):
         route = '/transactions/new'
         quick_replies = ['결제내역 추가할래', '최근 거래 보여줘', '카테고리 분석해줘']
     elif '계획' in text or '구매' in text:
-        reply = '큰 구매는 예산과 구매 월을 나눈 뒤 카드 혜택 조건에 맞춰 배치하면 좋아요. 구매 계획 화면에서 AI가 품목과 월별 배분 초안을 만들어줄 수 있습니다.'
+        reply = '예정된 큰 지출은 목적과 시점을 먼저 나눈 뒤 카드 혜택 조건에 맞춰 배치하면 좋습니다. 취업 준비, 여행, 전자기기처럼 항목이 섞인 계획도 월별 초안으로 정리할 수 있습니다.'
         route = '/plans/new'
-        quick_replies = ['구매 계획 만들기', '혼수가전 계획 예시', '카드 추천해줘']
+        quick_replies = ['큰 지출 계획 만들기', '취업 준비 예시', '카드 추천해줘']
     else:
         reply = f"현재 데이터에서는 {top_category['category']} 지출이 가장 크게 보여요. 먼저 상위 카테고리를 확인하고, 자주 쓰는 카드가 그 지출에 맞는 혜택을 주는지 비교해보면 좋겠습니다."
         route = '/analytics/cards'
@@ -1012,12 +1226,12 @@ def community_post_list(request):
         if not body:
             return json_response({'detail': '본문을 입력해 주세요.'}, status=400)
 
-        author = (payload.get('author') or '김지훈').strip()
+        author = (payload.get('author') or '남주현').strip()
         post = CommunityPost.objects.create(
             title=title[:120],
             body=body,
             author=author[:30],
-            avatar=(payload.get('avatar') or author[:1] or '김')[:2],
+            avatar=(payload.get('avatar') or author[:1] or '남')[:2],
             tags=normalize_tags(payload.get('tags')),
         )
         return json_response(serialize_community_post(post, include_comments=True), status=201)
@@ -1098,12 +1312,12 @@ def community_comment_list(request, post_id):
         body = (payload.get('body') or payload.get('text') or payload.get('content') or '').strip()
         if not body:
             return json_response({'detail': '댓글을 입력해 주세요.'}, status=400)
-        author = (payload.get('author') or '김지훈').strip()
+        author = (payload.get('author') or '남주현').strip()
         comment = CommunityComment.objects.create(
             post=post,
             body=body,
             author=author[:30],
-            avatar=(payload.get('avatar') or author[:1] or '김')[:2],
+            avatar=(payload.get('avatar') or author[:1] or '남')[:2],
         )
         return json_response(serialize_comment(comment), status=201)
 
@@ -1132,21 +1346,21 @@ def ai_contract(request):
         {
             'when': '카드/결제내역 API 연결 후 실제 AI 호출을 붙입니다.',
             'input': {
-                'rawPrompt': '10월 결혼 예정이고 혼수가전 예산은 700만 원이에요.',
+                'rawPrompt': '다음 달 큰 지출 예산 80만 원을 관리하고 싶어요.',
                 'transactions': '최근 결제내역 배열',
                 'cards': '보유/추천 카드 배열',
             },
             'parseOutput': {
-                'title': '혼수가전 구매 계획',
-                'type': '혼수',
-                'totalBudget': 7000000,
+                'title': '취업 준비 지출 계획',
+                'type': '취업 준비',
+                'totalBudget': 800000,
                 'startMonth': '2026-07',
-                'endMonth': '2026-09',
+                'endMonth': '2026-08',
                 'items': [
                     {
-                        'name': '냉장고',
-                        'category': '가전',
-                        'amount': 2500000,
+                        'name': '정장 셔츠·슬랙스',
+                        'category': '쇼핑',
+                        'amount': 210000,
                         'targetMonth': '2026-07',
                         'required': True,
                         'flexible': False,
@@ -1160,6 +1374,7 @@ def ai_contract(request):
 @csrf_exempt
 def purchase_plan_list(request):
     if request.method == 'GET':
+        ensure_purchase_plans_seeded()
         plans = [serialize_purchase_plan(plan) for plan in PurchasePlan.objects.all()]
         return json_response(plans)
 
@@ -1267,7 +1482,7 @@ def parse_purchase_plan(request):
         ai_plan['analysisRecordId'] = f'a{record.id}'
         return json_response(ai_plan)
 
-    plan_type = '기타'
+    plan_type = '큰 지출'
     if '이사' in text:
         plan_type = '이사'
     elif '여행' in text:
@@ -1275,21 +1490,74 @@ def parse_purchase_plan(request):
     elif '출산' in text or '육아' in text:
         plan_type = '육아'
     elif '혼수' in text or '결혼' in text:
-        plan_type = '혼수'
+        plan_type = '결혼 준비'
+    elif any(keyword in text for keyword in ['면접', '취업', '정장', '토익']):
+        plan_type = '취업 준비'
+    elif any(keyword in text for keyword in ['기념일', '데이트', '선물']):
+        plan_type = '기념일'
+    elif any(keyword in text for keyword in ['헬스', '운동', 'PT', '보충제']):
+        plan_type = '운동'
+    elif any(keyword in text for keyword in ['노트북', '태블릿', '맥북']):
+        plan_type = '전자기기'
 
     start_month = payload.get('startMonth') or '2026-07'
-    end_month = payload.get('endMonth') or '2026-09'
+    end_month = payload.get('endMonth') or '2026-08'
+    item_templates = {
+        '여행': [
+            ('항공권', '항공', 1600000),
+            ('숙박', '숙박', 1800000),
+            ('여행자보험', '보험', 200000),
+            ('현지 교통', '교통', 400000),
+        ],
+        '이사': [
+            ('이사 비용', '이사', 350000),
+            ('침대', '가구', 600000),
+            ('수납장', '가구', 240000),
+            ('생활용품', '생활', 180000),
+        ],
+        '취업 준비': [
+            ('정장 셔츠·슬랙스', '쇼핑', 210000),
+            ('구두', '쇼핑', 160000),
+            ('증명사진', '취업', 50000),
+            ('어학 응시료', '교육', 84000),
+        ],
+        '기념일': [
+            ('식사 예약', '식비', 180000),
+            ('영화·전시', '문화', 50000),
+            ('선물', '쇼핑', 180000),
+            ('이동비', '교통', 40000),
+        ],
+        '운동': [
+            ('헬스장 3개월권', '헬스', 180000),
+            ('보충제', '쇼핑', 70000),
+            ('운동복', '쇼핑', 80000),
+            ('인바디·관리비', '헬스', 20000),
+        ],
+        '전자기기': [
+            ('노트북', '전자기기', 1200000),
+            ('보호 파우치', '쇼핑', 40000),
+            ('마우스·허브', '전자기기', 90000),
+            ('AS 보증', '서비스', 70000),
+        ],
+    }
+    templates = item_templates.get(plan_type) or item_templates['취업 준비']
     plan = {
-        'title': '새 소비 계획' if plan_type == '기타' else f'{plan_type} 구매 계획',
+        'title': '새 목표 지출 계획' if plan_type == '큰 지출' else f'{plan_type} 지출 계획',
         'type': plan_type,
-        'totalBudget': int(payload.get('budget') or 7000000),
+        'totalBudget': int(payload.get('budget') or 800000),
         'startMonth': start_month,
         'endMonth': end_month,
         'items': [
-            {'id': 'i1', 'name': '냉장고', 'category': '가전', 'amount': 2500000, 'targetMonth': start_month, 'required': True, 'flexible': False},
-            {'id': 'i2', 'name': '세탁기', 'category': '가전', 'amount': 1200000, 'targetMonth': start_month, 'required': True, 'flexible': True},
-            {'id': 'i3', 'name': '건조기', 'category': '가전', 'amount': 1000000, 'targetMonth': end_month, 'required': True, 'flexible': True},
-            {'id': 'i4', 'name': 'TV', 'category': '가전', 'amount': 1800000, 'targetMonth': end_month, 'required': False, 'flexible': True},
+            {
+                'id': f'i{index + 1}',
+                'name': name,
+                'category': category,
+                'amount': amount,
+                'targetMonth': start_month if index < 2 else end_month,
+                'required': index < 3,
+                'flexible': index != 0,
+            }
+            for index, (name, category, amount) in enumerate(templates)
         ],
         'aiMode': 'mock',
     }
@@ -1383,10 +1651,10 @@ def fallback_chat_response(message, context):
         quick_replies = ['결제내역 추가할래', '최근 거래 보여줘', '카테고리 분석해줘']
         chips = [{'label': '추천 입력', 'value': '문장 보정', 'tone': 'blue'}]
     elif '계획' in text or '구매' in text:
-        reply = '큰 구매는 월 예산 안에서 관리할지, 별도 예정 지출로 볼지 먼저 선택하는 게 좋아요. 구매 계획 화면에서 품목과 월별 배치를 만들 수 있습니다.'
+        reply = '큰 지출은 월 예산 안에서 관리할지, 별도 예정 지출로 볼지 먼저 선택하는 게 좋아요. 취업 준비, 여행, 전자기기처럼 목적이 다른 지출도 품목과 월별 배치로 정리할 수 있습니다.'
         route = '/plans/new'
         message_type = 'purchase-plan'
-        quick_replies = ['구매 계획 만들기', '이사 계획 예시', '카드 추천해줘']
+        quick_replies = ['큰 지출 계획 만들기', '취업 준비 예시', '카드 추천해줘']
         chips = [{'label': '관리 방식', 'value': '선택 가능', 'tone': 'gold'}]
     else:
         reply = f'현재 데이터에서는 {top_category_name} 지출이 가장 크게 보여요. 먼저 상위 지출을 확인하고, 자주 쓰는 카드가 그 소비에 맞는 혜택을 주는지 비교하면 좋습니다.'
@@ -1416,16 +1684,16 @@ def ai_contract(request):
             'stored': 'AIAnalysisRecord.result_payload',
             'features': {
                 'transactionParse': {
-                    'input': {'rawText': '어제 스타벅스 강남역점 5,500원 결제'},
+                    'input': {'rawText': '오늘 컴포즈커피 역삼센터필드점 3,800원 결제'},
                     'output': {
                         'schemaVersion': 'transaction-parse-v2',
                         'cardId': '10029',
-                        'merchantName': '스타벅스 강남역점',
+                        'merchantName': '컴포즈커피 역삼센터필드점',
                         'category': '카페',
-                        'amount': -5500,
+                        'amount': -3800,
                         'approvedAt': '2026-06-23T09:30:00+09:00',
-                        'displayTitle': '스타벅스 결제',
-                        'displaySubtitle': '카페 · 5,500원 · LOCA 100',
+                        'displayTitle': '컴포즈커피 결제',
+                        'displaySubtitle': '카페 · 3,800원 · LOCA 100',
                         'corrections': [],
                         'confidence': 0.85,
                         'reviewFields': ['amount', 'approvedAt'],
@@ -1461,6 +1729,470 @@ def ai_contract(request):
                     },
                 },
             },
+        }
+    )
+
+
+CARD_RECOMMENDATION_CATEGORY_KEYWORDS = {
+    '쇼핑': ['쇼핑', '온라인', '쿠팡', '마켓', '백화점', 'mall', 'shopping'],
+    '마트': ['마트', '이마트', '홈플러스', '롯데마트', 'grocery', 'market'],
+    '카페': ['카페', '커피', '스타벅스', 'coffee', 'cafe'],
+    '식비': ['식비', '외식', '음식', '배달', '푸드', 'dining', 'food'],
+    '편의점': ['편의점', 'gs25', 'cu', '세븐일레븐'],
+    '뷰티': ['뷰티', '화장품', '올리브영', 'beauty'],
+    '교통': ['교통', '버스', '지하철', '택시', '주유', 'transport', 'fuel'],
+    '문화': ['문화', '영화', '공연', 'cgv', 'movie'],
+    '구독': ['구독', '넷플릭스', '스트리밍', 'subscription'],
+}
+
+
+def _as_int(value, fallback=0):
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _krw(value):
+    return f'{_as_int(value):,}원'
+
+
+def _category_keywords(category):
+    return CARD_RECOMMENDATION_CATEGORY_KEYWORDS.get(str(category), [str(category)])
+
+
+def _build_spending_profile(adjusted_for_recommendation=False):
+    transactions = [serialize_transaction(item) for item in transaction_queryset()]
+    spending_trend = _build_spending_trend(transactions)
+    current_month = spending_trend['currentMonth']
+    expenses = [
+        item
+        for item in transactions
+        if _as_int(item.get('amount')) < 0 and _month_key_from_transaction(item) == current_month
+    ]
+    adjustments = {
+        item['category']: _as_int(item.get('adjustedAmount'))
+        for item in spending_trend.get('categoryChanges') or []
+    }
+    actual_by_category = defaultdict(int)
+    for item in expenses:
+        actual_by_category[item.get('category') or item.get('cat') or '기타'] += abs(_as_int(item.get('amount')))
+
+    by_category = defaultdict(int)
+    by_card = defaultdict(int)
+    by_category_card = defaultdict(lambda: {'amount': 0, 'actualAmount': 0, 'merchants': []})
+
+    for item in expenses:
+        raw_amount = abs(_as_int(item.get('amount')))
+        category = item.get('category') or item.get('cat') or '기타'
+        card_id = str(item.get('cardId') or item.get('card_id') or '')
+        category_actual = actual_by_category[category] or raw_amount
+        if adjusted_for_recommendation:
+            category_adjusted = adjustments.get(category, category_actual)
+            scale = category_adjusted / category_actual if category_actual else 1
+            amount = round(raw_amount * scale)
+        else:
+            amount = raw_amount
+        by_category[category] += amount
+        by_card[card_id] += amount
+        category_card = by_category_card[(category, card_id)]
+        category_card['amount'] += amount
+        category_card['actualAmount'] += raw_amount
+        merchant = item.get('merchantName') or item.get('merchant') or ''
+        if merchant and merchant not in category_card['merchants']:
+            category_card['merchants'].append(merchant)
+
+    category_rows = sorted(
+        [{'category': key, 'amount': value} for key, value in by_category.items()],
+        key=lambda item: item['amount'],
+        reverse=True,
+    )
+    total_expense = sum(row['amount'] for row in category_rows)
+    top_category = category_rows[0]['category'] if category_rows else '기타'
+
+    style_tags = []
+    if total_expense >= 700000:
+        style_tags.append('고소비형')
+    elif total_expense >= 300000:
+        style_tags.append('생활비 관리형')
+    else:
+        style_tags.append('소액 반복형')
+    if top_category in {'쇼핑', '마트', '카페', '식비', '교통', '구독'}:
+        style_tags.append(f'{top_category} 집중형')
+    if len(category_rows) >= 4:
+        style_tags.append('분산 소비형')
+
+    return {
+        'totalExpense': total_expense,
+        'categoryRows': category_rows,
+        'byCard': [{'cardId': key, 'amount': value} for key, value in by_card.items()],
+        'categoryCardRows': sorted(
+            [
+                {
+                    'category': category,
+                    'cardId': card_id,
+                    'amount': value['amount'],
+                    'actualAmount': value['actualAmount'],
+                    'merchantExamples': value['merchants'][:3],
+                }
+                for (category, card_id), value in by_category_card.items()
+            ],
+            key=lambda item: item['amount'],
+            reverse=True,
+        ),
+        'topCategory': top_category,
+        'styleTags': style_tags[:3],
+        'period': {
+            'currentMonth': current_month,
+            'previousMonth': spending_trend['previousMonth'],
+            'baselineMonths': spending_trend['baselineMonths'],
+        },
+        'spendingTrend': spending_trend,
+        'actualTotalExpense': sum(actual_by_category.values()),
+        'adjustedForRecommendation': adjusted_for_recommendation,
+    }
+
+
+def _benefit_rate_for_category(card, category):
+    keywords = [keyword.lower() for keyword in _category_keywords(category)]
+    benefit_items = card.get('benefitItems') or []
+    best_rate = 0.0
+    best_limit = None
+    best_label = ''
+
+    for item in benefit_items:
+        label = ' '.join(
+            str(value or '')
+            for value in [item.get('label'), item.get('scope'), item.get('type')]
+        ).lower()
+        if not any(keyword in label for keyword in keywords):
+            continue
+        rate = item.get('ratePercent')
+        if rate is None and item.get('type') in {'discount_rate', 'point_rate'}:
+            rate = item.get('benefitValue') or item.get('benefit_value')
+        try:
+            rate = float(rate or 0)
+        except (TypeError, ValueError):
+            rate = 0
+        if rate > best_rate:
+            best_rate = rate
+            best_limit = item.get('monthlyBenefitLimitKrw')
+            best_label = item.get('label') or item.get('scope') or ''
+
+    if best_rate:
+        return best_rate, _as_int(best_limit, 0) or None, best_label
+
+    text = ' '.join(
+        str(value or '')
+        for value in [
+            card.get('name'),
+            card.get('benefitSummary'),
+            card.get('titleDescription'),
+            *(card.get('benefits') or []),
+        ]
+    ).lower()
+    if any(keyword in text for keyword in keywords):
+        percent_values = [float(match) for match in re.findall(r'(\d+(?:\.\d+)?)\s*%', text)]
+        return min(max(percent_values or [1.0]), 15.0), None, f'{category} 관련 혜택'
+    if '전가맹' in text or '국내' in text or '언제나' in text:
+        basic_matches = re.findall(
+            r'(?:전가맹|국내외?|가맹점|언제나)[^%]{0,40}?(\d+(?:\.\d+)?)\s*%',
+            text,
+        )
+        percent_values = [float(match) for match in basic_matches]
+        if not percent_values:
+            percent_values = [float(match) for match in re.findall(r'(\d+(?:\.\d+)?)\s*%\s*(?:적립|할인)', text)]
+        return min(percent_values or [0.5], default=0.5), None, '기본 혜택'
+    return 0.2, None, '기본 추정'
+
+
+def _estimate_card_value(card, profile, owned=False):
+    annual_fee = _as_int(card.get('annualFee') or card.get('domesticAnnualFee') or card.get('domestic_annual_fee'))
+    monthly_annual_fee = round(annual_fee / 12)
+    min_spend = _as_int(card.get('previousMonthMinSpend') or card.get('previous_month_min_spend'))
+    total_spend = _as_int(profile.get('totalExpense'))
+    eligible_ratio = 1
+    remaining_spend = 0
+    if min_spend and total_spend < min_spend:
+        eligible_ratio = max(0.25, total_spend / min_spend) if total_spend else 0.25
+        remaining_spend = min_spend - total_spend
+
+    category_breakdown = []
+    gross_benefit = 0
+    matched_categories = []
+    for row in profile.get('categoryRows') or []:
+        amount = _as_int(row.get('amount'))
+        if amount <= 0:
+            continue
+        rate, limit, label = _benefit_rate_for_category(card, row.get('category'))
+        estimated = round(amount * rate / 100)
+        if limit is not None:
+            estimated = min(estimated, limit)
+        estimated = round(estimated * eligible_ratio)
+        gross_benefit += estimated
+        if estimated > 0:
+            matched_categories.append(row.get('category'))
+        category_breakdown.append(
+            {
+                'category': row.get('category'),
+                'amount': amount,
+                'rate': round(rate, 2),
+                'estimatedBenefit': estimated,
+                'benefitLabel': label,
+            }
+        )
+
+    monthly_net = gross_benefit - monthly_annual_fee
+    annual_net = monthly_net * 12
+    return {
+        'expectedMonthlyBenefit': gross_benefit,
+        'monthlyAnnualFee': monthly_annual_fee,
+        'monthlyNetBenefit': monthly_net,
+        'annualNetBenefit': annual_net,
+        'annualFee': annual_fee,
+        'previousMonthMinSpend': min_spend,
+        'remainingSpendForBenefit': remaining_spend,
+        'eligibleRatio': round(eligible_ratio, 2),
+        'matchedCategories': list(dict.fromkeys(matched_categories))[:4],
+        'categoryBreakdown': category_breakdown[:8],
+        'owned': owned,
+    }
+
+
+def _recommendation_reason(card, value, profile, monthly_delta):
+    top_category = profile.get('topCategory') or '주요 소비'
+    if monthly_delta > 0:
+        return f'{top_category} 반복 소비 기준으로 연회비를 반영해도 월 {_krw(monthly_delta)} 정도 개선 여지가 있습니다.'
+    if value.get('remainingSpendForBenefit'):
+        return f'혜택 조건까지 {_krw(value["remainingSpendForBenefit"])} 정도 남아 있어, 실적을 채우면 후보가 될 수 있어요.'
+    return f'{top_category} 소비와 일부 혜택이 맞지만 반복 소비 기준의 개선 폭은 크지 않습니다.'
+
+
+def _card_id(card):
+    return str(card.get('cardAdId') or card.get('card_ad_id') or card.get('id') or '')
+
+
+def _card_name(card):
+    return card.get('name') or card.get('cardName') or card.get('card_name') or '추천 카드'
+
+
+def _issuer_name(card):
+    return card.get('issuer') or card.get('issuerName') or card.get('issuer_name') or ''
+
+
+def _card_image_url(card):
+    return card.get('imageUrl') or card.get('image_url') or ''
+
+
+def _topic_particle(text):
+    word = str(text or '').strip()
+    if not word:
+        return '는'
+    last = word[-1]
+    code = ord(last)
+    if 0xAC00 <= code <= 0xD7A3:
+        return '은' if (code - 0xAC00) % 28 else '는'
+    return '은'
+
+
+def _estimate_category_benefit(card, category, amount):
+    rate, limit, label = _benefit_rate_for_category(card, category)
+    estimated = round(_as_int(amount) * rate / 100)
+    if limit is not None:
+        estimated = min(estimated, _as_int(limit))
+    return {
+        'rate': round(rate, 2),
+        'benefitLabel': label,
+        'estimatedBenefit': estimated,
+    }
+
+
+def _build_routing_suggestions(profile, owned_values, result_cards, owned_ids):
+    cards_by_id = {}
+    destinations = []
+    for item in owned_values:
+        card = item.get('card') or {}
+        card_id = _card_id(card)
+        if card_id:
+            cards_by_id[card_id] = card
+            destinations.append({'card': card, 'rank': 99, 'monthlyDelta': 0})
+    for index, card in enumerate(result_cards):
+        card_id = _card_id(card)
+        if card_id:
+            cards_by_id.setdefault(card_id, card)
+            destinations.append(
+                {
+                    'card': card,
+                    'rank': index,
+                    'monthlyDelta': _as_int((card.get('economics') or {}).get('monthlyDelta')),
+                }
+            )
+
+    suggestions = []
+    seen = set()
+    for row in profile.get('categoryCardRows') or []:
+        source_card_id = str(row.get('cardId') or '')
+        source_card = cards_by_id.get(source_card_id)
+        amount = _as_int(row.get('amount'))
+        category = row.get('category') or '기타'
+        if not source_card or amount <= 0:
+            continue
+
+        source_estimate = _estimate_category_benefit(source_card, category, amount)
+        for destination_item in destinations:
+            destination = destination_item['card']
+            target_card_id = _card_id(destination)
+            if not target_card_id or target_card_id == source_card_id:
+                continue
+
+            target_estimate = _estimate_category_benefit(destination, category, amount)
+            monthly_gain = target_estimate['estimatedBenefit'] - source_estimate['estimatedBenefit']
+            if monthly_gain < 1000:
+                continue
+
+            key = (category, source_card_id, target_card_id)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            target_name = _card_name(destination)
+            source_name = _card_name(source_card)
+            owned_target = target_card_id in owned_ids
+            suggestions.append(
+                {
+                    'id': f'route-{category}-{source_card_id}-{target_card_id}',
+                    'category': category,
+                    'amount': amount,
+                    'monthlyGain': monthly_gain,
+                    'fromCardId': source_card_id,
+                    'fromCardName': source_name,
+                    'fromIssuer': _issuer_name(source_card),
+                    'fromRate': source_estimate['rate'],
+                    'fromBenefit': source_estimate['estimatedBenefit'],
+                    'toCardId': target_card_id,
+                    'toCardName': target_name,
+                    'toIssuer': _issuer_name(destination),
+                    'toImageUrl': _card_image_url(destination),
+                    'toRate': target_estimate['rate'],
+                    'toBenefit': target_estimate['estimatedBenefit'],
+                    'benefitLabel': target_estimate['benefitLabel'],
+                    'merchantExamples': row.get('merchantExamples') or [],
+                    'scope': 'owned' if owned_target else 'candidate',
+                    'scopeLabel': '보유 카드 조정' if owned_target else '추천 카드 검토',
+                    'destinationRank': destination_item['rank'],
+                    'destinationMonthlyDelta': destination_item['monthlyDelta'],
+                    'title': f'{category}{_topic_particle(category)} {target_name}',
+                    'body': f'반복 {category} 결제를 {target_name}로 모으면 월 {_krw(monthly_gain)} 더 남습니다.',
+                }
+            )
+
+    suggestions.sort(
+        key=lambda item: (
+            item['destinationMonthlyDelta'],
+            item['monthlyGain'],
+            item['scope'] == 'owned',
+            -item['destinationRank'],
+        ),
+        reverse=True,
+    )
+    unique_categories = []
+    used_categories = set()
+    for item in suggestions:
+        if item['category'] in used_categories:
+            continue
+        used_categories.add(item['category'])
+        unique_categories.append(item)
+        if len(unique_categories) >= 4:
+            break
+    return unique_categories
+
+
+def card_recommendations(request):
+    profile = _build_spending_profile(adjusted_for_recommendation=True)
+    ensure_owned_cards_seeded()
+    owned_ids = {str(item.card_id) for item in OwnedCard.objects.all()}
+
+    owned_values = []
+    for card_id in owned_ids:
+        if card_id.isdigit():
+            card = fetch_card(int(card_id), request)
+            if card:
+                owned_values.append({'card': card, **_estimate_card_value(card, profile, owned=True)})
+
+    baseline = max(owned_values, key=lambda item: item['monthlyNetBenefit'], default=None)
+    current_monthly_net = _as_int(baseline.get('monthlyNetBenefit')) if baseline else 0
+
+    candidates = fetch_cards(request, limit=36, active_only=True)
+    ranked = []
+    for card in candidates:
+        detailed = fetch_card(int(card['cardAdId']), request) or card
+        value = _estimate_card_value(detailed, profile, owned=str(detailed.get('cardAdId')) in owned_ids)
+        monthly_delta = value['monthlyNetBenefit'] - current_monthly_net
+        annual_delta = monthly_delta * 12
+        annual_fee_delta = max(0, value['annualFee'] - _as_int((baseline or {}).get('annualFee')))
+        payback_months = None
+        if monthly_delta > 0 and annual_fee_delta > 0:
+            payback_months = max(1, round(annual_fee_delta / monthly_delta))
+
+        match = 70
+        match += min(18, max(0, monthly_delta) // 1000)
+        match += min(8, len(value['matchedCategories']) * 3)
+        if value['remainingSpendForBenefit']:
+            match -= 8
+        if value['owned']:
+            match -= 6
+        match = max(45, min(98, match))
+        notification = annual_delta >= 30000 and monthly_delta > 0 and (payback_months is None or payback_months <= 8)
+
+        ranked.append(
+            {
+                **detailed,
+                'match': match,
+                'reason': _recommendation_reason(detailed, value, profile, monthly_delta),
+                'highlights': detailed.get('benefits', []),
+                'spendingFit': {
+                    'styleTags': profile['styleTags'],
+                    'topCategory': profile['topCategory'],
+                    'matchedCategories': value['matchedCategories'],
+                    'categoryBreakdown': value['categoryBreakdown'],
+                },
+                'economics': {
+                    **value,
+                    'currentMonthlyNetBenefit': current_monthly_net,
+                    'monthlyDelta': monthly_delta,
+                    'annualDelta': annual_delta,
+                    'paybackMonths': payback_months,
+                    'annualFeeDelta': annual_fee_delta,
+                },
+                'notification': {
+                    'show': notification,
+                    'title': '카드 교체로 혜택이 늘 수 있어요',
+                    'body': f'현재 소비 기준 월 {_krw(max(0, monthly_delta))} 정도 순혜택 차이가 예상돼요.',
+                    'severity': 'attention' if notification else 'info',
+                },
+            }
+        )
+
+    ranked.sort(key=lambda item: (item['economics']['monthlyDelta'], item['economics']['monthlyNetBenefit'], item['match']), reverse=True)
+    results = ranked[:5]
+    top = results[0] if results else None
+    alert = (top or {}).get('notification') or {'show': False}
+    routing_suggestions = _build_routing_suggestions(profile, owned_values, results, owned_ids)
+
+    return json_response(
+        {
+            'count': len(results),
+            'profile': profile,
+            'baseline': {
+                'cardId': str((baseline or {}).get('card', {}).get('cardAdId') or ''),
+                'cardName': (baseline or {}).get('card', {}).get('name') or '',
+                'monthlyNetBenefit': current_monthly_net,
+                'expectedMonthlyBenefit': _as_int((baseline or {}).get('expectedMonthlyBenefit')),
+                'monthlyAnnualFee': _as_int((baseline or {}).get('monthlyAnnualFee')),
+            },
+            'alert': alert,
+            'routingSuggestions': routing_suggestions,
+            'results': results,
         }
     )
 

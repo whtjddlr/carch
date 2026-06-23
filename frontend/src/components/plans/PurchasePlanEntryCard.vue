@@ -5,7 +5,7 @@
     </div>
     <div class="entry-body">
       <h3>큰 지출 계획이 있나요?</h3>
-      <p>혼수, 이사, 여행처럼 월 예산 밖의 지출이 예정되어 있다면 보유 카드에 맞는 목표 지출 계획을 만들어보세요.</p>
+      <p>취업 준비, 여행, 전자기기처럼 월 예산 밖의 지출이 예정되어 있다면 보유 카드에 맞는 목표 지출 계획을 만들어보세요.</p>
       <div class="entry-actions">
         <RouterLink class="primary-button" to="/plans/new">목표 지출 계획 만들기</RouterLink>
         <RouterLink class="entry-link" to="/plans">저장된 계획 보기</RouterLink>
