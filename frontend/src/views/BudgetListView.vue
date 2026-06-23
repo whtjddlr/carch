@@ -4,8 +4,8 @@
       <div class="header-row">
         <AppBackButton fallback="/cards" />
         <div>
-          <p>월별 예산 관리</p>
-          <h1>예산</h1>
+          <p>월 예산과 지출 계획</p>
+          <h1>소비계획</h1>
         </div>
         <span class="header-spacer" aria-hidden="true" />
       </div>
@@ -26,38 +26,23 @@
     </header>
 
     <div class="screen-scroll scrollbar-hide budget-list-body">
-      <div class="mode-guide">
-        <article class="mode-card primary">
-          <span>월 예산</span>
-          <strong>매달 쓰는 돈</strong>
-          <p>식비, 카페, 교통비를 관리해요.</p>
-        </article>
-        <RouterLink class="mode-card" to="/plans">
-          <span>목표 지출</span>
-          <strong>큰 지출 준비</strong>
-          <p>여행, 가전, 이사 비용을 따로 모아요.</p>
-        </RouterLink>
-      </div>
-
-      <section class="expense-mode-section">
+      <section class="plan-section">
         <div class="section-head split">
-          <div>
-            <h2>큰 지출은 어떻게 관리할까요?</h2>
-            <p>예산에 포함할지, 따로 볼지 먼저 고르면 계획이 깔끔해져요.</p>
-          </div>
+          <h2>지출 계획</h2>
           <RouterLink to="/plans">계획 보기</RouterLink>
         </div>
-
-        <div class="expense-mode-grid">
+        <div class="plan-mode-grid">
           <RouterLink
             v-for="mode in expenseModes"
             :key="mode.id"
-            class="expense-mode-card app-card"
+            class="plan-mode"
             :to="{ path: '/plans/new', query: { expenseMode: mode.id } }"
           >
-            <span>{{ mode.label }}</span>
-            <strong>{{ mode.title }}</strong>
-            <p>{{ mode.description }}</p>
+            <span class="pm-icon"><component :is="modeIcon(mode.id)" :size="18" /></span>
+            <div>
+              <strong>{{ mode.label }}</strong>
+              <small>{{ mode.title }}</small>
+            </div>
           </RouterLink>
         </div>
       </section>
@@ -79,6 +64,7 @@
           <div class="history-content">
             <div class="history-title-row">
               <div>
+                <em class="history-relative" :class="item.tone">{{ item.relativeLabel }}</em>
                 <strong>{{ item.title }}</strong>
                 <span>{{ item.period }}</span>
               </div>
@@ -108,18 +94,20 @@
       </section>
 
     </div>
-
-    <RouterLink class="floating-action-button" to="/budget/new" aria-label="예산 추가">
-      <Plus :size="20" />
-    </RouterLink>
   </section>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { ChevronRight, Plus, WalletCards } from 'lucide-vue-next'
+import { CalendarCheck, CalendarClock, ChevronRight, PiggyBank, WalletCards, Zap } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, expenseModes, krw } from '@/data/mockData'
+
+function modeIcon(id) {
+  if (id === 'within-budget') return PiggyBank
+  if (id === 'planned-extra') return CalendarClock
+  return Zap
+}
 
 const totalBudget = computed(() => budgetCategories.reduce((sum, category) => sum + category.budget, 0))
 const totalSpent = computed(() => budgetCategories.reduce((sum, category) => sum + category.spent, 0))
@@ -139,10 +127,12 @@ const currentBudget = computed(() => {
 
 const budgetHistory = computed(() => {
   const current = currentBudget.value
+  const nextBudget = 950000
 
   return [
     {
       id: '2026-06',
+      relativeLabel: '이번 달',
       title: '6월 예산',
       period: '2026.06.01 - 06.30',
       spent: current.spent,
@@ -155,6 +145,7 @@ const budgetHistory = computed(() => {
     },
     {
       id: '2026-05',
+      relativeLabel: '지난 달',
       title: '5월 예산',
       period: '2026.05.01 - 05.31',
       spent: 620000,
@@ -162,20 +153,22 @@ const budgetHistory = computed(() => {
       remaining: 290000,
       percent: 68,
       to: '/budget/current',
-      icon: WalletCards,
+      icon: CalendarCheck,
       tone: 'done',
     },
     {
-      id: '2026-04',
-      title: '4월 예산',
-      period: '2026.04.01 - 04.30',
-      spent: 875000,
-      budget: 880000,
-      remaining: 5000,
-      percent: 99,
+      id: '2026-07',
+      relativeLabel: '다음 달',
+      title: '7월 예산',
+      period: '2026.07.01 - 07.31',
+      spent: 0,
+      budget: nextBudget,
+      remaining: nextBudget,
+      percent: 0,
       to: '/budget/current',
-      icon: WalletCards,
-      tone: 'done',
+      icon: CalendarClock,
+      tone: 'upcoming',
+      upcoming: true,
     },
   ]
 })
@@ -264,71 +257,72 @@ h1 {
   width: min(100%, 300px);
   margin: 12px auto 0;
   border-radius: 999px;
-  background: rgba(36, 54, 79, 0.11);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .summary-track i {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #0f5fae;
+  background: linear-gradient(90deg, #ffffff, #d4e0ee);
 }
 
 .budget-list-body {
   padding: 16px 20px 112px;
 }
 
-.mode-guide {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
-  margin-bottom: 22px;
+.plan-section {
+  margin-bottom: 24px;
 }
 
-.mode-card {
-  border: 1px solid rgba(32, 36, 42, 0.06);
-  min-height: 106px;
-  padding: 15px 14px;
+.plan-mode-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.plan-mode {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 14px;
+  padding: 13px 14px;
+  background: rgba(44, 78, 114, 0.05);
   color: inherit;
   text-decoration: none;
 }
 
-.mode-card.primary {
-  border-color: rgba(32, 36, 42, 0.06) !important;
-  background: transparent !important;
+.pm-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #fff;
+  color: #2c4e72;
+  box-shadow: 0 2px 8px rgba(36, 54, 79, 0.1);
 }
 
-.mode-card span {
+.plan-mode strong {
   display: block;
-  color: #0f5fae;
-  font-size: 10px;
-  font-weight: 900;
-}
-
-.mode-card strong {
-  display: block;
-  margin-top: 5px;
   color: #20242a;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 900;
 }
 
-.mode-card p {
-  margin: 6px 0 0;
+.plan-mode small {
+  display: block;
+  margin-top: 2px;
   color: #6e6e73;
   font-size: 11px;
   font-weight: 700;
-  line-height: 1.42;
 }
 
 .section-block {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.expense-mode-section {
-  margin-bottom: 22px;
 }
 
 .section-head {
@@ -338,10 +332,9 @@ h1 {
 }
 
 .section-head.split {
-  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 11px;
 }
 
 .section-head h2 {
@@ -351,53 +344,12 @@ h1 {
   font-weight: 900;
 }
 
-.section-head p {
-  margin: 5px 0 0;
-  color: #6e6e73;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.45;
-}
-
 .section-head a {
   flex-shrink: 0;
-  color: #0f5fae;
+  color: #2c4e72;
   font-size: 12px;
   font-weight: 900;
   text-decoration: none;
-}
-
-.expense-mode-grid {
-  display: grid;
-  gap: 8px;
-}
-
-.expense-mode-card {
-  display: grid;
-  gap: 4px;
-  padding: 14px 15px;
-  color: inherit;
-  text-decoration: none;
-}
-
-.expense-mode-card span {
-  color: #0f5fae;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.expense-mode-card strong {
-  color: #20242a;
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.expense-mode-card p {
-  margin: 0;
-  color: #6e6e73;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.45;
 }
 
 .budget-history-card {
@@ -416,13 +368,41 @@ h1 {
   align-items: center;
   justify-content: center;
   border-radius: 13px;
-  background: rgba(15, 95, 174, 0.08);
-  color: #0f5fae;
+  background: rgba(44, 78, 114, 0.1);
+  color: #2c4e72;
 }
 
 .history-icon.done {
   background: rgba(36, 54, 79, 0.055);
   color: #6e6e73;
+}
+
+.history-icon.upcoming {
+  background: rgba(44, 78, 114, 0.06);
+  color: #8a9aad;
+}
+
+.history-relative {
+  display: inline-block;
+  margin-bottom: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+  font-style: normal;
+  letter-spacing: 0.2px;
+  background: rgba(44, 78, 114, 0.1);
+  color: #2c4e72;
+}
+
+.history-relative.done {
+  background: rgba(110, 110, 115, 0.12);
+  color: #6e6e73;
+}
+
+.history-relative.upcoming {
+  background: rgba(138, 154, 173, 0.16);
+  color: #5f6b77;
 }
 
 .history-title-row {
@@ -493,7 +473,7 @@ h1 {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #0f5fae;
+  background: linear-gradient(90deg, #2c4e72, #1c3149);
 }
 
 .history-track i.danger {

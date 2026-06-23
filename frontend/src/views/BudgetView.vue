@@ -7,7 +7,15 @@
           <h1>6월 예산</h1>
           <p>카테고리별 지출 현황</p>
         </div>
-        <span class="header-spacer" aria-hidden="true" />
+        <button
+          class="icon-button budget-edit-button"
+          type="button"
+          :aria-label="isEditingBudget ? '예산 저장' : '예산 수정'"
+          @click="isEditingBudget ? saveBudget() : startEditBudget()"
+        >
+          <Check v-if="isEditingBudget" :size="18" />
+          <Pencil v-else :size="18" />
+        </button>
       </div>
       <div class="budget-summary-box">
         <div>
@@ -15,40 +23,25 @@
           <strong>{{ krw(totalSpent) }}</strong>
         </div>
         <div>
-          <span>예산</span>
-          <strong>{{ krw(totalBudget) }}</strong>
+          <span>{{ isEditingBudget ? '예산 수정' : '예산' }}</span>
+          <strong v-if="!isEditingBudget">{{ krw(displayBudget) }}</strong>
+          <input
+            v-else
+            class="budget-edit-input"
+            type="number"
+            inputmode="numeric"
+            v-model.number="editBudget"
+            @keyup.enter="saveBudget"
+          />
         </div>
         <div class="summary-progress">
           <i :style="{ width: `${percent}%` }" />
         </div>
-        <p>전체 예산의 {{ percent }}% 사용 중</p>
+        <p>{{ isEditingBudget ? '이번 달 전체 예산을 입력하고 ✓ 를 누르세요' : `전체 예산의 ${percent}% 사용 중` }}</p>
       </div>
     </header>
 
     <div class="screen-scroll scrollbar-hide budget-body">
-      <PlanWarningAlert
-        message="여행, 가전, 이사처럼 월 예산 밖의 큰 지출은 목표 지출 계획에서 별도로 관리할 수 있어요."
-        tone="info"
-      />
-
-      <section class="big-expense-selector">
-        <div class="selector-head">
-          <strong>큰 지출 처리 방식</strong>
-          <RouterLink to="/plans">계획 보기</RouterLink>
-        </div>
-        <div class="selector-grid">
-          <RouterLink
-            v-for="mode in expenseModes"
-            :key="mode.id"
-            class="selector-card"
-            :to="{ path: '/plans/new', query: { expenseMode: mode.id } }"
-          >
-            <span>{{ mode.label }}</span>
-            <p>{{ mode.title }}</p>
-          </RouterLink>
-        </div>
-      </section>
-
       <article v-for="category in budgetCategories" :key="category.id" class="app-card budget-row">
         <div class="budget-row-head">
           <div>
@@ -66,23 +59,35 @@
         <small>{{ category.spent > category.budget ? `${krw(category.spent - category.budget)} 초과` : `${krw(category.budget - category.spent)} 남음` }}</small>
       </article>
     </div>
-
-    <RouterLink class="floating-action-button" to="/budget/new" aria-label="예산 추가">
-      <Plus :size="20" />
-    </RouterLink>
   </section>
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { Plus } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { Check, Pencil } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
-import PlanWarningAlert from '@/components/plans/PlanWarningAlert.vue'
-import { budgetCategories, expenseModes, krw } from '@/data/mockData'
+import { budgetCategories, krw } from '@/data/mockData'
 
 const totalBudget = computed(() => budgetCategories.reduce((sum, category) => sum + category.budget, 0))
 const totalSpent = computed(() => budgetCategories.reduce((sum, category) => sum + category.spent, 0))
-const percent = computed(() => Math.round((totalSpent.value / totalBudget.value) * 100))
+
+const budgetOverride = ref(null)
+const displayBudget = computed(() => budgetOverride.value ?? totalBudget.value)
+const percent = computed(() => Math.min(Math.round((totalSpent.value / displayBudget.value) * 100), 100))
+
+const isEditingBudget = ref(false)
+const editBudget = ref(0)
+
+function startEditBudget() {
+  editBudget.value = displayBudget.value
+  isEditingBudget.value = true
+}
+
+function saveBudget() {
+  const next = Number(editBudget.value)
+  budgetOverride.value = next > 0 ? next : displayBudget.value
+  isEditingBudget.value = false
+}
 </script>
 
 <style scoped>
@@ -134,6 +139,21 @@ h1 {
   display: block;
   font-size: 22px;
   font-weight: 900;
+}
+
+.budget-edit-input {
+  width: 100%;
+  margin-top: 2px;
+  border: 0;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 0;
+  padding: 0 0 3px;
+  background: transparent;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  outline: none;
 }
 
 .summary-progress {

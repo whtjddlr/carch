@@ -793,6 +793,32 @@ a {
   flex-shrink: 0;
 }
 
+.dev-fab {
+  position: absolute;
+  left: 14px;
+  bottom: 84px;
+  z-index: 40;
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.5);
+  background: rgba(28, 49, 73, 0.78);
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 8px 20px rgba(28, 49, 73, 0.3);
+  backdrop-filter: blur(8px);
+  opacity: 0.55;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.dev-fab:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
 .bottom-nav {
   flex-shrink: 0;
   border-top: 1px solid var(--carch-glass-border);

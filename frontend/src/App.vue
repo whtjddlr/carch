@@ -25,6 +25,9 @@
             </RouterLink>
           </div>
         </nav>
+        <RouterLink v-if="isDev" class="dev-fab" to="/dev" aria-label="개발자 패널">
+          <Code2 :size="18" />
+        </RouterLink>
       </main>
     </div>
   </RouterView>
@@ -33,14 +36,15 @@
 <script setup>
 import { nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { BarChart3, CreditCard, Target, Users } from 'lucide-vue-next'
+import { BarChart3, ClipboardList, Code2, CreditCard, Users } from 'lucide-vue-next'
 
+const isDev = import.meta.env.DEV
 const currentRoute = useRoute()
 const navItems = [
   { path: '/cards', icon: CreditCard, label: '카드', matches: ['/cards', '/recommendations'] },
-  { path: '/analytics/cards', icon: BarChart3, label: '소비분석', matches: ['/analytics'] },
+  { path: '/analytics/cards', icon: BarChart3, label: '분석', matches: ['/analytics'] },
   { path: '/chat', icon: null, label: '카치', primary: true },
-  { path: '/budget', icon: Target, label: '예산', matches: ['/budget'] },
+  { path: '/budget', icon: ClipboardList, label: '소비계획', matches: ['/budget'] },
   { path: '/community', icon: Users, label: '커뮤니티', matches: ['/community'] },
 ]
 

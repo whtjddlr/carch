@@ -16,6 +16,7 @@ import UtilityView from '@/views/UtilityView.vue'
 import PlansListView from '@/views/PlansListView.vue'
 import PlansCreateView from '@/views/PlansCreateView.vue'
 import PlanDetailView from '@/views/PlanDetailView.vue'
+import DevPanelView from '@/views/DevPanelView.vue'
 
 const protectedMeta = { requiresAuth: true, bottomNav: true }
 
@@ -31,7 +32,6 @@ const routes = [
   { path: '/transactions/:id', name: 'TransactionDetail', component: UtilityView, props: { type: 'transaction' }, meta: { requiresAuth: true } },
   { path: '/budget', name: 'BudgetList', component: BudgetListView, meta: protectedMeta },
   { path: '/budget/current', name: 'Budget', component: BudgetView, meta: protectedMeta },
-  { path: '/budget/new', name: 'BudgetNew', component: UtilityView, props: { type: 'budgetNew' }, meta: { requiresAuth: true } },
   { path: '/recommendations/new', name: 'RecommendationNew', component: RecommendationView, meta: { requiresAuth: true } },
   { path: '/recommendations/:id', name: 'RecommendationDetail', component: RecommendationView, meta: { requiresAuth: true } },
   { path: '/community', name: 'Community', component: CommunityView, meta: protectedMeta },
@@ -49,6 +49,7 @@ const routes = [
   { path: '/plans', name: 'PurchasePlanList', component: PlansListView, meta: protectedMeta },
   { path: '/plans/new', name: 'PurchasePlanCreate', component: PlansCreateView, meta: { requiresAuth: true } },
   { path: '/plans/:id', name: 'PurchasePlanDetail', component: PlanDetailView, meta: { requiresAuth: true } },
+  { path: '/dev', name: 'DevPanel', component: DevPanelView, meta: { requiresAuth: true } },
   { path: '/:pathMatch(.*)*', redirect: '/cards' },
 ]
 
