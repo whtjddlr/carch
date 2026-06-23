@@ -45,26 +45,23 @@
 
       <article v-if="aiAnalysis" class="app-card ai-card">
         <div class="section-title">
-          <span>{{ aiAnalysis.summaryTitle }}</span>
-          <small>{{ analysisSourceLabel || `신뢰도 ${Math.round(Number(aiAnalysis.confidence || 0) * 100)}%` }}</small>
+          <span>이번 달 소비 진단</span>
+          <small>신뢰도 {{ Math.round(Number(aiAnalysis.confidence || 0) * 100) }}%</small>
         </div>
-        <div v-if="aiAnalysis.primaryInsight" class="primary-insight" :class="`severity-${aiAnalysis.primaryInsight.severity || 'info'}`">
+        <div class="primary-insight compact" :class="`severity-${aiAnalysis.primaryInsight?.severity || 'info'}`">
           <div>
-            <span>{{ aiAnalysis.primaryInsight.label }}</span>
-            <strong>{{ aiAnalysis.primaryInsight.title }}</strong>
-            <p>{{ aiAnalysis.primaryInsight.body }}</p>
+            <span>{{ conciseDiagnosis.label }}</span>
+            <strong>{{ conciseDiagnosis.title }}</strong>
+            <p>{{ conciseDiagnosis.body }}</p>
           </div>
-          <em v-if="aiAnalysis.primaryInsight.metricValue">
-            {{ krw(aiAnalysis.primaryInsight.metricValue) }}
+          <em v-if="conciseDiagnosis.amount">
+            {{ krw(conciseDiagnosis.amount) }}
           </em>
         </div>
-        <h2>{{ aiAnalysis.headline }}</h2>
-        <p v-if="aiAnalysis.narrative" class="ai-narrative">{{ aiAnalysis.narrative }}</p>
-        <ul class="insight-list">
-          <li v-for="item in aiAnalysis.savingOpportunities" :key="item.title">
-            <strong>{{ item.title }}</strong>
-            <span>{{ item.reason }}</span>
-            <em>{{ item.action }}</em>
+        <ul class="diagnosis-points">
+          <li v-for="point in conciseInsightItems" :key="point">
+            <span></span>
+            <strong>{{ point }}</strong>
           </li>
         </ul>
       </article>
@@ -79,20 +76,31 @@
           <span>카드 교체 인사이트</span>
           <small>{{ topRecommendation.match }}% 매칭</small>
         </div>
-        <strong>{{ recommendationAlert.title }}</strong>
-        <p>{{ recommendationAlert.body }}</p>
+        <div class="switch-hero">
+          <div class="switch-card-preview">
+            <img v-if="topRecommendation.imageUrl" :src="topRecommendation.imageUrl" :alt="topRecommendation.name" />
+            <div v-else class="switch-card-fallback">
+              <small>{{ topRecommendation.issuer }}</small>
+              <strong>{{ topRecommendation.name }}</strong>
+            </div>
+          </div>
+          <div>
+            <strong>{{ cardSwitchTitle }}</strong>
+            <p>{{ cardSwitchBody }}</p>
+          </div>
+        </div>
         <div class="switch-metrics">
           <span>
-            <small>월 순혜택 차이</small>
-            <b>{{ krw(topRecommendation.economics.monthlyDelta) }}</b>
+            <small>월 예상 이득</small>
+            <b>{{ signedKrw(topRecommendation.economics.monthlyDelta) }}</b>
           </span>
           <span>
-            <small>연간 예상 차이</small>
-            <b>{{ krw(topRecommendation.economics.annualDelta) }}</b>
+            <small>연간 예상 이득</small>
+            <b>{{ signedKrw(topRecommendation.economics.annualDelta) }}</b>
           </span>
           <span>
-            <small>회수 기간</small>
-            <b>{{ topRecommendation.economics.paybackMonths ? `${topRecommendation.economics.paybackMonths}개월` : '즉시 비교' }}</b>
+            <small>비교 기준</small>
+            <b>연회비 포함</b>
           </span>
         </div>
         <RouterLink class="switch-link" :to="`/recommendations/r1`">
@@ -167,13 +175,7 @@ const analysisButtonLabel = computed(() => {
 })
 const aiBadgeLabel = computed(() => {
   if (!aiAnalysis.value) return ''
-  const mode = aiAnalysis.value.aiMode === 'gms' ? 'AI 분석' : '기본 분석'
-  return summary.value?.aiAnalysisCached ? `저장 ${mode}` : `새 ${mode}`
-})
-const analysisSourceLabel = computed(() => {
-  if (!summary.value?.aiAnalysisCreatedAt) return ''
-  const prefix = summary.value?.aiAnalysisCached ? '저장됨' : '방금 저장'
-  return `${prefix} ${formatRecordTime(summary.value.aiAnalysisCreatedAt)}`
+  return aiAnalysis.value.aiMode === 'gms' ? 'AI 분석' : '기본 분석'
 })
 const nextActionItems = computed(() => (aiAnalysis.value?.nextActions || []).slice(0, 3))
 const categoryRows = computed(() => {
@@ -184,6 +186,36 @@ const categoryRows = computed(() => {
     percent: Math.max(6, Math.round((Number(item.amount || 0) / max) * 100)),
     color: colors[index % colors.length],
   }))
+})
+const conciseDiagnosis = computed(() => {
+  const primary = aiAnalysis.value?.primaryInsight || {}
+  const top = categoryRows.value[0]
+  const second = categoryRows.value[1]
+  const categoryText = [top?.category, second?.category].filter(Boolean).join('·')
+  return {
+    label: primary.label || '핵심 진단',
+    title: primary.title || (top ? `${top.category} 지출 집중` : '소비 패턴 점검'),
+    body: categoryText
+      ? `${categoryText} 지출이 커요. 카드 혜택을 이 항목에 맞추면 더 유리합니다.`
+      : '최근 소비를 기준으로 카드 혜택을 다시 맞춰보세요.',
+    amount: primary.metricValue || top?.amount || 0,
+  }
+})
+const conciseInsightItems = computed(() => {
+  const items = []
+  const top = categoryRows.value[0]
+  const second = categoryRows.value[1]
+  if (top) items.push(`${top.category} 혜택이 강한 카드부터 비교하세요.`)
+  if (second) items.push(`${second.category} 지출도 함께 묶어 보면 좋아요.`)
+  if (topRecommendation.value?.economics?.monthlyDelta > 0) {
+    items.push(`${topRecommendation.value.name} 기준 월 ${signedKrw(topRecommendation.value.economics.monthlyDelta)} 예상 이득`)
+  }
+  return items.slice(0, 3)
+})
+const cardSwitchTitle = computed(() => `${topRecommendation.value?.name || '추천 카드'}가 더 유리해요`)
+const cardSwitchBody = computed(() => {
+  const delta = topRecommendation.value?.economics?.monthlyDelta || 0
+  return `연회비까지 반영해도 월 ${signedKrw(delta)} 정도 이득이 예상돼요.`
 })
 
 function buildMockSummary() {
@@ -263,16 +295,9 @@ async function refreshAnalysis() {
   }
 }
 
-function formatRecordTime(value) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  return new Intl.DateTimeFormat('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
+function signedKrw(value) {
+  const amount = Number(value || 0)
+  return `${amount > 0 ? '+' : amount < 0 ? '-' : ''}${krw(Math.abs(amount))}`
 }
 
 onMounted(loadSummary)
@@ -439,6 +464,10 @@ onMounted(loadSummary)
   background: rgba(232, 241, 255, 0.62);
 }
 
+.primary-insight.compact {
+  margin-bottom: 10px;
+}
+
 .primary-insight span {
   color: #0f5fae;
   font-size: 10px;
@@ -453,8 +482,7 @@ onMounted(loadSummary)
   font-weight: 900;
 }
 
-.primary-insight p,
-.ai-narrative {
+.primary-insight p {
   margin: 4px 0 0;
   color: #5f6b77;
   font-size: 12px;
@@ -479,6 +507,34 @@ onMounted(loadSummary)
 .primary-insight.severity-warning span,
 .primary-insight.severity-warning em {
   color: #dc2626;
+}
+
+.diagnosis-points {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.diagnosis-points li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: #3c4654;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.diagnosis-points li span {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  margin-top: 6px;
+  background: #008c95;
 }
 
 .empty-analysis-card {
@@ -516,14 +572,69 @@ onMounted(loadSummary)
   background: linear-gradient(180deg, rgba(240, 253, 250, 0.82), rgba(255, 255, 255, 0.78));
 }
 
-.card-switch-card > strong {
+.switch-hero {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 13px;
+  align-items: center;
+}
+
+.switch-card-preview {
+  display: flex;
+  min-height: 96px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.switch-card-preview img {
+  width: 56px;
+  height: 88px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 14px rgba(16, 24, 40, 0.18));
+}
+
+.switch-card-fallback {
+  display: flex;
+  width: 56px;
+  height: 88px;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: 9px;
+  padding: 9px 7px;
+  background: #24364f;
+  color: #fff;
+  box-shadow: 0 10px 14px rgba(16, 24, 40, 0.18);
+}
+
+.switch-card-fallback small,
+.switch-card-fallback strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switch-card-fallback small {
+  font-size: 8px;
+  font-weight: 800;
+  opacity: 0.76;
+}
+
+.switch-card-fallback strong {
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.switch-hero strong {
   display: block;
   color: #17202b;
   font-size: 16px;
   font-weight: 900;
+  line-height: 1.35;
 }
 
-.card-switch-card > p {
+.switch-hero p {
   margin: 6px 0 0;
   color: #5f6b77;
   font-size: 12px;
@@ -604,7 +715,6 @@ h2 {
   line-height: 1.4;
 }
 
-.insight-list,
 .compact-list {
   display: flex;
   flex-direction: column;
@@ -614,7 +724,6 @@ h2 {
   list-style: none;
 }
 
-.insight-list li,
 .compact-list li {
   display: flex;
   flex-direction: column;
@@ -624,26 +733,17 @@ h2 {
   background: #fbfdff;
 }
 
-.insight-list strong,
 .compact-list strong {
   color: #17202b;
   font-size: 12px;
   font-weight: 900;
 }
 
-.insight-list span,
 .compact-list span {
   color: #5f6b77;
   font-size: 12px;
   font-weight: 700;
   line-height: 1.45;
-}
-
-.insight-list em {
-  color: #0f5fae;
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 900;
 }
 
 .chart-card,
