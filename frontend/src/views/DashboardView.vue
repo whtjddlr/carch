@@ -628,17 +628,19 @@ onMounted(async () => {
 .header-actions .icon-button {
   width: 42px;
   height: 42px;
-  border: 1px solid rgba(32, 36, 42, 0.06) !important;
-  background: rgba(255, 255, 255, 0.82) !important;
-  color: #20242a !important;
-  box-shadow: 0 8px 22px rgba(36, 54, 79, 0.055) !important;
+  border: 1px solid rgba(36, 54, 79, 0.11) !important;
+  background: rgba(248, 251, 253, 0.58) !important;
+  color: #24364f !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58), 0 10px 24px rgba(36, 54, 79, 0.06) !important;
+  backdrop-filter: blur(16px) saturate(1.08);
 }
 
 :global(.app-backdrop .phone-shell .dashboard-header .header-actions .icon-button) {
-  border: 1px solid rgba(32, 36, 42, 0.06) !important;
-  background: rgba(255, 255, 255, 0.82) !important;
-  color: #20242a !important;
-  box-shadow: 0 8px 22px rgba(36, 54, 79, 0.055) !important;
+  border: 1px solid rgba(36, 54, 79, 0.11) !important;
+  background: rgba(248, 251, 253, 0.58) !important;
+  color: #24364f !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58), 0 10px 24px rgba(36, 54, 79, 0.06) !important;
+  backdrop-filter: blur(16px) saturate(1.08);
 }
 
 .month-summary {
@@ -853,13 +855,14 @@ onMounted(async () => {
   height: 46px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(24, 54, 89, 0.1);
+  border: 1px solid rgba(36, 54, 79, 0.12);
   border-radius: 50%;
   padding: 0;
-  background: rgba(255, 255, 255, 0.8);
-  color: #183659;
-  box-shadow: 0 10px 24px rgba(36, 54, 79, 0.06);
-  transition: transform 160ms ease, background-color 160ms ease, color 160ms ease, opacity 160ms ease;
+  background: rgba(248, 251, 253, 0.56);
+  color: #24364f;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62), 0 12px 26px rgba(36, 54, 79, 0.07);
+  backdrop-filter: blur(16px) saturate(1.08);
+  transition: transform 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
 }
 
 .wallet-icon-button svg {
@@ -872,13 +875,24 @@ onMounted(async () => {
   transform: scale(0.96);
 }
 
+.wallet-icon-button:hover {
+  background: rgba(248, 251, 253, 0.68);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68), 0 14px 30px rgba(36, 54, 79, 0.085);
+}
+
 .wallet-icon-button.is-add {
-  background: #183659;
+  border-color: rgba(36, 54, 79, 0.18);
+  background: rgba(36, 54, 79, 0.9);
   color: #fff;
+  box-shadow: 0 16px 30px rgba(36, 54, 79, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.wallet-icon-button.is-add:hover {
+  background: rgba(36, 54, 79, 0.96);
 }
 
 .wallet-icon-button.danger {
-  background: rgba(179, 38, 30, 0.08);
+  background: rgba(179, 38, 30, 0.075);
   border-color: rgba(179, 38, 30, 0.14);
   color: #b3261e;
 }
@@ -1355,12 +1369,13 @@ onMounted(async () => {
   flex-shrink: 0;
   border-radius: 999px;
   padding: 4px 8px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(248, 251, 253, 0.58);
   color: var(--accent);
   font-size: 10px;
   font-style: normal;
   font-weight: 900;
-  box-shadow: inset 0 0 0 1px var(--accent-border);
+  box-shadow: inset 0 0 0 1px var(--accent-border), inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(12px) saturate(1.05);
 }
 
 .card-info strong {
@@ -1530,9 +1545,15 @@ onMounted(async () => {
 }
 
 .quick-action.app-card-sm {
-  border-color: rgba(32, 36, 42, 0.06) !important;
-  background: rgba(255, 255, 255, 0.82) !important;
-  box-shadow: 0 10px 30px rgba(36, 54, 79, 0.055) !important;
+  border-color: rgba(36, 54, 79, 0.1) !important;
+  background: rgba(248, 251, 253, 0.55) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58), 0 12px 26px rgba(36, 54, 79, 0.055) !important;
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.quick-action.app-card-sm:hover {
+  background: rgba(248, 251, 253, 0.68) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68), 0 15px 30px rgba(36, 54, 79, 0.07) !important;
 }
 
 .quick-action svg {
@@ -1636,11 +1657,12 @@ onMounted(async () => {
   width: 100%;
   max-height: min(78dvh, 700px);
   flex-direction: column;
-  border: 1px solid rgba(32, 36, 42, 0.08);
+  border: 1px solid rgba(36, 54, 79, 0.12);
   border-radius: 28px 28px 0 0;
   padding: 18px 16px 14px;
-  background: rgba(248, 251, 253, 0.96);
+  background: rgba(248, 251, 253, 0.84);
   box-shadow: 0 -22px 50px rgba(36, 54, 79, 0.18);
+  backdrop-filter: blur(24px) saturate(1.1);
 }
 
 .card-picker-sheet header {
@@ -1673,9 +1695,11 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.86);
-  color: #20242a;
-  box-shadow: 0 8px 20px rgba(36, 54, 79, 0.08);
+  border: 1px solid rgba(36, 54, 79, 0.11);
+  background: rgba(248, 251, 253, 0.56);
+  color: #24364f;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58), 0 10px 24px rgba(36, 54, 79, 0.06);
+  backdrop-filter: blur(16px) saturate(1.08);
 }
 
 .card-search-form {
@@ -1684,11 +1708,13 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   min-height: 48px;
-  border: 1px solid rgba(32, 36, 42, 0.08);
+  border: 1px solid rgba(36, 54, 79, 0.11);
   border-radius: 16px;
   padding: 0 13px;
-  background: #fff;
+  background: rgba(248, 251, 253, 0.58);
   color: #5f6b77;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(16px) saturate(1.08);
 }
 
 .card-search-form input {
@@ -1727,11 +1753,12 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   min-height: 96px;
-  border: 1px solid rgba(32, 36, 42, 0.07);
+  border: 1px solid rgba(36, 54, 79, 0.1);
   border-radius: 20px;
   padding: 10px;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 12px 26px rgba(36, 54, 79, 0.06);
+  background: rgba(248, 251, 253, 0.58);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58), 0 12px 26px rgba(36, 54, 79, 0.055);
+  backdrop-filter: blur(16px) saturate(1.08);
 }
 
 .candidate-card-image {
@@ -1742,7 +1769,8 @@ onMounted(async () => {
   justify-content: center;
   overflow: hidden;
   border-radius: 16px;
-  background: #f3f6f8;
+  background: rgba(232, 241, 251, 0.48);
+  box-shadow: inset 0 0 0 1px rgba(36, 54, 79, 0.07);
 }
 
 .candidate-card-image img {
@@ -1794,13 +1822,20 @@ onMounted(async () => {
   justify-content: center;
   border-radius: 999px;
   padding: 0;
-  background: #183659;
+  background: rgba(36, 54, 79, 0.92);
   color: #fff;
+  box-shadow: 0 12px 22px rgba(36, 54, 79, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.26);
+  backdrop-filter: blur(12px) saturate(1.08);
+}
+
+.candidate-card-row > button:hover:not(:disabled) {
+  background: rgba(36, 54, 79, 0.98);
 }
 
 .candidate-card-row > button:disabled {
-  background: #e6ecf2;
+  background: rgba(230, 236, 242, 0.66);
   color: #7a8795;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
 }
 
 @media (max-width: 380px) {
