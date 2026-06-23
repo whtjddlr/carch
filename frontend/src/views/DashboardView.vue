@@ -180,18 +180,31 @@
         </div>
 
         <div class="card-manage-toolbar" aria-label="보유 카드 관리">
-          <button type="button" class="wallet-icon-button is-add" aria-label="카드 추가" @click="openCardPicker">
-            <PlusCircle :size="16" />
-          </button>
           <button
             type="button"
-            class="wallet-icon-button danger"
-            :aria-label="isDeletingCard ? '카드 삭제 중' : '현재 카드 삭제'"
-            :disabled="!activeCard || isDeletingCard"
-            @click="handleDeleteActiveCard"
+            class="wallet-icon-button"
+            aria-label="보유 카드 관리 메뉴"
+            :aria-expanded="isCardManageMenuOpen"
+            @click.stop="toggleCardManageMenu"
           >
-            <Trash2 :size="16" />
+            <MoreHorizontal :size="20" />
           </button>
+          <div v-if="isCardManageMenuOpen" class="card-manage-menu" role="menu" aria-label="보유 카드 관리 메뉴">
+            <button type="button" role="menuitem" @click.stop="openCardPickerFromMenu">
+              <PlusCircle :size="15" />
+              <span>카드 추가</span>
+            </button>
+            <button
+              type="button"
+              class="danger"
+              role="menuitem"
+              :disabled="!activeCard || isDeletingCard"
+              @click.stop="deleteActiveCardFromMenu"
+            >
+              <Trash2 :size="15" />
+              <span>{{ isDeletingCard ? '삭제 중' : '카드 삭제' }}</span>
+            </button>
+          </div>
         </div>
 
         <p v-if="cardManageMessage" class="card-manage-note">{{ cardManageMessage }}</p>
@@ -289,7 +302,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { BarChart3, Bell, CalendarDays, Check, ChevronLeft, ChevronRight, PlusCircle, Search, Settings, Sparkles, Trash2, X } from 'lucide-vue-next'
+import { BarChart3, Bell, CalendarDays, Check, ChevronLeft, ChevronRight, MoreHorizontal, PlusCircle, Search, Settings, Sparkles, Trash2, X } from 'lucide-vue-next'
 import { cards as mockCards, krw, transactions as mockTransactions } from '@/data/mockData'
 import { addOwnedCard, deleteOwnedCard, fetchCards, fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
 
@@ -303,6 +316,7 @@ const carouselDirection = ref('next')
 const motionTargetIndex = ref(null)
 const imageOrientations = ref({})
 const isCardPickerOpen = ref(false)
+const isCardManageMenuOpen = ref(false)
 const cardSearch = ref('')
 const candidateCards = ref([])
 const isLoadingCandidateCards = ref(false)
@@ -453,11 +467,20 @@ function scheduleCandidateSearch() {
   cardSearchTimer = window.setTimeout(loadCandidateCards, 260)
 }
 
+function toggleCardManageMenu() {
+  isCardManageMenuOpen.value = !isCardManageMenuOpen.value
+}
+
 async function openCardPicker() {
+  isCardManageMenuOpen.value = false
   isCardPickerOpen.value = true
   cardManageMessage.value = ''
   cardManageError.value = ''
   await loadCandidateCards()
+}
+
+async function openCardPickerFromMenu() {
+  await openCardPicker()
 }
 
 function closeCardPicker() {
@@ -487,6 +510,7 @@ async function handleAddCandidate(candidate) {
 
 async function handleDeleteActiveCard() {
   if (!activeCard.value || isDeletingCard.value) return
+  isCardManageMenuOpen.value = false
   const ok = window.confirm(`${activeCard.value.name} 카드를 보유 목록에서 삭제할까요?`)
   if (!ok) return
 
@@ -502,6 +526,10 @@ async function handleDeleteActiveCard() {
   } finally {
     isDeletingCard.value = false
   }
+}
+
+async function deleteActiveCardFromMenu() {
+  await handleDeleteActiveCard()
 }
 
 onMounted(async () => {
@@ -844,13 +872,11 @@ onMounted(async () => {
 
 .card-manage-toolbar {
   position: absolute;
-  top: clamp(148px, 39vw, 162px);
-  right: clamp(8px, 3.5vw, 16px);
-  z-index: 6;
+  top: clamp(6px, 2.8vw, 12px);
+  right: clamp(10px, 4.8vw, 20px);
+  z-index: 8;
   display: flex;
-  flex-direction: column;
   justify-content: center;
-  gap: 0;
   margin: 0;
 }
 
@@ -864,7 +890,7 @@ onMounted(async () => {
   border-radius: 50%;
   padding: 0;
   background: transparent;
-  color: #24364f;
+  color: rgba(36, 54, 79, 0.72);
   box-shadow: none;
   backdrop-filter: none;
   transition: transform 160ms ease, color 160ms ease, opacity 160ms ease;
@@ -884,29 +910,67 @@ onMounted(async () => {
   color: #0f5fae;
 }
 
-.wallet-icon-button.is-add {
-  border-color: transparent;
-  background: transparent;
-  color: #24364f;
-  box-shadow: none;
+.wallet-icon-button:disabled {
+  opacity: 0.45;
 }
 
-.wallet-icon-button.is-add:hover {
+.card-manage-menu {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  display: grid;
+  min-width: 136px;
+  gap: 2px;
+  border: 1px solid rgba(36, 54, 79, 0.11);
+  border-radius: 16px;
+  padding: 6px;
+  background: rgba(248, 251, 253, 0.82);
+  box-shadow: 0 18px 36px rgba(36, 54, 79, 0.13);
+  backdrop-filter: blur(20px) saturate(1.08);
+}
+
+.card-manage-menu button {
+  display: grid;
+  min-height: 38px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 9px;
+  background: transparent;
+  color: #24364f;
+  font-size: 12px;
+  font-weight: 850;
+  text-align: left;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.card-manage-menu button:hover:not(:disabled) {
+  background: rgba(36, 54, 79, 0.07);
   color: #0f5fae;
 }
 
-.wallet-icon-button.danger {
-  background: transparent;
-  border-color: transparent;
+.card-manage-menu button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.card-manage-menu button.danger {
   color: #b3261e;
 }
 
-.wallet-icon-button.danger:hover {
+.card-manage-menu button.danger:hover:not(:disabled) {
+  background: rgba(179, 38, 30, 0.07);
   color: #d92d20;
 }
 
-.wallet-icon-button:disabled {
-  opacity: 0.45;
+.card-manage-menu button:disabled {
+  color: rgba(36, 54, 79, 0.34);
+}
+
+.card-manage-menu svg {
+  justify-self: center;
+  stroke-width: 2.35;
 }
 
 .card-manage-note {
@@ -1911,14 +1975,18 @@ onMounted(async () => {
   }
 
   .card-manage-toolbar {
-    top: 148px;
+    top: 4px;
     right: 8px;
-    gap: 0;
   }
 
   .wallet-icon-button {
     width: 38px;
     height: 38px;
+  }
+
+  .card-manage-menu {
+    top: 36px;
+    min-width: 130px;
   }
 }
 
