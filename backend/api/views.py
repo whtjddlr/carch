@@ -3454,6 +3454,141 @@ def _build_routing_suggestions(profile, owned_values, result_cards, owned_ids):
     return unique_categories
 
 
+def _build_owned_category_guides(profile, owned_values, owned_ids):
+    if not owned_values:
+        return []
+
+    previous_card_spend = _profile_card_spend_map(profile, 'previousByCard')
+    current_card_spend = _profile_card_spend_map(profile, 'currentByCard')
+    one_time_categories = set(profile.get('oneTimeCategories') or [])
+    source_rows = profile.get('categoryCardRows') or []
+    rows = profile.get('benefitEvaluationRows') or profile.get('categoryRows') or []
+    guides = []
+    used_categories = set()
+
+    for row in rows:
+        category = row.get('category') or '기타'
+        if category in used_categories or category in one_time_categories:
+            continue
+        amount = _as_int(row.get('amount'))
+        if amount <= 0:
+            continue
+
+        scored = []
+        for item in owned_values:
+            card = item.get('card') or {}
+            card_id = _card_id(card)
+            if not card_id or card_id not in owned_ids:
+                continue
+            estimate = _estimate_category_benefit(
+                card,
+                category,
+                amount,
+                evaluation_spend=previous_card_spend.get(card_id, 0),
+                payment_context=row,
+            )
+            min_spend = _card_min_spend(card)
+            current_spend = current_card_spend.get(card_id, 0)
+            remaining_current_spend = max(min_spend - current_spend, 0) if min_spend else 0
+            next_month_eligible = not min_spend or current_spend >= min_spend
+            scored.append(
+                {
+                    'card': card,
+                    'cardId': card_id,
+                    'estimate': estimate,
+                    'minSpend': min_spend,
+                    'currentSpend': current_spend,
+                    'remainingCurrentSpend': remaining_current_spend,
+                    'nextMonthEligible': next_month_eligible,
+                }
+            )
+
+        if not scored:
+            continue
+
+        scored.sort(
+            key=lambda item: (
+                item['estimate']['estimatedBenefit'] > 0,
+                item['estimate']['estimatedBenefit'],
+                item['estimate']['potentialBenefit'],
+                item['nextMonthEligible'],
+                -item['remainingCurrentSpend'],
+                item['estimate']['benefitRuleConfidence'],
+            ),
+            reverse=True,
+        )
+        best = scored[0]
+        card = best['card']
+        card_id = best['cardId']
+
+        current_row = next(
+            (
+                source
+                for source in source_rows
+                if source.get('category') == category and _as_int(source.get('amount')) > 0
+            ),
+            None,
+        )
+        current_estimated = 0
+        source_card_id = str((current_row or {}).get('cardId') or '')
+        if current_row and source_card_id:
+            source_item = next((item for item in scored if item['cardId'] == source_card_id), None)
+            if source_item:
+                current_estimated = _estimate_category_benefit(
+                    source_item['card'],
+                    category,
+                    _as_int(current_row.get('amount')),
+                    evaluation_spend=previous_card_spend.get(source_card_id, 0),
+                    payment_context=current_row,
+                )['estimatedBenefit']
+
+        estimated = _as_int(best['estimate']['estimatedBenefit'])
+        potential = _as_int(best['estimate']['potentialBenefit'])
+        monthly_gain = max(estimated - current_estimated, 0)
+        card_name = _card_name(card)
+        if estimated > 0:
+            body = f'{category} 지출은 {card_name} 카드로 쓰는 쪽이 현재 조건에서 월 {_krw(estimated)} 혜택으로 가장 유리합니다.'
+        elif best['nextMonthEligible']:
+            body = f'{category} 지출은 {card_name} 카드가 다음 달 혜택 조건을 이미 충족했습니다.'
+        elif best['remainingCurrentSpend'] > 0:
+            body = f'{category} 지출은 {card_name} 카드가 잘 맞지만 다음 달 조건까지 {_krw(best["remainingCurrentSpend"])} 부족합니다.'
+        else:
+            body = f'{category} 지출은 {card_name} 카드의 혜택 조건을 확인해볼 만합니다.'
+
+        guides.append(
+            {
+                'id': f'owned-category-{category}-{card_id}',
+                'category': category,
+                'amount': amount,
+                'cardId': card_id,
+                'cardName': card_name,
+                'issuer': _issuer_name(card),
+                'imageUrl': _card_image_url(card),
+                'estimatedBenefit': estimated,
+                'potentialBenefit': potential,
+                'monthlyGain': monthly_gain,
+                'benefitLabel': best['estimate']['benefitLabel'],
+                'eligibleForBenefit': best['estimate']['eligibleForBenefit'],
+                'nextMonthEligible': best['nextMonthEligible'],
+                'remainingCurrentSpend': best['remainingCurrentSpend'],
+                'paymentType': best['estimate']['paymentType'],
+                'installmentMonths': best['estimate']['installmentMonths'],
+                'isInterestFreeInstallment': best['estimate']['isInterestFreeInstallment'],
+                'paymentLabel': best['estimate']['paymentLabel'],
+                'benefitRuleConfidence': best['estimate']['benefitRuleConfidence'],
+                'scope': 'owned',
+                'scopeLabel': '보유 카드 추천',
+                'title': f'{category}{_topic_particle(category)} {card_name}',
+                'body': body,
+            }
+        )
+        used_categories.add(category)
+        if len(guides) >= 4:
+            break
+
+    return guides
+
+
 def card_recommendations(request):
     user, error_response = require_request_user(request)
     if error_response:
@@ -3601,6 +3736,7 @@ def card_recommendations(request):
     top = results[0] if results else None
     alert = (top or {}).get('notification') or {'show': False}
     routing_suggestions = _build_routing_suggestions(profile, owned_values, results, owned_ids)
+    owned_category_guides = _build_owned_category_guides(profile, owned_values, owned_ids)
 
     return json_response(
         {
@@ -3618,6 +3754,7 @@ def card_recommendations(request):
                 'breakdown': baseline.get('breakdown') or [],
             },
             'alert': alert,
+            'ownedCategoryGuides': owned_category_guides,
             'routingSuggestions': routing_suggestions,
             'results': results,
             'warnings': [

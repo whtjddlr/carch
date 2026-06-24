@@ -76,63 +76,14 @@
       <header class="recommend-header blue-gradient">
         <AppBackButton fallback="/cards" />
         <p>카드 추천</p>
-        <h1>결제 방향만 바꿔도<br />혜택이 커집니다</h1>
+        <h1>사용할 카드와<br />발급할 카드를 나눠볼게요</h1>
+        <div class="recommend-mode-pills">
+          <span>보유 카드 사용 추천</span>
+          <span>새 카드 발급 추천</span>
+        </div>
       </header>
 
       <div class="screen-scroll scrollbar-hide recommendation-body">
-        <article v-if="routingSuggestions.length" class="app-card routing-card">
-          <div class="routing-title">
-            <span>{{ primaryRouting.scopeLabel }}</span>
-            <strong>{{ primaryRouting.title }}</strong>
-            <p>{{ primaryRouting.body }}</p>
-          </div>
-
-          <div class="routing-flow">
-            <div class="route-card-mini muted">
-              <small>현재</small>
-              <b>{{ primaryRouting.fromCardName }}</b>
-            </div>
-            <ArrowRight :size="18" stroke-width="2.4" />
-            <div class="route-card-mini target">
-              <img v-if="primaryRouting.toImageUrl" :src="primaryRouting.toImageUrl" :alt="primaryRouting.toCardName" />
-              <small>추천</small>
-              <b>{{ primaryRouting.toCardName }}</b>
-            </div>
-          </div>
-
-          <div class="routing-metrics">
-            <span>
-              <small>대상 지출</small>
-              <b>{{ krw(primaryRouting.amount) }}</b>
-            </span>
-            <span>
-              <small>월 개선</small>
-              <b>{{ signedKrw(primaryRouting.monthlyGain) }}</b>
-            </span>
-            <span>
-              <small>분야</small>
-              <b>{{ primaryRouting.category }}</b>
-            </span>
-          </div>
-
-          <button type="button" class="route-action" @click="goToSuggestion(primaryRouting)">
-            추천 카드 보기
-            <ArrowRight :size="16" stroke-width="2.5" />
-          </button>
-
-          <div v-if="routingSuggestions.length > 1" class="routing-more">
-            <button
-              v-for="item in routingSuggestions.slice(1)"
-              :key="item.id"
-              type="button"
-              @click="goToSuggestion(item)"
-            >
-              <span>{{ item.category }}</span>
-              <b>{{ signedKrw(item.monthlyGain) }}</b>
-            </button>
-          </div>
-        </article>
-
         <article v-if="bundle?.profile" class="app-card profile-card">
           <div>
             <span>계산 기준</span>
@@ -144,15 +95,57 @@
           </div>
         </article>
 
-        <article v-if="!routingSuggestions.length && bundle?.alert?.show && recommendationItems[0]" class="app-card alert-card">
-          <span>추천 알림</span>
-          <strong>{{ bundle.alert.title }}</strong>
-          <p>{{ bundle.alert.body }}</p>
+        <div class="recommend-section-title">
+          <div>
+            <span>보유 카드 사용 추천</span>
+            <h2>이미 가진 카드 안에서 어디에 쓸지</h2>
+          </div>
+          <b>결제 배분</b>
+        </div>
+
+        <div v-if="ownedUsageGuides.length" class="usage-guide-list">
+          <article
+            v-for="item in ownedUsageGuides"
+            :key="item.id"
+            class="app-card usage-guide-card"
+          >
+            <div class="usage-guide-main">
+              <div>
+                <span class="usage-label">사용 추천</span>
+                <h3>{{ item.category }}는 {{ item.cardName }}</h3>
+                <p>{{ item.body }}</p>
+              </div>
+              <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.cardName" />
+            </div>
+            <div class="usage-metrics">
+              <span>
+                <small>분야 지출</small>
+                <b>{{ krw(item.amount) }}</b>
+              </span>
+              <span>
+                <small>{{ item.eligibleForBenefit ? '예상 혜택' : '가능 혜택' }}</small>
+                <b>{{ krw(item.eligibleForBenefit ? item.estimatedBenefit : item.potentialBenefit) }}</b>
+              </span>
+              <span>
+                <small>조건</small>
+                <b>{{ usageConditionLabel(item) }}</b>
+              </span>
+            </div>
+          </article>
+        </div>
+
+        <article v-else class="app-card usage-empty-card">
+          <span>보유 카드 사용 추천</span>
+          <strong>아직 비교할 보유 카드 데이터가 부족해요</strong>
+          <p>카드와 결제 내역이 쌓이면 분야별로 어떤 보유 카드를 쓰면 좋은지 따로 보여줄게요.</p>
         </article>
 
-        <div class="section-heading">
-          <h2>추천 카드</h2>
-          <span>혜택 큰 순</span>
+        <div class="recommend-section-title issue-title">
+          <div>
+            <span>새 카드 발급 추천</span>
+            <h2>새로 발급하면 더 나아질 카드</h2>
+          </div>
+          <b>미보유 카드</b>
         </div>
 
         <div class="recommend-list">
@@ -164,7 +157,7 @@
           >
             <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.name" />
             <div>
-              <span>{{ item.issuer }}</span>
+              <span>발급 추천 · {{ item.issuer }}</span>
               <h2>{{ item.name }}</h2>
               <p>{{ item.reason }}</p>
               <div v-if="item.performanceFill" class="fill-economics">
@@ -196,7 +189,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowRight } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { krw, recommendations } from '@/data/mockData'
 import { fetchCardRecommendationBundle } from '@/services/api'
@@ -219,13 +211,12 @@ const recommendation = computed(() => {
   if (!isDetail.value) return recommendationItems.value[0]
   return recommendationItems.value.find((item) => item.id === route.params.id) || null
 })
-const routingSuggestions = computed(() => {
-  const items = bundle.value?.routingSuggestions || []
-  return items
-    .filter((item) => Number(item.monthlyGain || 0) > 0)
-    .slice(0, 4)
-})
-const primaryRouting = computed(() => routingSuggestions.value[0] || {})
+const ownedUsageGuides = computed(() =>
+  (bundle.value?.ownedCategoryGuides || [])
+    .map(normalizeOwnedUsageGuide)
+    .filter(Boolean)
+    .slice(0, 4),
+)
 const oneTimeCount = computed(() => bundle.value?.profile?.spendingTrend?.oneTimeCandidates?.length || 0)
 
 function signedKrw(value) {
@@ -301,6 +292,32 @@ function buildPerformanceFill(economics = {}) {
   }
 }
 
+function normalizeOwnedUsageGuide(item = {}) {
+  const cardName = item.cardName || item.name || '보유 카드'
+  const category = item.category || '추천 분야'
+  return {
+    ...item,
+    id: item.id || `owned-${category}-${item.cardId || cardName}`,
+    category,
+    cardName,
+    amount: Number(item.amount || 0),
+    estimatedBenefit: Number(item.estimatedBenefit || 0),
+    potentialBenefit: Number(item.potentialBenefit || 0),
+    remainingCurrentSpend: Number(item.remainingCurrentSpend || 0),
+    eligibleForBenefit: Boolean(item.eligibleForBenefit),
+    nextMonthEligible: Boolean(item.nextMonthEligible),
+    imageUrl: item.imageUrl || item.toImageUrl || '',
+    body: item.body || `${category} 지출은 보유 카드 중 ${cardName}가 가장 잘 맞습니다.`,
+  }
+}
+
+function usageConditionLabel(item = {}) {
+  if (item.eligibleForBenefit) return '이번 달 가능'
+  if (item.nextMonthEligible) return '다음 달 가능'
+  if (Number(item.remainingCurrentSpend || 0) > 0) return `${krw(item.remainingCurrentSpend)} 부족`
+  return '조건 확인'
+}
+
 function normalizeRecommendation(item) {
   const economics = { ...defaultEconomics, ...(item.economics || {}) }
   return {
@@ -333,11 +350,6 @@ function mapRecommendation(card, index) {
     spendingFit: card.spendingFit || { styleTags: [] },
     notification: card.notification || {},
   })
-}
-
-function goToSuggestion(item) {
-  const matched = recommendationItems.value.find((card) => String(card.cardAdId) === String(item.toCardId))
-  router.push(matched ? `/recommendations/${matched.id}` : '/cards')
 }
 
 onMounted(async () => {
@@ -381,6 +393,22 @@ onMounted(async () => {
   font-weight: 900;
 }
 
+.recommend-mode-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.recommend-mode-pills span {
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .recommendation-body {
   padding: 20px;
 }
@@ -388,7 +416,9 @@ onMounted(async () => {
 .profile-card,
 .alert-card,
 .result-card,
-.recommend-card {
+.recommend-card,
+.usage-guide-card,
+.usage-empty-card {
   padding: 18px;
 }
 
@@ -426,191 +456,142 @@ onMounted(async () => {
   background: rgba(240, 253, 250, 0.82);
 }
 
-.routing-card {
+.recommend-section-title {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 18px;
-  border-color: rgba(34, 55, 78, 0.12);
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 18px 38px rgba(34, 55, 78, 0.1);
-}
-
-.routing-title span {
-  color: #008c95;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.routing-title strong {
-  display: block;
-  margin-top: 5px;
-  color: #17202b;
-  font-size: 20px;
-  font-weight: 950;
-  letter-spacing: 0;
-}
-
-.routing-title p {
-  max-width: 28em;
-  margin: 6px 0 0;
-  color: #52606d;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.55;
-}
-
-.routing-flow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
-  gap: 8px;
-  align-items: center;
-  color: #008c95;
-}
-
-.route-card-mini {
-  position: relative;
-  min-height: 86px;
-  overflow: hidden;
-  border: 1px solid rgba(34, 55, 78, 0.1);
-  border-radius: 18px;
-  padding: 14px;
-  background: rgba(255, 255, 255, 0.68);
-}
-
-.route-card-mini.target {
-  border-color: rgba(0, 140, 149, 0.22);
-  background: rgba(238, 249, 248, 0.82);
-}
-
-.route-card-mini img {
-  position: absolute;
-  right: 10px;
-  bottom: -12px;
-  width: 48px;
-  height: 66px;
-  object-fit: contain;
-  opacity: 0.82;
-  filter: drop-shadow(0 10px 14px rgba(34, 55, 78, 0.16));
-}
-
-.route-card-mini small {
-  display: block;
-  color: #8a96a3;
-  font-size: 10px;
-  font-weight: 900;
-}
-
-.route-card-mini b {
-  position: relative;
-  z-index: 1;
-  display: block;
-  max-width: calc(100% - 34px);
-  margin-top: 7px;
-  color: #17202b;
-  font-size: 13px;
-  font-weight: 950;
-  line-height: 1.35;
-}
-
-.route-card-mini.muted b {
-  color: #5f6b77;
-}
-
-.routing-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.routing-metrics span {
-  min-height: 66px;
-  border-radius: 16px;
-  padding: 12px;
-  background: rgba(245, 248, 250, 0.82);
-}
-
-.routing-metrics small {
-  display: block;
-  color: #7a8592;
-  font-size: 10px;
-  font-weight: 900;
-}
-
-.routing-metrics b {
-  display: block;
-  margin-top: 7px;
-  color: #17202b;
-  font-size: 14px;
-  font-weight: 950;
-}
-
-.routing-metrics span:nth-child(2) b {
-  color: #008c95;
-}
-
-.route-action {
-  display: inline-flex;
-  min-height: 44px;
-  width: fit-content;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  border: 0;
-  border-radius: 999px;
-  padding: 0 16px;
-  background: #22374e;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 950;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.routing-more {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.routing-more button {
-  display: inline-flex;
-  min-height: 40px;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid rgba(34, 55, 78, 0.1);
-  border-radius: 999px;
-  padding: 0 12px;
-  background: rgba(255, 255, 255, 0.58);
-  color: #52606d;
-  font-size: 11px;
-  font-weight: 900;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.routing-more b {
-  color: #008c95;
-}
-
-.section-heading {
-  display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  margin: 18px 2px 10px;
+  gap: 12px;
+  margin: 20px 2px 10px;
 }
 
-.section-heading h2 {
+.recommend-section-title span {
+  display: block;
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.recommend-section-title h2 {
   margin: 0;
   color: #17202b;
   font-size: 16px;
   font-weight: 950;
 }
 
-.section-heading span {
-  color: #8a96a3;
+.recommend-section-title b {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: rgba(15, 95, 174, 0.08);
+  color: #0f5fae;
   font-size: 11px;
   font-weight: 900;
+}
+
+.recommend-section-title.issue-title span {
+  color: #008c95;
+}
+
+.recommend-section-title.issue-title b {
+  background: rgba(0, 140, 149, 0.1);
+  color: #008c95;
+}
+
+.usage-guide-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.usage-guide-card {
+  border-color: rgba(15, 95, 174, 0.1);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.usage-guide-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 54px;
+  align-items: center;
+  gap: 12px;
+}
+
+.usage-guide-main img {
+  width: 54px;
+  height: 74px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 14px rgba(16, 24, 40, 0.14));
+}
+
+.usage-label,
+.usage-empty-card span {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: rgba(15, 95, 174, 0.08);
+  color: #0f5fae;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.usage-guide-card h3 {
+  margin: 7px 0 0;
+  color: #17202b;
+  font-size: 17px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.usage-guide-card p,
+.usage-empty-card p {
+  margin: 6px 0 0;
+  color: #52606d;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.usage-empty-card strong {
+  display: block;
+  margin-top: 7px;
+  color: #17202b;
+  font-size: 17px;
+  font-weight: 950;
+}
+
+.usage-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.usage-metrics span {
+  min-width: 0;
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(245, 248, 250, 0.86);
+}
+
+.usage-metrics small {
+  display: block;
+  overflow: hidden;
+  color: #7a8592;
+  font-size: 10px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-metrics b {
+  display: block;
+  overflow: hidden;
+  margin-top: 5px;
+  color: #17202b;
+  font-size: 12px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .recommend-list {
@@ -816,9 +797,10 @@ ul {
   text-decoration: none;
 }
 
-:global(.app-backdrop .phone-shell .recommendation-body .routing-card),
 :global(.app-backdrop .phone-shell .recommendation-body .profile-card),
 :global(.app-backdrop .phone-shell .recommendation-body .alert-card),
+:global(.app-backdrop .phone-shell .recommendation-body .usage-guide-card),
+:global(.app-backdrop .phone-shell .recommendation-body .usage-empty-card),
 :global(.app-backdrop .phone-shell .recommendation-body .result-card),
 :global(.app-backdrop .phone-shell .recommendation-body .recommend-card) {
   border: 1px solid rgba(36, 54, 79, 0.08) !important;
@@ -828,7 +810,9 @@ ul {
   backdrop-filter: blur(12px) saturate(1.04) !important;
 }
 
-:global(.app-backdrop .phone-shell .recommendation-body .recommend-card) {
+:global(.app-backdrop .phone-shell .recommendation-body .recommend-card),
+:global(.app-backdrop .phone-shell .recommendation-body .usage-guide-card),
+:global(.app-backdrop .phone-shell .recommendation-body .usage-empty-card) {
   padding: 16px !important;
 }
 </style>

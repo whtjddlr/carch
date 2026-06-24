@@ -169,9 +169,9 @@
         <div class="category-guide-list">
           <RouterLink
             v-for="guide in categoryGuides"
-            :key="guide.label"
+            :key="guide.id || guide.label"
             class="category-guide-row"
-            :to="{ path: '/recommendations/new', query: { category: guide.label } }"
+            :to="guide.route || { path: '/recommendations/new', query: { category: guide.label } }"
           >
             <span class="cg-emoji">{{ guide.icon }}</span>
             <div class="cg-info">
@@ -202,7 +202,7 @@
             <span>{{ tx.icon }}</span>
             <div>
               <strong>{{ tx.merchant }}</strong>
-              <small>{{ tx.cat }} · {{ tx.time }}</small>
+              <small>{{ tx.cat }} · {{ transactionPaymentLabel(tx) }} · {{ tx.time }}</small>
             </div>
             <span class="tx-mini-card">
               <img
@@ -280,10 +280,9 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Bell, CalendarDays, Check, PlusCircle, Search, Sparkles, User, X } from 'lucide-vue-next'
-import { budgetCategories, cards as mockCards, krw, transactions as mockTransactions, user } from '@/data/mockData'
-import { addOwnedCard, deleteOwnedCard, fetchCards, fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
-import { readCustomBudgetCategories } from '@/services/budgetStorage'
-import { cardPerformance, scoreCardBenefit } from '@/utils/cardPerformance'
+import { cards as mockCards, krw, transactions as mockTransactions, user } from '@/data/mockData'
+import { addOwnedCard, deleteOwnedCard, fetchCardRecommendationBundle, fetchCards, fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
+import { cardPerformance, paymentContextLabel } from '@/utils/cardPerformance'
 
 const router = useRouter()
 
@@ -315,6 +314,7 @@ const cardManageMessage = ref('')
 const cardManageError = ref('')
 const isDeletingCard = ref(false)
 const isAddingCardId = ref('')
+const recommendationBundle = ref(null)
 const totalSpent = computed(() => cards.value.reduce((sum, card) => sum + card.spent, 0))
 const totalSpendLabel = computed(() => krw(totalSpent.value))
 const activeCard = computed(() => cards.value[activeCardIndex.value] || null)
@@ -324,38 +324,24 @@ const quickActions = [
   { label: '카드 추천', path: '/recommendations/new', icon: Sparkles, color: '#008c95' },
   { label: '지출계획하기', path: '/plans/new', icon: CalendarDays, color: '#24364f' },
 ]
-const futurePaymentCandidates = computed(() => (
-  [...budgetCategories, ...readCustomBudgetCategories()]
-    .map((category) => {
-      const budget = Number(category.budget || 0)
-      const spent = Number(category.spent || 0)
-      const amount = Math.max(budget - spent, 0)
-      return {
-        id: `budget-${category.id}`,
-        source: 'budget',
-        category: category.name,
-        merchant: '이번 달 남은 예산',
-        amount,
-        budget,
-        spent,
-      }
-    })
-    .filter((item) => item.amount > 0)
-    .sort((a, b) => b.amount - a.amount)
-))
-const merchantRecommendation = computed(() => {
-  const futureRows = futurePaymentCandidates.value
-    .map(buildMerchantRecommendation)
-    .filter(Boolean)
-  return futureRows.find((item) => !item.isBlocked && item.extraBenefit > 0)
-    || futureRows.find((item) => !item.isBlocked)
-    || futureRows[0]
-    || null
-})
 const categoryGuideDefs = [
   { label: '외식', icon: '🍽️', keywords: ['음식', '외식', '식당', '카페', '음식점', '배달', '맛집', '푸드', '베이커리'] },
   { label: '쇼핑', icon: '🛍️', keywords: ['쇼핑', '마트', '온라인', '백화점', '이마트', '쿠팡', '편의점', '아울렛', '면세'] },
 ]
+
+const categoryIconMap = {
+  식비: '🍽️',
+  외식: '🍽️',
+  음식점: '🍽️',
+  카페: '☕',
+  쇼핑: '🛍️',
+  편의점: '🏪',
+  교통: '🚇',
+  뷰티: '💄',
+  구독: '📱',
+  문화: '🎬',
+  교육: '📚',
+}
 
 function bestCardForKeywords(keywords) {
   const list = cards.value || []
@@ -370,25 +356,102 @@ function bestCardForKeywords(keywords) {
   return list[0] ? { card: list[0], benefitText: list[0].benefitSummary || '' } : null
 }
 
-const categoryGuides = computed(() =>
-  categoryGuideDefs
+function categoryIcon(label) {
+  const text = String(label || '')
+  return Object.entries(categoryIconMap).find(([key]) => text.includes(key))?.[1] || '💳'
+}
+
+function signedKrw(value) {
+  const amount = Number(value || 0)
+  return `${amount > 0 ? '+' : amount < 0 ? '-' : ''}${krw(Math.abs(amount))}`
+}
+
+function ownedCardById(cardId) {
+  return cards.value.find((card) => String(card.id) === String(cardId) || String(card.cardAdId) === String(cardId))
+}
+
+function buildCategoryGuideFromOwnedGuide(item, index) {
+  const toCard = ownedCardById(item.cardId)
+  const card = toCard || normalizeCard({
+    id: item.cardId,
+    cardAdId: item.cardId,
+    name: item.cardName,
+    issuer: item.issuer,
+    imageUrl: item.imageUrl,
+    benefitSummary: item.benefitLabel || item.title || '',
+  }, index, transactions.value)
+  if (!card?.id) return null
+
+  const label = String(item.category || '추천 분야').replace(/\s+/g, ' ').trim()
+  const estimatedBenefit = Number(item.estimatedBenefit || 0)
+  const potentialBenefit = Number(item.potentialBenefit || 0)
+  const remaining = Number(item.remainingCurrentSpend || 0)
+  const benefitText = estimatedBenefit > 0
+    ? `${item.benefitLabel || '예상 혜택'} · 월 ${krw(estimatedBenefit)}`
+    : potentialBenefit > 0 && remaining > 0
+      ? `조건까지 ${krw(remaining)} · 월 ${krw(potentialBenefit)} 가능`
+      : item.benefitLabel || item.body || card.benefitSummary || ''
+
+  return {
+    id: item.id || `owned-category-${label}-${card.id || index}`,
+    label,
+    icon: categoryIcon(label),
+    card,
+    benefitText,
+    route: { path: '/recommendations/new', query: { category: label, cardId: card.id } },
+  }
+}
+
+function buildCategoryGuideFromRouting(item, index) {
+  const toCard = ownedCardById(item.toCardId)
+  const isOwnedSuggestion = String(item.scope || '').toLowerCase() === 'owned' || Boolean(toCard)
+  if (!isOwnedSuggestion) return null
+
+  const card = toCard || normalizeCard({
+    id: item.toCardId,
+    cardAdId: item.toCardId,
+    name: item.toCardName,
+    issuer: item.toIssuer,
+    imageUrl: item.toImageUrl,
+    benefitSummary: item.benefitLabel || item.title || '',
+  }, index, transactions.value)
+  const gain = Number(item.monthlyGain || 0)
+  const label = String(item.category || '추천 분야').replace(/\s+/g, ' ').trim()
+  const fromCardName = String(item.fromCardName || '').trim()
+
+  return {
+    id: item.id || `owned-route-${label}-${card.id || index}`,
+    label,
+    icon: categoryIcon(label),
+    card,
+    benefitText: gain > 0
+      ? `월 ${signedKrw(gain)} 예상${fromCardName ? ` · ${fromCardName}보다 유리` : ''}`
+      : item.benefitLabel || item.body || card.benefitSummary || '',
+    route: { path: '/recommendations/new', query: { category: label, cardId: card.id } },
+  }
+}
+
+const categoryGuides = computed(() => {
+  if (backendCategoryGuides.value.length) return backendCategoryGuides.value
+  return categoryGuideDefs
     .map((def) => {
       const result = bestCardForKeywords(def.keywords)
       return result ? { ...def, card: result.card, benefitText: result.benefitText } : null
     })
-    .filter(Boolean),
-)
+    .filter(Boolean)
+})
 
-const merchantRecommendationLink = computed(() => {
-  const item = merchantRecommendation.value
-  if (!item) return '/budget'
-  return {
-    path: '/budget',
-    query: {
-      category: item.category,
-      cardId: item.recommendedCard.id,
-    },
-  }
+const backendCategoryGuides = computed(() => {
+  const ownedGuides = (recommendationBundle.value?.ownedCategoryGuides || [])
+    .map((item, index) => buildCategoryGuideFromOwnedGuide(item, index))
+    .filter(Boolean)
+  if (ownedGuides.length) return ownedGuides.slice(0, 3)
+
+  return (recommendationBundle.value?.routingSuggestions || [])
+    .filter((item) => Number(item.monthlyGain || 0) > 0)
+    .map((item, index) => buildCategoryGuideFromRouting(item, index))
+    .filter(Boolean)
+    .slice(0, 3)
 })
 let cardGlideTimer = null
 let cardSearchTimer = null
@@ -483,168 +546,70 @@ function txCard(tx) {
   return cards.value.find((card) => String(card.id) === String(tx.cardId)) || null
 }
 
-function transactionAmount(tx) {
-  return Number(tx.amount ?? tx.amt) || 0
-}
-
-function transactionCategory(tx) {
-  return String(tx.category || tx.cat || '기타').trim()
-}
-
-function transactionMerchant(tx) {
-  return String(tx.merchant || tx.merchantName || tx.merchant_name || '최근 결제').replace(/\s+/g, ' ').trim()
-}
-
-function normalizeSearchText(value) {
-  return String(value || '').toLowerCase().replace(/\s+/g, ' ')
-}
-
-function includesAny(text, keywords) {
-  return keywords.some((keyword) => text.includes(normalizeSearchText(keyword)))
-}
-
-function cardBenefitText(card) {
-  return normalizeSearchText([
-    card.name,
-    card.issuer,
-    card.benefitSummary,
-    card.titleDescription,
-    ...(card.benefits || []),
-  ].filter(Boolean).join(' '))
-}
-
-function inferPaymentBenefitRate(card, tx) {
-  const cardId = String(card.id || card.cardAdId || card.card_ad_id)
-  const usageText = normalizeSearchText(`${transactionCategory(tx)} ${transactionMerchant(tx)}`)
-  const benefitText = cardBenefitText(card)
-  let rate = 0
-
-  if (cardId === '10106') {
-    if (includesAny(usageText, ['카페', '커피', '컴포즈', '스타벅스', '편의점', 'gs25', 'cu'])) {
-      rate = Math.max(rate, 0.06)
-    } else if (includesAny(usageText, ['식비', '외식', '배달'])) {
-      rate = Math.max(rate, 0.06)
-    }
-  }
-  if (cardId === '10612' && includesAny(usageText, ['쇼핑', '뷰티', '온라인', '무신사', '쿠팡', '올리브영'])) {
-    rate = Math.max(rate, 0.1)
-  }
-  if (cardId === '10029') {
-    rate = Math.max(rate, includesAny(usageText, ['교통', '택시', '전철', '철도', '지하철', '버스', '카카오t']) ? 0.01 : 0.015)
-  }
-
-  if (includesAny(usageText, ['쇼핑', '뷰티', '온라인']) && includesAny(benefitText, ['쇼핑', '온라인', '오프라인'])) {
-    rate = Math.max(rate, 0.01)
-  }
-  if (includesAny(usageText, ['마트', '이마트']) && includesAny(benefitText, ['마트', '이마트'])) {
-    rate = Math.max(rate, 0.15)
-  }
-  if (includesAny(usageText, ['교통', '택시', '전철', '철도', '지하철', '버스']) && includesAny(benefitText, ['교통', '대중교통'])) {
-    rate = Math.max(rate, 0.1)
-  }
-  if (includesAny(usageText, ['편의점', 'gs25']) && includesAny(benefitText, ['편의점', '생활'])) {
-    rate = Math.max(rate, 0.05)
-  }
-  if (!rate && includesAny(benefitText, ['언제나', '일상', '가맹점'])) {
-    rate = 0.015
-  }
-  if (!rate && includesAny(benefitText, ['국내외 가맹점', '적립'])) {
-    rate = 0.005
-  }
-
-  return rate
-}
-
-function formatBenefitRate(rate) {
-  if (!rate) return '혜택'
-  return `${Number((rate * 100).toFixed(1))}%`
-}
-
-function buildMerchantRecommendation(tx) {
-  const amount = Math.abs(transactionAmount(tx))
-  if (!amount || !cards.value.length) return null
-
-  const currentCard = txCard(tx) || activeCard.value || cards.value[0]
-  const scoredCards = cards.value.map((card) => {
-    const rate = inferPaymentBenefitRate(card, tx)
-    const score = scoreCardBenefit({ card, amount, rate })
-    return {
-      card,
-      rate,
-      benefit: score.activeBenefit,
-      grossBenefit: score.grossBenefit,
-      performance: score,
-    }
-  })
-  const currentScore = scoredCards.find((item) => String(item.card.id) === String(currentCard.id)) || scoredCards[0]
-  const activeScores = scoredCards.filter((item) => item.grossBenefit > 0 && item.performance.currentBenefitEligible)
-  const blockedScores = scoredCards.filter((item) => item.grossBenefit > 0)
-  const bestScore = (activeScores.length ? activeScores : blockedScores).sort((a, b) => (
-    b.benefit - a.benefit
-    || Number(!b.performance.blocked) - Number(!a.performance.blocked)
-    || b.grossBenefit - a.grossBenefit
-    || a.performance.remainingAfter - b.performance.remainingAfter
-  ))[0]
-  if (!bestScore || bestScore.grossBenefit <= 0) return null
-
-  const extraBenefit = Math.max(bestScore.benefit - (currentScore?.benefit || 0), 0)
-  const merchant = transactionMerchant(tx)
-  const category = transactionCategory(tx)
-  const performance = bestScore.performance
-  const isBlocked = !performance.currentBenefitEligible
-  const performanceNote = performance.noPerformanceRequired
-    ? '무실적 혜택 카드'
-    : performance.currentBenefitEligible
-    ? '이번 달 혜택 가능 카드'
-    : performance.nextMonthWillQualify
-      ? '이번 지출로 다음 달 조건 충족'
-      : `다음 달 조건까지 ${krw(performance.remainingAfter)} 부족`
-  const performanceTone = isBlocked ? 'is-waiting' : 'is-ready'
-  const isSameCard = String(bestScore.card.id) === String(currentCard.id)
-  const headline = isBlocked
-    ? `${bestScore.card.name}은 다음 달 혜택 준비가 필요해요`
-    : performance.noPerformanceRequired
-      ? `${bestScore.card.name}는 조건 없이 혜택 가능해요`
-    : performance.nextMonthWillQualify && !performance.currentBenefitEligible
-      ? `${bestScore.card.name}은 다음 달 혜택 조건을 채워요`
-      : `${bestScore.card.name}로 결제하면 좋아요`
-  const routeTargetLabel = isSameCard
-    ? isBlocked ? '다음달 준비' : performance.noPerformanceRequired ? '무실적 유지' : '현재 카드 유지'
-    : bestScore.card.name
-  const message = isBlocked
-    ? `이번 결제는 다음 달 실적에 반영돼요. 현재 ${krw(performance.spent)} 사용 중이고, ${category} 예정을 더해도 ${krw(performance.remainingAfter)} 부족합니다.`
-    : performance.noPerformanceRequired
-      ? `${category} 예정 지출은 전월 조건 없이 바로 혜택 계산이 가능해요.`
-      : extraBenefit > 0
-      ? `${category} 예정 지출은 ${currentCard.name}보다 약 ${krw(extraBenefit)} 더 유리해요.`
-      : `${category} 예정 지출은 실적 조건과 혜택을 함께 보면 지금 카드가 잘 맞아요.`
-
+function transactionPaymentContext(tx) {
   return {
-    transaction: tx,
-    merchant,
-    category,
-    amount,
-    currentCard,
-    recommendedCard: bestScore.card,
-    expectedBenefit: bestScore.benefit,
-    potentialBenefit: bestScore.grossBenefit,
-    extraBenefit,
-    rateLabel: formatBenefitRate(bestScore.rate),
-    isBlocked,
-    performanceNote,
-    performanceTone,
-    headline,
-    routeTargetLabel,
-    message,
+    paymentType: tx.paymentType || tx.payment_type || 'lump_sum',
+    installmentMonths: Number(tx.installmentMonths ?? tx.installment_months ?? 0),
+    isInterestFreeInstallment: Boolean(tx.isInterestFreeInstallment ?? tx.is_interest_free_installment ?? false),
   }
+}
+
+function transactionPaymentLabel(tx) {
+  return paymentContextLabel(transactionPaymentContext(tx))
 }
 
 function benefitTags(card) {
-  const candidates = card.benefits?.length ? card.benefits : [card.benefitSummary || card.titleDescription]
-  return candidates
-    .map((benefit) => String(benefit || '').replace(/\s+/g, ' ').trim())
+  const itemLabels = (card.benefitItems || card.benefit_items || [])
+    .map((item) => benefitItemTag(item))
     .filter(Boolean)
+  const candidates = itemLabels.length
+    ? itemLabels
+    : card.benefits?.length
+      ? card.benefits
+      : [card.benefitSummary || card.titleDescription]
+  const unique = []
+  const seen = new Set()
+  candidates.forEach((benefit) => {
+    const label = String(benefit || '').replace(/\s+/g, ' ').trim()
+    if (!label || seen.has(label)) return
+    seen.add(label)
+    unique.push(label)
+  })
+  return unique
     .slice(0, 2)
+}
+
+function benefitItemTag(item = {}) {
+  const scope = benefitItemDisplayScope(item)
+  if (scope) return `${scope} 할인`
+  const label = String(item.label || '').replace(/\s+/g, ' ').trim()
+  return label.replace(/\s*(최대\s*)?\d+(?:\.\d+)?%\s*/g, '').replace(/\s+/g, ' ').trim()
+}
+
+function benefitItemDisplayScope(item = {}) {
+  const normalized = Array.isArray(item.normalizedCategories || item.normalized_categories)
+    ? item.normalizedCategories || item.normalized_categories
+    : []
+  const categoryMap = {
+    dining: '식비',
+    cafe_bakery: '카페',
+    shopping: '쇼핑',
+    convenience_store: '편의점',
+    transportation: '교통',
+    beauty: '뷰티',
+    subscription: '구독',
+    culture: '문화',
+  }
+  const mapped = normalized.map((key) => categoryMap[String(key)]).find(Boolean)
+  if (mapped) return mapped
+
+  const categories = Array.isArray(item.categories) ? item.categories : []
+  const readableCategory = categories.map((value) => String(value || '').replace(/\s+/g, ' ').trim()).find((value) => /[가-힣A-Za-z0-9]/.test(value))
+  if (readableCategory) return readableCategory.split('/')[0]
+
+  const scope = String(item.scope || item.category || item.name || '').replace(/\s+/g, ' ').trim()
+  if (/[가-힣A-Za-z0-9]/.test(scope)) return scope
+  return ''
 }
 
 function candidateCardId(card) {
@@ -672,6 +637,15 @@ async function loadWalletData() {
   cards.value = apiCards.map((card, index) => normalizeCard(card, index, apiTransactions))
   activeCardIndex.value = Math.min(activeCardIndex.value, Math.max(cards.value.length - 1, 0))
   await nextTick()
+}
+
+async function loadRecommendationBundle() {
+  try {
+    recommendationBundle.value = await fetchCardRecommendationBundle()
+  } catch (error) {
+    recommendationBundle.value = null
+    console.warn('카드 추천 API를 불러오지 못해 보유 카드 키워드 기준으로 표시합니다.', error)
+  }
 }
 
 async function loadCandidateCards() {
@@ -727,6 +701,7 @@ async function handleAddCandidate(candidate) {
     await addOwnedCard(id)
     cardManageMessage.value = '보유 카드에 추가했습니다.'
     await loadWalletData()
+    await loadRecommendationBundle()
     await loadCandidateCards()
     const addedIndex = cards.value.findIndex((card) => String(card.id) === id)
     if (addedIndex >= 0) focusCard(addedIndex)
@@ -750,6 +725,7 @@ async function handleDeleteActiveCard() {
     cardManageMessage.value = '보유 카드에서 삭제했습니다.'
     activeCardIndex.value = Math.max(activeCardIndex.value - 1, 0)
     await loadWalletData()
+    await loadRecommendationBundle()
   } catch (error) {
     cardManageError.value = '카드를 삭제하지 못했습니다.'
   } finally {
@@ -764,6 +740,7 @@ async function deleteActiveCardFromMenu() {
 onMounted(async () => {
   try {
     await loadWalletData()
+    await loadRecommendationBundle()
   } catch (error) {
     console.warn('대시보드 API를 불러오지 못해 기본 데이터를 사용합니다.', error)
   }
@@ -2014,8 +1991,8 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 0;
-  width: fit-content;
+  gap: 6px 12px;
+  width: 100%;
   max-width: 100%;
   margin: 0 auto;
   overflow: visible;
@@ -2029,9 +2006,10 @@ onMounted(async () => {
 
 .benefit-chips span {
   position: relative;
+  min-width: 0;
   border: 0;
   border-radius: 0;
-  padding: 0 10px;
+  padding: 0;
   background: transparent;
   color: #4a5663;
   font-size: 11px;
@@ -2182,176 +2160,6 @@ onMounted(async () => {
   height: 42px;
   max-width: none;
   transform: translate(-50%, -50%) rotate(90deg);
-}
-
-.payment-advice-section {
-  margin-top: 18px;
-}
-
-.payment-advice-card {
-  display: block;
-  overflow: hidden;
-  border: 1px solid rgba(15, 95, 174, 0.12);
-  border-radius: 18px;
-  padding: 14px;
-  background:
-    radial-gradient(circle at 92% 0%, rgba(0, 140, 149, 0.1), transparent 34%),
-    linear-gradient(145deg, #ffffff 0%, #f8fbfe 100%);
-  color: inherit;
-  text-decoration: none;
-  box-shadow: 0 10px 24px rgba(36, 54, 79, 0.08);
-}
-
-.advice-topline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.advice-topline span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: #0f5fae;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.advice-topline b {
-  flex-shrink: 0;
-  border-radius: 999px;
-  padding: 5px 8px;
-  background: rgba(0, 140, 149, 0.1);
-  color: #008c95;
-  font-size: 11px;
-  font-weight: 950;
-}
-
-.advice-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 48px;
-  align-items: center;
-  gap: 12px;
-}
-
-.advice-copy {
-  min-width: 0;
-}
-
-.advice-copy span {
-  display: block;
-  color: #7a8795;
-  font-size: 11px;
-  font-weight: 800;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.advice-copy strong {
-  display: block;
-  margin-top: 4px;
-  color: #17202b;
-  font-size: 15px;
-  font-weight: 950;
-  line-height: 1.25;
-  word-break: keep-all;
-}
-
-.advice-copy p {
-  margin: 6px 0 0;
-  color: #536170;
-  font-size: 12px;
-  font-weight: 750;
-  line-height: 1.45;
-  word-break: keep-all;
-}
-
-.advice-performance {
-  display: inline-flex;
-  width: fit-content;
-  margin-top: 8px;
-  border-radius: 999px;
-  padding: 5px 8px;
-  background: rgba(15, 95, 174, 0.08);
-  color: #0f5fae;
-  font-size: 10.5px;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.advice-performance.is-waiting {
-  background: rgba(249, 115, 22, 0.1);
-  color: #c2410c;
-}
-
-.advice-performance.is-ready {
-  background: rgba(0, 140, 149, 0.1);
-  color: #007780;
-}
-
-.advice-card-image {
-  position: relative;
-  display: block;
-  width: 40px;
-  height: 56px;
-  justify-self: end;
-  overflow: hidden;
-  border-radius: 7px;
-  background: #e8edf2;
-  box-shadow: 0 8px 18px rgba(36, 54, 79, 0.16);
-}
-
-.advice-card-image img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.advice-card-image img.is-landscape {
-  inset: auto;
-  top: 50%;
-  left: 50%;
-  width: 56px;
-  height: 40px;
-  transform: translate(-50%, -50%) rotate(90deg);
-}
-
-.advice-route {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  border-top: 1px solid rgba(32, 36, 42, 0.08);
-  padding-top: 11px;
-}
-
-.advice-route span,
-.advice-route strong {
-  min-width: 0;
-  overflow: hidden;
-  color: #6f7d8c;
-  font-size: 11px;
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.advice-route i {
-  display: block;
-  height: 1px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(15, 95, 174, 0.48), transparent);
-}
-
-.advice-route strong {
-  color: #24364f;
-  text-align: right;
 }
 
 .section-block {

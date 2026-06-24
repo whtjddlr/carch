@@ -142,7 +142,7 @@ import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, cards as mockCards, expenseModes, krw } from '@/data/mockData'
 import { readBudgetOverride, readCustomBudgetCategories } from '@/services/budgetStorage'
 import { budgetProgressWidth, budgetRiskColor, budgetUsagePercent } from '@/utils/budgetRisk'
-import { scoreCardBenefit } from '@/utils/cardPerformance'
+import { compareCardBenefitCandidates, scoreCardBenefit, summarizeWalletPerformance } from '@/utils/cardPerformance'
 
 function modeIcon(id) {
   if (id === 'within-budget') return PiggyBank
@@ -156,6 +156,7 @@ const budgetOverride = readBudgetOverride()
 const totalBudget = computed(() => budgetOverride ?? displayBudgetCategories.reduce((sum, category) => sum + category.budget, 0))
 const totalSpent = computed(() => displayBudgetCategories.reduce((sum, category) => sum + category.spent, 0))
 const cards = mockCards
+const walletPerformance = computed(() => summarizeWalletPerformance(cards))
 const cardGuideItems = computed(() => (
   prioritizeCardGuideItems(displayBudgetCategories
     .map((category) => {
@@ -163,6 +164,10 @@ const cardGuideItems = computed(() => (
       const recommendation = recommendCardForCategory(category.name, remaining)
       const card = recommendation?.card
       if (!card) return null
+      const needsPreparationOnly = walletPerformance.value.needsPreparationOnly && !recommendation.performance.currentBenefitEligible
+      const fillsPerformanceOverNoPerformance = walletPerformance.value.hasOnlyNoPerformanceReady
+        && !recommendation.performance.currentBenefitEligible
+        && recommendation.performance.nextMonthWillQualify
       return {
         category,
         card,
@@ -170,8 +175,11 @@ const cardGuideItems = computed(() => (
         rateLabel: benefitRateLabel(category.name, card),
         benefit: recommendation.benefit,
         potentialBenefit: recommendation.grossBenefit,
+        grossBenefit: recommendation.grossBenefit,
         performance: recommendation.performance,
-        performanceLabel: performanceStatusLabel(recommendation.performance),
+        needsPreparationOnly,
+        fillsPerformanceOverNoPerformance,
+        performanceLabel: performanceStatusLabel(recommendation.performance, needsPreparationOnly, fillsPerformanceOverNoPerformance),
         performanceTone: performanceStatusTone(recommendation.performance),
         remainingLabel: remaining > 0 ? `${krw(remaining)} 남음` : '예산 초과',
       }
@@ -311,25 +319,21 @@ function benefitRateLabel(categoryName, card) {
 }
 
 function sortCardRecommendations(a, b) {
-  return b.benefit - a.benefit
-    || Number(!b.performance.blocked) - Number(!a.performance.blocked)
-    || b.grossBenefit - a.grossBenefit
-    || a.performance.remainingAfter - b.performance.remainingAfter
+  return compareCardBenefitCandidates(a, b)
 }
 
 function sortCardGuideItems(a, b) {
-  return b.benefit - a.benefit
-    || Number(!b.performance.blocked) - Number(!a.performance.blocked)
-    || b.potentialBenefit - a.potentialBenefit
-    || a.performance.remainingAfter - b.performance.remainingAfter
+  return compareCardBenefitCandidates(a, b)
     || b.remaining - a.remaining
 }
 
-function performanceStatusLabel(performance) {
+function performanceStatusLabel(performance, needsPreparationOnly = false, fillsPerformanceOverNoPerformance = false) {
   if (!performance) return '실적 정보 없음'
   if (performance.noPerformanceRequired) return '무실적 혜택'
   if (performance.currentBenefitEligible) return '이번 달 혜택 가능'
+  if (fillsPerformanceOverNoPerformance) return '무실적보다 실적 완성'
   if (performance.nextMonthWillQualify) return '다음 달 조건 충족'
+  if (needsPreparationOnly) return '실적 준비 우선'
   return `다음 달 조건 ${krw(performance.remainingAfter)} 부족`
 }
 
@@ -344,6 +348,15 @@ function cardGuideReason(item) {
   }
   if (item.performance?.currentBenefitEligible) {
     return `${item.category.name} 예산은 전월 실적이 충족된 카드라 이번 달 혜택을 받을 수 있어요.`
+  }
+  if (item.fillsPerformanceOverNoPerformance) {
+    return `무실적 카드는 당장 혜택을 받을 수 있지만, ${item.category.name} 예산은 ${item.card.name} 실적을 완성해 다음 달 혜택을 여는 쪽이 더 좋아요.`
+  }
+  if (item.needsPreparationOnly && item.performance?.nextMonthWillQualify) {
+    return `전월 실적 충족 카드가 없어 이번 달 혜택은 어렵지만, ${item.category.name} 예산을 ${item.card.name}에 쓰면 다음 달 조건을 열 수 있어요.`
+  }
+  if (item.needsPreparationOnly) {
+    return `전월 실적 충족 카드가 없어 이번 달은 혜택보다 다음 달 조건 준비가 우선이에요. ${item.card.name}은 ${item.category.name} 기대혜택이 가장 큽니다.`
   }
   if (item.performance?.nextMonthWillQualify) {
     return `${item.category.name} 지출을 ${item.card.name}에 모으면 다음 달 혜택 조건을 채워요.`
