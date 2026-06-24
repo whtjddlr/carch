@@ -245,6 +245,7 @@ import { useRouter } from 'vue-router'
 import { CalendarClock, Check, ChevronRight, CreditCard, Pencil, PiggyBank, Search, Zap } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, cards as mockCards, expenseModes, krw } from '@/data/mockData'
+import { demoMonthSummary } from '@/data/monthlyAnalytics'
 import { readBudgetOverride, readCustomBudgetCategories, writeBudgetOverride } from '@/services/budgetStorage'
 import { budgetProgressWidth, budgetRiskColor, budgetRiskLabel, budgetUsagePercent } from '@/utils/budgetRisk'
 import { compareCardBenefitCandidates, scoreCardBenefit, summarizeWalletPerformance } from '@/utils/cardPerformance'
@@ -410,13 +411,17 @@ function shortKrw(value) {
 }
 // 최근 5개월 예산(연한 트랙) + 사용(색상) 겹침 막대그래프
 const barChart = computed(() => {
+  // 과거 달 사용액은 분석 화면과 동일한 데모 데이터(monthlyAnalytics)에서 가져와 숫자를 일치시킨다
+  const monthBudget = { '2026-02': 600000, '2026-03': 700000, '2026-04': 700000, '2026-05': 750000 }
   const months = [
-    { label: '2월', ym: '2026-02', budget: 1100000, spent: 980000 },
-    { label: '3월', ym: '2026-03', budget: 1100000, spent: 1162000 },
-    { label: '4월', ym: '2026-04', budget: 1200000, spent: 1043000 },
-    { label: '5월', ym: '2026-05', budget: 910000, spent: 620000 },
-    { label: '6월', ym: '2026-06', budget: currentBudget.value.budget, spent: currentBudget.value.spent, current: true },
-  ]
+    { label: '2월', ym: '2026-02' },
+    { label: '3월', ym: '2026-03' },
+    { label: '4월', ym: '2026-04' },
+    { label: '5월', ym: '2026-05' },
+    { label: '6월', ym: '2026-06', current: true },
+  ].map((m) => (m.current
+    ? { ...m, budget: currentBudget.value.budget, spent: currentBudget.value.spent }
+    : { ...m, budget: monthBudget[m.ym] || 0, spent: demoMonthSummary(m.ym)?.totalExpense || 0 }))
   const w = 320
   const h = 168
   const padTop = 28

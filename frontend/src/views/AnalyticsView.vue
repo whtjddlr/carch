@@ -222,6 +222,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { BarChart3, ChevronDown, ChevronRight, CreditCard, FileText, RefreshCw, Sparkles } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { cards as mockCards, krw, transactions as mockTransactions } from '@/data/mockData'
@@ -258,9 +259,20 @@ function writeStoredList(key, value) {
 const recurringOverrides = ref(readStoredList(RECURRING_STORAGE_KEY))
 const handledReviewCategories = ref(readStoredList(REVIEW_HANDLED_STORAGE_KEY))
 
+const route = useRoute()
 const LATEST_MONTH = '2026-06'
 const selectedMonth = ref(null)
 const isMonthMenuOpen = ref(false)
+
+// 소비계획에서 ?month=YYYY-MM 으로 넘어오면 그 달 분석을 보여준다
+function applyMonthFromRoute() {
+  const month = String(route.query.month || '')
+  if (!/^\d{4}-\d{2}$/.test(month)) return
+  selectedMonth.value = month === LATEST_MONTH ? null : month
+  dialYear.value = Number(month.slice(0, 4))
+  dialMonth.value = Number(month.slice(5, 7))
+}
+watch(() => route.query.month, applyMonthFromRoute)
 
 const safeSummary = computed(() => {
   if (selectedMonth.value) {
@@ -731,7 +743,10 @@ function categoryDescription(category, index) {
   return '이번 달 주요 지출'
 }
 
-onMounted(loadSummary)
+onMounted(() => {
+  applyMonthFromRoute()
+  loadSummary()
+})
 </script>
 
 <style scoped>
