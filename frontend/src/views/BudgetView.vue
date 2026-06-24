@@ -18,7 +18,7 @@
       </div>
       <div class="budget-summary-box">
         <div>
-          <span>사용</span>
+          <span>예산 내 사용</span>
           <strong>{{ krw(totalSpent) }}</strong>
         </div>
         <div>
@@ -36,7 +36,7 @@
         <div class="summary-progress">
           <i :style="{ width: `${budgetProgressWidth(percent)}%`, background: budgetRiskColor(percent) }" />
         </div>
-        <p>{{ isEditingBudget ? '이번 달 전체 예산을 입력하고 ✓ 를 누르세요' : `전체 예산의 ${percent}% 사용 중` }}</p>
+        <p>{{ isEditingBudget ? '이번 달 전체 예산을 입력하고 저장을 눌러주세요' : `전체 예산의 ${percent}% 사용 중` }}</p>
       </div>
     </header>
 

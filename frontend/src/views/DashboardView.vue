@@ -408,7 +408,7 @@ function buildCategoryGuideFromOwnedGuide(item, index) {
   const potentialBenefit = Number(item.potentialBenefit || 0)
   const remaining = Number(item.remainingCurrentSpend || 0)
   const monthlyCap = Number(item.limit || item.monthlyCap || 0)
-  const discountLabel = item.benefitLabel || item.body || card.benefitSummary || ''
+  const discountLabel = compactBenefitLabel(item.benefitLabel || item.title || card.benefitSummary || '')
   const benefitText = monthlyCap > 0
     ? `${discountLabel} · 월 최대 ${krw(monthlyCap)} 가능`
     : discountLabel
@@ -426,6 +426,13 @@ function buildCategoryGuideFromOwnedGuide(item, index) {
     nextMonthEligible: Boolean(item.nextMonthEligible),
     route: { path: '/recommendations/usage', query: { category: label, cardId: card.id } },
   }
+}
+
+function compactBenefitLabel(value) {
+  return String(value || '')
+    .replace(/\s*(최대\s*)?\d+(?:\.\d+)?%\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function categoryGuidePriority(item = {}) {

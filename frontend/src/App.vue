@@ -50,7 +50,7 @@ import { computed, nextTick, onErrorCaptured, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { BarChart3, ClipboardList, Code2, Home, Users } from 'lucide-vue-next'
 
-const isDev = import.meta.env.DEV
+const isDev = import.meta.env.DEV && import.meta.env.VITE_SHOW_DEV_FAB === 'true'
 const currentRoute = useRoute()
 const routeError = ref(null)
 const routeErrorMessage = computed(() => routeError.value?.message || '잠시 후 다시 시도해 주세요.')

@@ -10,7 +10,7 @@
 
       <RouterLink class="current-summary" to="/budget/current" aria-label="6월 예산 상세 보기">
         <div class="summary-top">
-          <span>이번 달 사용</span>
+          <span>예산 내 사용</span>
           <strong>{{ krw(currentBudget.spent) }}</strong>
         </div>
         <div class="summary-meta">

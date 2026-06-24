@@ -229,6 +229,18 @@ const expectedSaving = computed(() =>
 )
 const topRecommendation = computed(() => recommendationBundle.value?.results?.[0] || null)
 const topRecommendationEconomics = computed(() => topRecommendation.value?.economics || {})
+const cardNameById = computed(() => {
+  const map = new Map()
+  ;[
+    ...(recommendationBundle.value?.ownedCategoryGuides || []),
+    ...(recommendationBundle.value?.ownedCards || []),
+  ].forEach((item) => {
+    const id = item.cardId || item.id || item.card_ad_id
+    const name = item.cardName || item.name || item.card_name
+    if (id && name) map.set(String(id), name)
+  })
+  return map
+})
 
 const trendPeriodLabel = computed(() => {
   const currentMonth = spendingTrend.value?.currentMonth || safeSummary.value.period?.currentMonth
@@ -297,13 +309,13 @@ const cardRows = computed(() => {
   const sourceRows = insightRows.length
     ? insightRows.map((item) => ({
       id: item.cardId || item.cardName,
-      name: item.cardName || `카드 ${item.cardId}`,
+      name: analyticsCardName(item),
       amount: Number(item.amount || 0),
       caption: item.fit ? `적합도 ${item.fit}` : (item.insight || '사용 흐름 확인'),
     }))
     : (safeSummary.value.byCard || []).map((item) => ({
       id: item.cardId,
-      name: `카드 ${item.cardId}`,
+      name: analyticsCardName(item),
       amount: Number(item.amount || 0),
       caption: '사용 흐름 확인',
     }))
@@ -383,6 +395,11 @@ function buildMockSummary() {
       })),
     },
   }
+}
+
+function analyticsCardName(item = {}) {
+  const id = item.cardId || item.id
+  return item.cardName || item.name || cardNameById.value.get(String(id)) || `카드 ${id}`
 }
 
 function buildEmptySummary() {

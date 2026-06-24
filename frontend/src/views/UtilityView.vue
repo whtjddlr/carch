@@ -888,7 +888,28 @@ function reportCategoryColor(cat, index) {
   return budgetCategory?.color || reportPalette[index % reportPalette.length]
 }
 
-const reportExpenseRows = computed(() => transactionRows.value.filter((tx) => Number(tx.amt) < 0))
+function parseTransactionDate(value) {
+  const date = value ? new Date(`${value}T00:00:00`) : null
+  return date && !Number.isNaN(date.getTime()) ? date : null
+}
+
+const allReportExpenseRows = computed(() => transactionRows.value.filter((tx) => Number(tx.amt) < 0))
+const latestReportExpenseDate = computed(() => {
+  const latest = [...allReportExpenseRows.value].sort((a, b) => String(b.date).localeCompare(String(a.date)))[0]
+  return parseTransactionDate(latest?.date) || new Date()
+})
+const reportPeriod = computed(() => ({
+  year: latestReportExpenseDate.value.getFullYear(),
+  monthIndex: latestReportExpenseDate.value.getMonth(),
+  month: latestReportExpenseDate.value.getMonth() + 1,
+}))
+const reportExpenseRows = computed(() => {
+  const { year, monthIndex } = reportPeriod.value
+  return allReportExpenseRows.value.filter((tx) => {
+    const date = parseTransactionDate(tx.date)
+    return date && date.getFullYear() === year && date.getMonth() === monthIndex
+  })
+})
 const reportTotalSpent = computed(() => reportExpenseRows.value.reduce((sum, tx) => sum + Math.abs(Number(tx.amt) || 0), 0))
 const reportCategories = computed(() => {
   const map = new Map()
@@ -945,15 +966,6 @@ const reportDonutBackground = computed(() => {
   return `conic-gradient(${segments.join(', ')})`
 })
 
-const reportPeriod = computed(() => {
-  const latest = [...reportExpenseRows.value].sort((a, b) => String(b.date).localeCompare(String(a.date)))[0]
-  const date = latest?.date ? new Date(`${latest.date}T00:00:00`) : new Date()
-  return {
-    year: date.getFullYear(),
-    monthIndex: date.getMonth(),
-    month: date.getMonth() + 1,
-  }
-})
 const reportPeriodLabel = computed(() => `${reportPeriod.value.year}.${String(reportPeriod.value.month).padStart(2, '0')}`)
 const reportWeekdays = ['일', '월', '화', '수', '목', '금', '토']
 const reportLatestDay = computed(() => {
