@@ -1078,7 +1078,7 @@ onMounted(() => {
   margin: 5px 0 3px;
   color: #17202b;
   font-size: clamp(13px, 3.7vw, 16px);
-  font-weight: 950;
+  font-weight: 500;
   letter-spacing: 0;
   line-height: 1.14;
   text-overflow: ellipsis;
@@ -1196,7 +1196,7 @@ onMounted(() => {
 .category-row-head strong {
   color: #17202b;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -1210,7 +1210,7 @@ onMounted(() => {
 .category-amount em {
   color: #8a9aad;
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 500;
   font-style: normal;
 }
 
@@ -1363,7 +1363,7 @@ onMounted(() => {
   display: block;
   color: #17202b;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .card-usage-value span {

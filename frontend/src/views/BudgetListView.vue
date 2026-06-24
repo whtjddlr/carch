@@ -999,12 +999,12 @@ h1 {
 
 .cs-meta .cs-pct {
   font-size: 14px;
-  font-weight: 950;
+  font-weight: 500;
 }
 
 .cs-meta .cs-remain {
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 500;
 }
 
 .budget-list-body {
@@ -1148,13 +1148,13 @@ h1 {
 .ubar-head b {
   color: #17202b;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 500;
 }
 
 .ubar-head b i {
   color: #9aa6b3;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 500;
   font-style: normal;
 }
 
@@ -1352,7 +1352,7 @@ h1 {
   flex-shrink: 0;
   color: #16a34a;
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 500;
   letter-spacing: -0.3px;
   font-variant-numeric: tabular-nums;
 }
@@ -1360,7 +1360,7 @@ h1 {
 .ai-reco-benefit.muted {
   color: #9aa6b3;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .plan-section {
@@ -1635,7 +1635,7 @@ h1 {
   align-items: center;
   padding: 5px 2px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.2px;
 }
@@ -1683,7 +1683,7 @@ h1 {
 .tm-row.cur span,
 .tm-row.cur .tm-month {
   color: #20242a;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .tm-row.cur .tm-budget {
@@ -1693,12 +1693,12 @@ h1 {
 /* 잔액: + 초록 / − 빨강 (현재월 강조 행에서도 색 유지) */
 .trend-months .tm-row .pos {
   color: #16a34a;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .trend-months .tm-row .neg {
   color: #e5484d;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .plan-entry {
