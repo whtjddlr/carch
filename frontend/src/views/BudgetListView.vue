@@ -246,7 +246,7 @@ import { CalendarClock, Check, ChevronRight, CreditCard, Pencil, PiggyBank, Sear
 import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, cards as mockCards, expenseModes, krw } from '@/data/mockData'
 import { demoMonthSummary } from '@/data/monthlyAnalytics'
-import { fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
+import { fetchCardRecommendationBundle, fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
 import { readBudgetOverride, readCustomBudgetCategories, writeBudgetOverride } from '@/services/budgetStorage'
 import { budgetProgressWidth, budgetRiskColor, budgetRiskLabel, budgetUsagePercent } from '@/utils/budgetRisk'
 import { compareCardBenefitCandidates, scoreCardBenefit, summarizeWalletPerformance } from '@/utils/cardPerformance'
@@ -434,10 +434,52 @@ const cardUsageList = computed(() => walletCards.value.map((card) => {
   }
 }))
 
-// AI 카드 추천: 남은 예산 + 카드 실적 기준으로 카테고리별 최적 카드 제안
-const aiRecommendations = computed(() => cardGuideItems.value.slice(0, 3))
-const aiPotentialSaving = computed(() =>
-  aiRecommendations.value.reduce((sum, item) => sum + (Number(item.benefit) || 0), 0))
+// AI 카드 추천: 실제 추천 엔진(/api/recommendations/cards/)의 ownedCategoryGuides 우선,
+// 실패하거나 비어 있으면 기존 로컬 추천(cardGuideItems)으로 폴백 → 섹션은 항상 동일하게 채워짐.
+const CATEGORY_EMOJI = {
+  식비: '🥗', 외식: '🥗', 카페: '☕', 쇼핑: '🛍️', 뷰티: '💄', 교통: '🚇', 교육: '📚',
+  편의점: '🏪', 문화: '🎬', 헬스: '🏋️', 생활: '🏠', 통신: '📡', 구독: '📺',
+}
+function categoryEmoji(name) {
+  return CATEGORY_EMOJI[String(name || '').trim()] || '💳'
+}
+
+const aiBundle = ref(null)
+async function loadAiRecommendations() {
+  try {
+    const bundle = await fetchCardRecommendationBundle()
+    const guides = bundle?.ownedCategoryGuides
+    if (Array.isArray(guides) && guides.length) aiBundle.value = bundle
+  } catch {
+    // 실패 시 aiBundle은 null 유지 → 로컬 추천으로 폴백
+  }
+}
+onMounted(loadAiRecommendations)
+
+function mapGuideToReco(item, index) {
+  const label = String(item.category || '추천 분야').replace(/\s+/g, ' ').trim()
+  const card = walletCards.value.find((c) => String(c.id) === String(item.cardId))
+    || { id: item.cardId, name: item.cardName, imageUrl: item.imageUrl, benefitSummary: item.benefitLabel }
+  const eligible = Boolean(item.eligibleForBenefit)
+  const nextMonth = Boolean(item.nextMonthEligible)
+  return {
+    category: { id: `guide-${label}-${index}`, name: label, icon: categoryEmoji(label) },
+    card,
+    benefitText: item.benefitLabel || card.benefitSummary || '혜택 확인',
+    benefit: eligible ? Number(item.estimatedBenefit || 0) : 0,
+    grossBenefit: Number(item.potentialBenefit || item.estimatedBenefit || 0),
+    performanceShort: eligible ? '이번 달 가능' : nextMonth ? '다음 달 충족' : '준비 필요',
+    performanceTone: eligible || nextMonth ? 'is-ready' : 'is-waiting',
+  }
+}
+
+const aiRecommendations = computed(() => {
+  const guides = aiBundle.value?.ownedCategoryGuides
+  if (Array.isArray(guides) && guides.length) {
+    return guides.map(mapGuideToReco).slice(0, 3)
+  }
+  return cardGuideItems.value.slice(0, 3)
+})
 // 까치(카치AI)가 말풍선에서 건네는 짧은 추천 한마디
 const aiBubble = computed(() => {
   const top = aiRecommendations.value[0]
