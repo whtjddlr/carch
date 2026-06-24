@@ -443,9 +443,16 @@ const cardUsageList = computed(() => walletCards.value.map((card) => {
   // 이번달 할인 = 지난달(전월) 실적을 채웠는가 / 다음달 할인 = 이번달 실적을 채웠는가
   const thisMonthOk = noPerf || prevSpend >= minSpend
   const nextMonthOk = noPerf || curSpend >= minSpend
+  // 할인 한도(월 최대)는 카드 metadata, 받은 할인은 이번 달 사용액 × 혜택률을 한도 내에서 계산.
+  // 혜택률/한도 정보가 없으면(예: 신규 사용자 카드) metadata 값으로 폴백(보통 0).
+  const rawDiscountLimit = Number(card.discountLimit || 0)
+  const benefitRate = Number(card.benefitItems?.[0]?.ratePercent || 0) / 100
+  const computedUsed = benefitRate > 0 && rawDiscountLimit > 0
+    ? Math.min(Math.round(spent * benefitRate), rawDiscountLimit)
+    : Number(card.discountUsed || 0)
   // 이번달 할인이 안 되는 카드는 할인 한도 자체가 0원 (0원 / 0원)
-  const discountLimit = thisMonthOk ? Number(card.discountLimit || 0) : 0
-  const discountUsed = thisMonthOk ? Number(card.discountUsed || 0) : 0
+  const discountLimit = thisMonthOk ? rawDiscountLimit : 0
+  const discountUsed = thisMonthOk ? computedUsed : 0
   return {
     id: card.id,
     name: card.name,
