@@ -887,7 +887,7 @@ export async function fetchCardRecommendationBundle({ recurringCategories = [] }
     })),
   })
   const fallback = () => clone(buildMockRecommendationBundle({ recurringCategories }))
-  const request = api.get('/api/recommendations/cards/', { params })
+  const request = api.get('/api/recommendations/cards/', { params, timeout: AI_REQUEST_TIMEOUT_MS })
     .then((response) => normalizeRecommendationBundle(response.data))
     .catch((error) => {
       if (!isNetworkFallbackError(error)) throw error

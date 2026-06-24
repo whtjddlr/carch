@@ -37,6 +37,7 @@ ALLOWED_AI_ROUTES = {
     '/transactions/new',
     '/budget',
     '/recommendations/new',
+    '/recommendations/usage',
     '/analytics',
     '/community',
     '/plans',
@@ -52,6 +53,29 @@ ALLOWED_MESSAGE_TYPES = {
     'transaction-help',
     'purchase-plan',
     'navigation',
+}
+ALLOWED_RECOMMENDATION_STRATEGIES = {'owned_usage', 'new_card_issue', 'mixed', 'no_action'}
+ALLOWED_RECOMMENDATION_ROLES = {
+    'use_now',
+    'use_now_and_prepare',
+    'prepare_next_month',
+    'issue_new',
+    'avoid_for_now',
+    'no_action',
+}
+ALLOWED_RECOMMENDATION_REASON_CODES = {
+    'CURRENT_BENEFIT_AVAILABLE',
+    'NEXT_MONTH_PERFORMANCE',
+    'PERFORMANCE_NOT_MET',
+    'NO_PERFORMANCE_CARD',
+    'BENEFIT_CAP_REACHED',
+    'INSTALLMENT_EXCLUSION',
+    'SIMPLE_PAYMENT_EXCLUSION',
+    'FUTURE_PLAN',
+    'NEW_CARD_BETTER',
+    'OWNED_CARD_ENOUGH',
+    'DATA_LIMITED',
+    'NO_ACTION_NEEDED',
 }
 
 
@@ -135,6 +159,21 @@ def chat_with_ai(message, history, context):
         if not parsed:
             return None
         return normalize_chat_response(parsed)
+    except (OSError, ValueError, requests.RequestException):
+        return None
+
+
+def recommend_cards_with_ai(context):
+    if not get_ai_status()['configured']:
+        return None
+
+    prompt = ai_prompts.build_card_recommendation_prompt(context)
+    try:
+        response_payload = request_gms_json(prompt, ai_prompts.CARD_RECOMMENDATION_DEVELOPER_PROMPT)
+        parsed = extract_json_object(extract_output_text(response_payload))
+        if not parsed:
+            return None
+        return normalize_card_recommendation_decision(parsed, context)
     except (OSError, ValueError, requests.RequestException):
         return None
 
@@ -425,6 +464,203 @@ def normalize_chat_response(parsed):
         'aiMode': 'gms',
         'confidence': clamp_confidence(parsed.get('confidence'), 0.75),
     }
+
+
+def normalize_card_recommendation_decision(parsed, context):
+    if not isinstance(parsed, dict):
+        return None
+
+    cards_by_id = recommendation_cards_by_id(context)
+    title = truncate(parsed.get('title') or 'AI 카드 전략', 80)
+    summary = truncate(parsed.get('summary') or '', 260)
+    primary_action = truncate(parsed.get('primaryAction') or parsed.get('primary_action') or '', 220)
+    if not summary and not primary_action:
+        return None
+
+    decision_cards = normalize_decision_cards(parsed.get('decisionCards') or parsed.get('decision_cards'), cards_by_id)
+    tradeoffs = normalize_tradeoffs(parsed.get('tradeoffs'))
+    reason_codes = [
+        code
+        for code in normalize_string_list(parsed.get('reasonCodes') or parsed.get('reason_codes'))
+        if code in ALLOWED_RECOMMENDATION_REASON_CODES
+    ]
+    if not reason_codes:
+        reason_codes = ['DATA_LIMITED']
+    validation_notes = []
+    decision_cards, card_notes = reconcile_recommendation_decision_cards(decision_cards, context, reason_codes, cards_by_id)
+    validation_notes.extend(card_notes)
+    warnings, warning_notes = normalize_recommendation_warnings(parsed.get('warnings'), context)
+    validation_notes.extend(warning_notes)
+
+    return {
+        'schemaVersion': str(parsed.get('schemaVersion') or 'card-recommendation-decision-v1'),
+        'strategyType': normalize_choice(
+            parsed.get('strategyType') or parsed.get('strategy_type'),
+            ALLOWED_RECOMMENDATION_STRATEGIES,
+            'owned_usage',
+        ),
+        'title': title,
+        'summary': summary,
+        'primaryAction': primary_action,
+        'decisionCards': decision_cards,
+        'tradeoffs': tradeoffs,
+        'reasonCodes': reason_codes[:6],
+        'warnings': warnings,
+        'validationStatus': 'adjusted' if validation_notes else 'passed',
+        'validationNotes': validation_notes[:5],
+        'aiMode': 'gms',
+        'confidence': clamp_confidence(parsed.get('confidence'), 0.72),
+    }
+
+
+def recommendation_cards_by_id(context):
+    if not isinstance(context, dict):
+        return {}
+    raw_cards = context.get('cardsById') or {}
+    cards = {}
+    if isinstance(raw_cards, dict):
+        for card_id, card in raw_cards.items():
+            if not isinstance(card, dict):
+                continue
+            normalized_id = str(card_id or card.get('cardId') or '').strip()
+            if not normalized_id:
+                continue
+            cards[normalized_id] = {
+                'cardId': normalized_id,
+                'cardName': truncate(card.get('cardName') or card.get('name') or normalized_id, 80),
+                'issuer': truncate(card.get('issuer') or '', 40),
+                'maxExpectedBenefit': coerce_positive_int(card.get('maxExpectedBenefit'), 0),
+                'maxMonthlyGain': coerce_positive_int(card.get('maxMonthlyGain'), 0),
+                'remainingCondition': coerce_positive_int(card.get('remainingCondition'), 0),
+            }
+    return cards
+
+
+def normalize_decision_cards(value, cards_by_id):
+    if not isinstance(value, list):
+        return []
+    normalized = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        card_id = str(item.get('cardId') or item.get('card_id') or '').strip()
+        card = cards_by_id.get(card_id)
+        if card_id and not card:
+            continue
+        role = normalize_choice(item.get('role'), ALLOWED_RECOMMENDATION_ROLES, 'no_action')
+        expected_benefit = coerce_positive_int(item.get('expectedBenefit') or item.get('expected_benefit'), 0)
+        max_expected = card['maxExpectedBenefit'] if card else 0
+        if max_expected:
+            expected_benefit = min(expected_benefit, max_expected)
+        remaining_condition = coerce_positive_int(item.get('remainingCondition') or item.get('remaining_condition'), 0)
+        max_remaining = card['remainingCondition'] if card else 0
+        if max_remaining:
+            remaining_condition = min(remaining_condition, max_remaining)
+        normalized.append(
+            {
+                'cardId': card_id,
+                'cardName': (card or {}).get('cardName') or truncate(item.get('cardName') or item.get('card_name') or '', 80),
+                'issuer': (card or {}).get('issuer') or truncate(item.get('issuer') or '', 40),
+                'role': role,
+                'title': truncate(item.get('title') or '', 80),
+                'reason': truncate(item.get('reason') or '', 220),
+                'category': truncate(item.get('category') or '', 32),
+                'expectedBenefit': expected_benefit,
+                'remainingCondition': remaining_condition,
+            }
+        )
+        if len(normalized) >= 4:
+            break
+    return normalized
+
+
+def reconcile_recommendation_decision_cards(decision_cards, context, reason_codes, cards_by_id):
+    notes = []
+    if 'NEXT_MONTH_PERFORMANCE' not in reason_codes:
+        return decision_cards, notes
+
+    has_preparation_role = any(
+        item.get('role') in {'prepare_next_month', 'use_now_and_prepare'}
+        for item in decision_cards
+    )
+    if has_preparation_role:
+        return decision_cards, notes
+
+    for item in decision_cards:
+        if item.get('role') == 'use_now' and coerce_positive_int(item.get('remainingCondition'), 0) > 0:
+            item['role'] = 'use_now_and_prepare'
+            notes.append('converted_use_now_to_dual_preparation_role')
+            return decision_cards, notes
+
+    candidate = best_preparation_candidate(context)
+    if candidate:
+        card_id = str(candidate.get('cardId') or '')
+        card = cards_by_id.get(card_id) or {}
+        expected_benefit = coerce_positive_int(candidate.get('potentialBenefit') or candidate.get('estimatedBenefit'), 0)
+        max_expected = coerce_positive_int(card.get('maxExpectedBenefit'), 0)
+        if max_expected:
+            expected_benefit = min(expected_benefit, max_expected)
+        decision_cards.append(
+            {
+                'cardId': card_id,
+                'cardName': card.get('cardName') or truncate(candidate.get('cardName') or '', 80),
+                'issuer': card.get('issuer') or truncate(candidate.get('issuer') or '', 40),
+                'role': 'prepare_next_month',
+                'title': truncate(candidate.get('category') or '다음 달 조건 준비', 80),
+                'reason': '다음 달 혜택 조건을 열 수 있는 후보라 서버 검증 단계에서 보강했습니다.',
+                'category': truncate(candidate.get('category') or '', 32),
+                'expectedBenefit': expected_benefit,
+                'remainingCondition': coerce_positive_int(candidate.get('remainingCondition'), 0),
+            }
+        )
+        notes.append('added_missing_preparation_card')
+
+    return decision_cards[:4], notes
+
+
+def best_preparation_candidate(context):
+    candidates = []
+    for item in (context or {}).get('ownedUsageCandidates') or []:
+        remaining = coerce_positive_int(item.get('remainingCondition'), 0)
+        potential = coerce_positive_int(item.get('potentialBenefit'), 0)
+        if remaining <= 0 or potential <= 0:
+            continue
+        candidates.append((potential, -remaining, item))
+    if not candidates:
+        return None
+    candidates.sort(reverse=True)
+    return candidates[0][2]
+
+
+def normalize_recommendation_warnings(value, context):
+    warnings = normalize_string_list(value)[:4]
+    notes = []
+    payment_risks = (context or {}).get('paymentRisks') or []
+    if payment_risks:
+        return warnings, notes
+
+    payment_keywords = ('할부', '무이자', '간편결제', 'simple payment', 'installment', 'interest-free')
+    filtered = [warning for warning in warnings if not any(keyword in warning for keyword in payment_keywords)]
+    if len(filtered) != len(warnings):
+        notes.append('removed_payment_warning_without_payment_risk')
+    return filtered, notes
+
+
+def normalize_tradeoffs(value):
+    if not isinstance(value, list):
+        return []
+    tradeoffs = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        title = truncate(item.get('title') or '', 80)
+        body = truncate(item.get('body') or '', 220)
+        if not title and not body:
+            continue
+        tradeoffs.append({'title': title, 'body': body})
+        if len(tradeoffs) >= 4:
+            break
+    return tradeoffs
 
 
 def coerce_amount(value):

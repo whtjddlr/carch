@@ -3,6 +3,7 @@ import json
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase, override_settings
 
+from .ai_service import normalize_card_recommendation_decision
 from .views import (
     _build_routing_suggestions,
     _benefit_rate_for_category,
@@ -14,6 +15,54 @@ from .views import (
 
 
 class CardRecommendationLogicTests(SimpleTestCase):
+    def test_ai_card_decision_filters_unknown_cards_and_caps_amounts(self):
+        context = {
+            'cardsById': {
+                '10106': {
+                    'cardName': 'LOCA LIKIT Eat',
+                    'issuer': 'Lotte',
+                    'maxExpectedBenefit': 5000,
+                    'maxMonthlyGain': 1200,
+                    'remainingCondition': 300000,
+                }
+            }
+        }
+        parsed = {
+            'schemaVersion': 'card-recommendation-decision-v1',
+            'strategyType': 'owned_usage',
+            'title': 'Use owned card',
+            'summary': 'Use only verified owned-card data.',
+            'primaryAction': 'Route planned spending.',
+            'decisionCards': [
+                {
+                    'cardId': '10106',
+                    'role': 'use_now',
+                    'title': 'Food',
+                    'reason': 'Verified card.',
+                    'category': 'food',
+                    'expectedBenefit': 999999,
+                    'remainingCondition': 999999,
+                },
+                {
+                    'cardId': '99999',
+                    'role': 'issue_new',
+                    'title': 'Hallucinated card',
+                    'reason': 'Should be removed.',
+                    'expectedBenefit': 10000,
+                },
+            ],
+            'reasonCodes': ['CURRENT_BENEFIT_AVAILABLE', 'MADE_UP_REASON'],
+            'confidence': 0.9,
+        }
+
+        decision = normalize_card_recommendation_decision(parsed, context)
+
+        self.assertEqual(len(decision['decisionCards']), 1)
+        self.assertEqual(decision['decisionCards'][0]['cardId'], '10106')
+        self.assertEqual(decision['decisionCards'][0]['expectedBenefit'], 5000)
+        self.assertEqual(decision['decisionCards'][0]['remainingCondition'], 300000)
+        self.assertEqual(decision['reasonCodes'], ['CURRENT_BENEFIT_AVAILABLE'])
+
     def test_category_specific_merchant_is_not_general_benefit(self):
         card = {
             'benefitItems': [

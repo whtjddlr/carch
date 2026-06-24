@@ -95,6 +95,22 @@
           </div>
         </article>
 
+        <article v-if="aiDecision" class="app-card ai-decision-card">
+          <div class="ai-decision-heading">
+            <span>AI 전략 판단</span>
+            <b>{{ aiDecision.aiMode === 'gms' ? 'LLM' : '검증 fallback' }}</b>
+          </div>
+          <strong>{{ aiDecision.title }}</strong>
+          <p>{{ aiDecision.summary }}</p>
+          <p v-if="aiDecision.primaryAction" class="ai-primary-action">{{ aiDecision.primaryAction }}</p>
+          <div v-if="aiDecision.decisionCards?.length" class="ai-decision-list">
+            <span v-for="item in aiDecision.decisionCards" :key="`${item.cardId}-${item.role}`">
+              <small>{{ decisionRoleLabel(item.role) }}</small>
+              <b>{{ item.cardName || item.title }}</b>
+            </span>
+          </div>
+        </article>
+
         <template v-if="isUsageMode">
           <div class="recommend-section-title">
             <div>
@@ -223,10 +239,22 @@ const ownedUsageGuides = computed(() =>
     .slice(0, 4),
 )
 const oneTimeCount = computed(() => bundle.value?.profile?.spendingTrend?.oneTimeCandidates?.length || 0)
+const aiDecision = computed(() => bundle.value?.aiDecision || null)
 
 function signedKrw(value) {
   const amount = Number(value || 0)
   return `${amount > 0 ? '+' : amount < 0 ? '-' : ''}${krw(Math.abs(amount))}`
+}
+
+function decisionRoleLabel(role) {
+  return {
+    use_now: '지금 사용',
+    use_now_and_prepare: '사용+준비',
+    prepare_next_month: '다음 달 준비',
+    issue_new: '발급 검토',
+    avoid_for_now: '보류',
+    no_action: '유지',
+  }[role] || '판단'
 }
 
 function recommendationImpact(item = {}) {
@@ -422,6 +450,7 @@ onMounted(async () => {
 .alert-card,
 .result-card,
 .recommend-card,
+.ai-decision-card,
 .usage-guide-card,
 .usage-empty-card {
   padding: 18px;
@@ -429,6 +458,7 @@ onMounted(async () => {
 
 .profile-card span,
 .alert-card span,
+.ai-decision-heading span,
 .recommend-card span {
   color: #0f5fae;
   font-size: 11px;
@@ -436,7 +466,8 @@ onMounted(async () => {
 }
 
 .profile-card strong,
-.alert-card strong {
+.alert-card strong,
+.ai-decision-card strong {
   display: block;
   margin-top: 5px;
   color: #17202b;
@@ -446,6 +477,7 @@ onMounted(async () => {
 
 .profile-card p,
 .alert-card p,
+.ai-decision-card p,
 .result-card p,
 .recommend-card p {
   margin: 6px 0 0;
@@ -453,6 +485,65 @@ onMounted(async () => {
   font-size: 12px;
   font-weight: 800;
   line-height: 1.5;
+}
+
+.ai-decision-card {
+  margin-top: 12px;
+  border-color: rgba(0, 140, 149, 0.16);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(240, 253, 250, 0.78));
+}
+
+.ai-decision-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ai-decision-heading b {
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: rgba(0, 140, 149, 0.1);
+  color: #008c95;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.ai-primary-action {
+  color: #23384f !important;
+}
+
+.ai-decision-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.ai-decision-list span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  border-radius: 14px;
+  padding: 9px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.ai-decision-list small {
+  color: #008c95;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.ai-decision-list b {
+  overflow: hidden;
+  margin: 0;
+  color: #17202b;
+  font-size: 12px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .alert-card {

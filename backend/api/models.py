@@ -236,6 +236,7 @@ class AIAnalysisRecord(models.Model):
         ('chat', '챗봇 상담'),
         ('transaction_parse', '결제내역 입력 보정'),
         ('purchase_plan', '소비 계획 분석'),
+        ('card_recommendation', '카드 추천 판단'),
     ]
 
     user = models.ForeignKey(

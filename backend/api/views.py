@@ -21,7 +21,14 @@ from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
-from .ai_service import chat_with_ai, analyze_spending_with_ai, get_ai_status, parse_purchase_plan_with_ai, parse_transaction_with_ai
+from .ai_service import (
+    analyze_spending_with_ai,
+    chat_with_ai,
+    get_ai_status,
+    parse_purchase_plan_with_ai,
+    parse_transaction_with_ai,
+    recommend_cards_with_ai,
+)
 from .card_repository import fetch_card, fetch_cards
 from .models import AIAnalysisRecord, AuthSession, CommunityComment, CommunityPost, CommunityPostLike, OwnedCard, PurchasePlan, SocialAccount, Transaction
 from .seed_data import PURCHASE_PLANS, TRANSACTIONS
@@ -3641,6 +3648,278 @@ def _build_owned_category_guides(profile, owned_values, owned_ids):
     return guides
 
 
+def _merge_card_context(cards_by_id, card_id, **updates):
+    card_id = str(card_id or '').strip()
+    if not card_id:
+        return
+    current = cards_by_id.setdefault(
+        card_id,
+        {
+            'cardId': card_id,
+            'cardName': updates.get('cardName') or card_id,
+            'issuer': updates.get('issuer') or '',
+            'maxExpectedBenefit': 0,
+            'maxMonthlyGain': 0,
+            'remainingCondition': 0,
+        },
+    )
+    if updates.get('cardName'):
+        current['cardName'] = updates['cardName']
+    if updates.get('issuer'):
+        current['issuer'] = updates['issuer']
+    for key in ['maxExpectedBenefit', 'maxMonthlyGain', 'remainingCondition']:
+        current[key] = max(_as_int(current.get(key)), _as_int(updates.get(key)))
+
+
+def _build_card_recommendation_ai_context(
+    profile,
+    data_readiness,
+    baseline,
+    owned_category_guides,
+    routing_suggestions,
+    results,
+):
+    cards_by_id = {}
+    owned_candidates = []
+    for item in (owned_category_guides or [])[:6]:
+        card_id = str(item.get('cardId') or '')
+        candidate = {
+            'id': item.get('id'),
+            'cardId': card_id,
+            'cardName': item.get('cardName'),
+            'issuer': item.get('issuer'),
+            'category': item.get('category'),
+            'amount': _as_int(item.get('amount')),
+            'eligibleForBenefit': bool(item.get('eligibleForBenefit')),
+            'nextMonthEligible': bool(item.get('nextMonthEligible')),
+            'estimatedBenefit': _as_int(item.get('estimatedBenefit')),
+            'potentialBenefit': _as_int(item.get('potentialBenefit')),
+            'monthlyGain': _as_int(item.get('monthlyGain')),
+            'remainingCondition': _as_int(item.get('remainingCurrentSpend')),
+            'paymentType': item.get('paymentType'),
+            'installmentMonths': _as_int(item.get('installmentMonths')),
+            'isInterestFreeInstallment': bool(item.get('isInterestFreeInstallment')),
+            'paymentLabel': item.get('paymentLabel'),
+            'benefitLabel': item.get('benefitLabel'),
+        }
+        owned_candidates.append(candidate)
+        _merge_card_context(
+            cards_by_id,
+            card_id,
+            cardName=item.get('cardName'),
+            issuer=item.get('issuer'),
+            maxExpectedBenefit=max(candidate['estimatedBenefit'], candidate['potentialBenefit']),
+            maxMonthlyGain=candidate['monthlyGain'],
+            remainingCondition=candidate['remainingCondition'],
+        )
+
+    routing_candidates = []
+    for item in (routing_suggestions or [])[:4]:
+        candidate = {
+            'id': item.get('id'),
+            'category': item.get('category'),
+            'amount': _as_int(item.get('amount')),
+            'fromCardId': str(item.get('fromCardId') or ''),
+            'fromCardName': item.get('fromCardName'),
+            'toCardId': str(item.get('toCardId') or ''),
+            'toCardName': item.get('toCardName'),
+            'monthlyGain': _as_int(item.get('monthlyGain')),
+            'paymentType': item.get('paymentType'),
+            'installmentMonths': _as_int(item.get('installmentMonths')),
+            'isInterestFreeInstallment': bool(item.get('isInterestFreeInstallment')),
+            'paymentLabel': item.get('paymentLabel'),
+            'benefitLabel': item.get('benefitLabel'),
+        }
+        routing_candidates.append(candidate)
+        _merge_card_context(
+            cards_by_id,
+            candidate['toCardId'],
+            cardName=item.get('toCardName'),
+            issuer=item.get('toIssuer'),
+            maxExpectedBenefit=_as_int(item.get('toBenefit')),
+            maxMonthlyGain=candidate['monthlyGain'],
+        )
+        _merge_card_context(
+            cards_by_id,
+            candidate['fromCardId'],
+            cardName=item.get('fromCardName'),
+            issuer=item.get('fromIssuer'),
+            maxExpectedBenefit=_as_int(item.get('fromBenefit')),
+        )
+
+    new_card_candidates = []
+    for item in (results or [])[:5]:
+        economics = item.get('economics') or {}
+        card_id = str(item.get('cardAdId') or item.get('id') or '')
+        candidate = {
+            'cardId': card_id,
+            'cardName': item.get('name') or item.get('cardName'),
+            'issuer': item.get('issuer') or item.get('issuerName'),
+            'match': _as_int(item.get('match')),
+            'reason': item.get('reason'),
+            'matchedCategories': (item.get('spendingFit') or {}).get('matchedCategories') or [],
+            'expectedMonthlyBenefit': _as_int(economics.get('expectedMonthlyBenefit')),
+            'potentialMonthlyBenefit': _as_int(economics.get('potentialMonthlyBenefit')),
+            'monthlyDelta': _as_int(economics.get('monthlyDelta')),
+            'annualDelta': _as_int(economics.get('annualDelta')),
+            'monthlyAnnualFee': _as_int(economics.get('monthlyAnnualFee')),
+            'remainingCondition': _as_int(
+                economics.get('remainingCurrentSpendForNextMonthBenefit')
+                or economics.get('remainingSpendForBenefit')
+            ),
+            'eligibleForBenefit': bool(economics.get('eligibleForBenefit')),
+            'benefitTiming': economics.get('benefitTiming'),
+            'confidence': item.get('recommendationConfidence'),
+        }
+        new_card_candidates.append(candidate)
+        _merge_card_context(
+            cards_by_id,
+            card_id,
+            cardName=candidate['cardName'],
+            issuer=candidate['issuer'],
+            maxExpectedBenefit=max(candidate['expectedMonthlyBenefit'], candidate['potentialMonthlyBenefit']),
+            maxMonthlyGain=max(candidate['monthlyDelta'], 0),
+            remainingCondition=candidate['remainingCondition'],
+        )
+
+    payment_risks = [
+        item
+        for item in [*owned_candidates, *routing_candidates]
+        if item.get('paymentType') == PAYMENT_TYPE_INSTALLMENT or item.get('isInterestFreeInstallment')
+    ][:4]
+    tradeoff_hints = []
+    if any(item.get('eligibleForBenefit') for item in owned_candidates) and any(
+        _as_int(item.get('remainingCondition')) > 0 for item in owned_candidates
+    ):
+        tradeoff_hints.append('current-benefit-vs-next-month-performance')
+    if any(_as_int(item.get('monthlyDelta')) > 0 for item in new_card_candidates):
+        tradeoff_hints.append('owned-usage-vs-new-card-issue')
+    if payment_risks:
+        tradeoff_hints.append('payment-method-exclusion-risk')
+    if data_readiness.get('recommendationMode') == 'conditional':
+        tradeoff_hints.append('limited-data-conservative-decision')
+
+    return {
+        'schemaVersion': 'card-recommendation-context-v1',
+        'generatedAt': timezone.localtime().isoformat(),
+        'dataReadiness': data_readiness,
+        'profileSummary': {
+            'totalExpense': _as_int(profile.get('totalExpense')),
+            'topCategory': profile.get('topCategory'),
+            'recommendationTopCategory': profile.get('recommendationTopCategory'),
+            'styleTags': profile.get('styleTags') or [],
+            'oneTimeCategories': profile.get('oneTimeCategories') or [],
+            'spendingTrend': {
+                'recurringCategories': (profile.get('spendingTrend') or {}).get('recurringCategories') or [],
+                'oneTimeCandidates': (profile.get('spendingTrend') or {}).get('oneTimeCandidates') or [],
+            },
+        },
+        'baseline': baseline,
+        'ownedUsageCandidates': owned_candidates,
+        'routingCandidates': routing_candidates,
+        'newCardCandidates': new_card_candidates,
+        'paymentRisks': payment_risks,
+        'tradeoffHints': tradeoff_hints,
+        'allowedCardIds': sorted(cards_by_id.keys()),
+        'cardsById': cards_by_id,
+    }
+
+
+def _fallback_card_recommendation_decision(context):
+    owned_candidates = context.get('ownedUsageCandidates') or []
+    new_candidates = context.get('newCardCandidates') or []
+    payment_risks = context.get('paymentRisks') or []
+    ready_now = [
+        item for item in owned_candidates if item.get('eligibleForBenefit') and _as_int(item.get('estimatedBenefit')) > 0
+    ]
+    preparation = [
+        item
+        for item in owned_candidates
+        if not item.get('eligibleForBenefit')
+        and _as_int(item.get('remainingCondition')) > 0
+        and _as_int(item.get('potentialBenefit')) > 0
+    ]
+    new_gain = [item for item in new_candidates if _as_int(item.get('monthlyDelta')) > 0]
+
+    if ready_now and preparation:
+        strategy_type = 'mixed'
+        title = '이번 달 혜택과 다음 달 준비를 나눠 쓰세요'
+        summary = '바로 혜택을 받을 수 있는 결제는 유지하고, 남은 결제는 다음 달 혜택 조건을 열 카드에 배정하는 편이 유리합니다.'
+        primary_action = '혜택 가능 카드는 해당 분야에 쓰고, 조건이 부족한 카드는 계획된 남은 지출로만 실적을 준비하세요.'
+        reason_codes = ['CURRENT_BENEFIT_AVAILABLE', 'NEXT_MONTH_PERFORMANCE']
+    elif ready_now:
+        strategy_type = 'owned_usage'
+        title = '지금은 보유 카드 혜택을 먼저 쓰세요'
+        summary = '전월 실적이 충족된 보유 카드에서 당장 받을 수 있는 혜택이 확인됩니다.'
+        primary_action = '이번 달 혜택이 가능한 카드부터 분야별로 사용하세요.'
+        reason_codes = ['CURRENT_BENEFIT_AVAILABLE']
+    elif preparation:
+        strategy_type = 'owned_usage'
+        title = '이번 달은 다음 달 혜택 조건을 준비하세요'
+        summary = '현재 바로 받을 혜택은 제한적이지만, 일부 보유 카드는 이번 달 실적을 채우면 다음 달 혜택 가능성이 생깁니다.'
+        primary_action = '이미 예정된 결제 안에서 조건 부족액이 작은 카드부터 채우세요.'
+        reason_codes = ['NEXT_MONTH_PERFORMANCE', 'PERFORMANCE_NOT_MET']
+    elif new_gain:
+        strategy_type = 'new_card_issue'
+        title = '새 카드 발급을 검토할 만합니다'
+        summary = '현재 소비 패턴 기준으로 보유 카드보다 추가 혜택이 예상되는 새 카드 후보가 있습니다.'
+        primary_action = '새 카드 후보의 연회비와 전월 실적 조건을 확인한 뒤 발급 여부를 비교하세요.'
+        reason_codes = ['NEW_CARD_BETTER']
+    else:
+        strategy_type = 'no_action'
+        title = '지금은 추가 조정보다 데이터 확인이 우선입니다'
+        summary = '현재 데이터만으로는 큰 혜택 개선이 확인되지 않아 보수적으로 판단했습니다.'
+        primary_action = '거래 내역과 보유 카드 조건을 더 채운 뒤 다시 비교하세요.'
+        reason_codes = ['DATA_LIMITED', 'NO_ACTION_NEEDED']
+
+    selected = (ready_now[:1] + preparation[:1]) or new_gain[:1]
+    decision_cards = []
+    for item in selected[:3]:
+        is_new = item in new_gain
+        decision_cards.append(
+            {
+                'cardId': item.get('cardId'),
+                'cardName': item.get('cardName'),
+                'issuer': item.get('issuer'),
+                'role': 'issue_new' if is_new else ('use_now' if item.get('eligibleForBenefit') else 'prepare_next_month'),
+                'title': item.get('category') or ('새 카드 발급 후보' if is_new else '보유 카드 사용 후보'),
+                'reason': item.get('reason') or summary,
+                'category': item.get('category') or '',
+                'expectedBenefit': _as_int(
+                    item.get('estimatedBenefit')
+                    or item.get('potentialBenefit')
+                    or item.get('expectedMonthlyBenefit')
+                ),
+                'remainingCondition': _as_int(item.get('remainingCondition')),
+            }
+        )
+
+    warnings = []
+    if payment_risks:
+        warnings.append('할부 또는 무이자 할부 결제는 일부 혜택에서 제외될 수 있어 결제 전 조건 확인이 필요합니다.')
+    if context.get('dataReadiness', {}).get('recommendationMode') == 'conditional':
+        warnings.append(context.get('dataReadiness', {}).get('message') or '일부 혜택 데이터는 보수적으로 반영했습니다.')
+
+    return {
+        'schemaVersion': 'card-recommendation-decision-v1',
+        'strategyType': strategy_type,
+        'title': title,
+        'summary': summary,
+        'primaryAction': primary_action,
+        'decisionCards': decision_cards,
+        'tradeoffs': [
+            {
+                'title': '계산값 기반 보수 판단',
+                'body': '실적, 한도, 예상 혜택은 규칙 엔진으로 계산하고 최종 문구는 안전한 기본 전략으로 구성했습니다.',
+            }
+        ],
+        'reasonCodes': reason_codes,
+        'warnings': warnings[:4],
+        'aiMode': 'rule_fallback',
+        'confidence': min(0.72, context.get('dataReadiness', {}).get('confidence') or 0.6),
+    }
+
+
 def card_recommendations(request):
     user, error_response = require_request_user(request)
     if error_response:
@@ -3797,22 +4076,76 @@ def card_recommendations(request):
     alert = (top or {}).get('notification') or {'show': False}
     routing_suggestions = _build_routing_suggestions(profile, owned_values, results, owned_ids)
     owned_category_guides = _build_owned_category_guides(profile, owned_values, owned_ids)
+    baseline_payload = {
+        'cardId': baseline.get('cardId'),
+        'cardName': baseline.get('cardName'),
+        'monthlyNetBenefit': current_monthly_net,
+        'expectedMonthlyBenefit': _as_int(baseline.get('expectedMonthlyBenefit')),
+        'potentialMonthlyBenefit': _as_int(baseline.get('potentialMonthlyBenefit')),
+        'monthlyAnnualFee': _as_int(baseline.get('monthlyAnnualFee')),
+        'annualFee': _as_int(baseline.get('annualFee')),
+        'breakdown': baseline.get('breakdown') or [],
+    }
+    recommendation_context = _build_card_recommendation_ai_context(
+        profile,
+        data_readiness,
+        baseline_payload,
+        owned_category_guides,
+        routing_suggestions,
+        results,
+    )
+    cache_context = {
+        key: value
+        for key, value in recommendation_context.items()
+        if key != 'generatedAt'
+    }
+    recommendation_cache_key = analysis_cache_key(cache_context)
+    ai_decision = None
+    ai_status = get_ai_status()
+    ai_enabled = str(request.GET.get('ai') or 'true').lower() not in {'0', 'false', 'no'}
+    refresh_ai = str(request.GET.get('ai') or '').lower() == 'refresh' or str(
+        request.GET.get('refreshAi') or ''
+    ).lower() in {'1', 'true', 'yes'}
+    if ai_enabled:
+        if not refresh_ai:
+            cached_record = AIAnalysisRecord.objects.filter(
+                user=user,
+                analysis_type='card_recommendation',
+                cache_key=recommendation_cache_key,
+            ).first()
+            if cached_record:
+                ai_decision = {
+                    **(cached_record.result_payload or {}),
+                    'cacheHit': True,
+                }
+        if not ai_decision:
+            ai_decision = recommend_cards_with_ai(recommendation_context)
+            if ai_decision:
+                save_analysis_record(
+                    'card_recommendation',
+                    ai_decision.get('title') or '카드 추천 판단',
+                    cache_context,
+                    ai_decision,
+                    cache_key=recommendation_cache_key,
+                    user=user,
+                )
+    if not ai_decision:
+        ai_decision = _fallback_card_recommendation_decision(recommendation_context)
 
     return json_response(
         {
             'count': len(results),
             'profile': profile,
             'dataReadiness': data_readiness,
-            'baseline': {
-                'cardId': baseline.get('cardId'),
-                'cardName': baseline.get('cardName'),
-                'monthlyNetBenefit': current_monthly_net,
-                'expectedMonthlyBenefit': _as_int(baseline.get('expectedMonthlyBenefit')),
-                'potentialMonthlyBenefit': _as_int(baseline.get('potentialMonthlyBenefit')),
-                'monthlyAnnualFee': _as_int(baseline.get('monthlyAnnualFee')),
-                'annualFee': _as_int(baseline.get('annualFee')),
-                'breakdown': baseline.get('breakdown') or [],
+            'baseline': baseline_payload,
+            'recommendationEngine': {
+                'mode': 'llm_guided_hybrid',
+                'aiConfigured': ai_status['configured'],
+                'aiMode': ai_decision.get('aiMode'),
+                'cacheKey': recommendation_cache_key,
+                'cacheHit': bool(ai_decision.get('cacheHit')),
             },
+            'aiDecision': ai_decision,
             'alert': alert,
             'ownedCategoryGuides': owned_category_guides,
             'routingSuggestions': routing_suggestions,

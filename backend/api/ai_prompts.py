@@ -30,6 +30,15 @@ Give practical next steps, but never guarantee card benefits or issuer rules.
 Return JSON only. Do not include markdown, comments, or extra prose.
 """.strip()
 
+CARD_RECOMMENDATION_DEVELOPER_PROMPT = """
+You are CARCH's card recommendation strategist.
+You decide the user's card strategy from verified calculation context.
+Use the supplied JSON only. Never invent card benefits, card names, issuer terms, rates, caps, or savings.
+The rule engine already calculated benefit amounts, performance gaps, eligibility, and payment exclusions.
+Your job is to resolve trade-offs and explain the best strategy in polished Korean.
+Return JSON only. Do not include markdown, comments, or extra prose.
+""".strip()
+
 
 def build_transaction_prompt(raw_text, today, cards, categories):
     card_lines = '\n'.join(f'- {card_id}: {name}' for card_id, name in cards.items())
@@ -325,7 +334,9 @@ Rules:
 - Do not expose implementation words such as mock, fallback, DB, cache, candidate, or confidence.
 - messageType must be one of general, spending-analysis, card-recommendation, transaction-help, purchase-plan, navigation.
 - tone must be one of navy, teal, blue, gray, gold, danger.
-- actionButtons[].route must be one of /cards, /transactions, /transactions/new, /budget, /recommendations/new, /analytics, /community, /plans, /plans/new.
+- actionButtons[].route must be one of /cards, /transactions, /transactions/new, /budget, /recommendations/new, /recommendations/usage, /analytics, /community, /plans, /plans/new.
+- Use /recommendations/usage when the user asks which owned card to use, how to split payments, performance preparation, or current spending strategy.
+- Use /recommendations/new only when the user asks for a new card to issue or compare with cards they do not own.
 - quickReplies should be 2 to 4 short Korean follow-up buttons.
 
 Return this exact JSON shape:
@@ -343,5 +354,55 @@ Return this exact JSON shape:
   ],
   "relatedRoute": "/analytics",
   "confidence": 0.78
+}}
+""".strip()
+
+
+def build_card_recommendation_prompt(context):
+    return f"""
+Recommend a card strategy for this Korean CARCH user.
+
+Recommendation context JSON:
+{json.dumps(context, ensure_ascii=False)}
+
+Decision rules:
+- Use only card IDs in allowedCardIds.
+- Do not create new cards, rates, limits, merchants, or benefit amounts.
+- Keep benefit amounts at or below the supplied maxExpectedBenefit or monthlyGain for that card.
+- Separate owned-card usage strategy from new-card issuance strategy.
+- Prefer owned-card usage when it solves the user's situation without a meaningful new-card gain.
+- If a card is not currently eligible but can unlock meaningful next-month benefits, explain it as performance preparation, not current benefit.
+- If a benefit is excluded because of installment, interest-free installment, or simple payment conditions, include a warning.
+- If dataReadiness is conditional or low-confidence, use conservative wording.
+- Do not encourage extra spending. Only distribute spending the user already made or planned.
+- Make the decision visibly different from a static score list by naming the trade-off: current benefit, next-month preparation, no-performance fallback, cap/exclusion risk, or new-card issuance.
+
+Return this exact JSON shape:
+{{
+  "schemaVersion": "card-recommendation-decision-v1",
+  "strategyType": "owned_usage",
+  "title": "이번 달은 보유 카드 안에서 먼저 조정하세요",
+  "summary": "현재 받을 수 있는 혜택과 다음 달 실적 준비를 함께 보면, 새 카드 발급보다 보유 카드 배분을 먼저 조정하는 편이 유리합니다.",
+  "primaryAction": "식비는 혜택 가능 카드로 유지하고, 남은 일반 결제는 다음 달 조건을 열 카드에 배정하세요.",
+  "decisionCards": [
+    {{
+      "cardId": "10106",
+      "role": "use_now",
+      "title": "식비 결제 우선",
+      "reason": "전월 실적이 충족되어 이번 달 혜택이 바로 적용될 수 있습니다.",
+      "category": "식비",
+      "expectedBenefit": 2250,
+      "remainingCondition": 0
+    }}
+  ],
+  "tradeoffs": [
+    {{
+      "title": "당장 혜택과 다음 달 준비",
+      "body": "지금 혜택이 가능한 카드와 다음 달 조건을 열 카드가 달라서 결제 목적별로 나누는 전략이 적합합니다."
+    }}
+  ],
+  "reasonCodes": ["CURRENT_BENEFIT_AVAILABLE", "NEXT_MONTH_PERFORMANCE"],
+  "warnings": ["무이자 할부는 일부 카드 혜택에서 제외될 수 있어 결제 전 조건 확인이 필요합니다."],
+  "confidence": 0.82
 }}
 """.strip()
