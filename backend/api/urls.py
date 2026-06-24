@@ -23,6 +23,7 @@ urlpatterns = [
     path('transactions/parse/', views.parse_transaction, name='transaction-parse'),
     path('transactions/<str:transaction_id>/', views.transaction_detail, name='transaction-detail'),
     path('budgets/<str:month>/', views.budget_detail, name='budget-detail'),
+    path('analytics/monthly/', views.analytics_monthly, name='analytics-monthly'),
     path('analytics/spending-summary/', views.spending_summary, name='spending-summary'),
     path('analytics/records/', views.analysis_record_list, name='analysis-record-list'),
     path('recommendations/cards/', views.card_recommendations, name='card-recommendations'),

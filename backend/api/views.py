@@ -1913,6 +1913,71 @@ def parse_transaction(request):
     return json_response(parsed)
 
 
+# 데모/시연 계정 5개월 차트용 큐레이션 값(과거 달). 현재 달(2026-06)은 실제 거래 집계 사용.
+DEMO_MONTHLY_TOTALS = {
+    '2026-02': 614900,
+    '2026-03': 667900,
+    '2026-04': 687900,
+    '2026-05': 702900,
+}
+DEMO_MONTHLY_BUDGETS = {
+    '2026-02': 600000,
+    '2026-03': 700000,
+    '2026-04': 700000,
+    '2026-05': 750000,
+    '2026-06': 1400000,
+}
+
+
+def _recent_months(anchor, count):
+    year, month = int(anchor[:4]), int(anchor[5:7])
+    out = []
+    for _ in range(count):
+        out.append(f'{year:04d}-{month:02d}')
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+    return list(reversed(out))
+
+
+@csrf_exempt
+def analytics_monthly(request):
+    """사용자별 최근 N개월 지출(실제 거래 집계) + 월 예산. 데모 계정은 과거 달을 큐레이션 값으로 보강."""
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
+    try:
+        count = max(1, min(int(request.GET.get('months', 5)), 12))
+    except (TypeError, ValueError):
+        count = 5
+    months = _recent_months('2026-06', count)
+
+    spent_by_month = defaultdict(int)
+    for transaction in transaction_queryset(user=user):
+        item = serialize_transaction(transaction)
+        if item['amount'] < 0:
+            spent_by_month[_month_key_from_transaction(item)] += abs(item['amount'])
+
+    demo = is_demo_seed_user(user)
+    budget_by_month = {
+        budget.month: budget.total_goal
+        for budget in Budget.objects.filter(user=user, month__in=months)
+    }
+
+    result = []
+    for month in months:
+        spent = spent_by_month.get(month, 0)
+        # 데모 계정은 과거 달을 큐레이션 값으로 고정(시연 차트 일관). 현재 달(2026-06)은 실제 거래 사용.
+        if demo and month in DEMO_MONTHLY_TOTALS:
+            spent = DEMO_MONTHLY_TOTALS[month]
+        budget = budget_by_month.get(month)
+        if budget is None and demo:
+            budget = DEMO_MONTHLY_BUDGETS.get(month)
+        result.append({'month': month, 'spent': spent, 'budget': budget})
+    return json_response({'months': result})
+
+
 def serialize_budget(budget, month):
     if not budget:
         return {'month': month, 'totalGoal': None, 'categoryBudgets': {}}

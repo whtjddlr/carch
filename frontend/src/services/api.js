@@ -937,6 +937,15 @@ export async function fetchSpendingSummary({ ai = false, refresh = false, recurr
   return withTimedLocalFallback(request, () => clone(buildMockSpendingSummary({ ai, refresh, recurringCategories })))
 }
 
+export async function fetchMonthlySpending(months = 5) {
+  if (USE_MOCK_API) {
+    await delay(80)
+    return { months: [] }
+  }
+  const response = await api.get('/api/analytics/monthly/', { params: { months } })
+  return response.data
+}
+
 export async function fetchBudget(month) {
   if (USE_MOCK_API) {
     await delay(80)

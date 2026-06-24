@@ -246,7 +246,7 @@ import { CalendarClock, Check, ChevronRight, CreditCard, Pencil, PiggyBank, Sear
 import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, cards as mockCards, expenseModes, krw } from '@/data/mockData'
 import { demoMonthSummary } from '@/data/monthlyAnalytics'
-import { fetchBudget, fetchCardRecommendationBundle, fetchOwnedCards, fetchSpendingSummary, fetchTransactions, normalizeCard, saveBudget } from '@/services/api'
+import { fetchBudget, fetchCardRecommendationBundle, fetchMonthlySpending, fetchOwnedCards, fetchSpendingSummary, fetchTransactions, normalizeCard, saveBudget } from '@/services/api'
 import { readBudgetOverride, readCustomBudgetCategories, writeBudgetOverride } from '@/services/budgetStorage'
 import { budgetProgressWidth, budgetRiskColor, budgetRiskLabel, budgetUsagePercent } from '@/utils/budgetRisk'
 import { compareCardBenefitCandidates, scoreCardBenefit, summarizeWalletPerformance } from '@/utils/cardPerformance'
@@ -523,19 +523,45 @@ function shortKrw(value) {
   if (value >= 10000) return `${Math.round(value / 10000).toLocaleString()}만`
   return krw(value)
 }
+// 최근 5개월 사용액·예산: 백엔드(사용자별 거래 집계 + 월 예산) 우선, 실패 시 데모 데이터
+const monthlySeries = ref(null)
+async function loadMonthly() {
+  try {
+    const data = await fetchMonthlySpending(5)
+    if (data && Array.isArray(data.months) && data.months.length) monthlySeries.value = data.months
+  } catch {
+    // 실패 시 데모 데이터(monthlyAnalytics)로 폴백
+  }
+}
+onMounted(loadMonthly)
+
 // 최근 5개월 예산(연한 트랙) + 사용(색상) 겹침 막대그래프
 const barChart = computed(() => {
   // 과거 달 사용액은 분석 화면과 동일한 데모 데이터(monthlyAnalytics)에서 가져와 숫자를 일치시킨다
   const monthBudget = { '2026-02': 600000, '2026-03': 700000, '2026-04': 700000, '2026-05': 750000 }
-  const months = [
-    { label: '2월', ym: '2026-02' },
-    { label: '3월', ym: '2026-03' },
-    { label: '4월', ym: '2026-04' },
-    { label: '5월', ym: '2026-05' },
-    { label: '6월', ym: '2026-06', current: true },
-  ].map((m) => (m.current
-    ? { ...m, budget: currentBudget.value.budget, spent: currentBudget.value.spent }
-    : { ...m, budget: monthBudget[m.ym] || 0, spent: demoMonthSummary(m.ym)?.totalExpense || 0 }))
+  const series = monthlySeries.value
+  const months = (series && series.length)
+    ? series.map((m) => {
+      const ym = String(m.month)
+      const isCurrent = ym === CURRENT_MONTH
+      return {
+        label: `${Number(ym.slice(5, 7))}월`,
+        ym,
+        current: isCurrent,
+        // 현재 달은 헤더(목표/사용)와 동기화되도록 라이브 값 사용
+        budget: isCurrent ? currentBudget.value.budget : Number(m.budget || 0),
+        spent: isCurrent ? currentBudget.value.spent : Number(m.spent || 0),
+      }
+    })
+    : [
+      { label: '2월', ym: '2026-02' },
+      { label: '3월', ym: '2026-03' },
+      { label: '4월', ym: '2026-04' },
+      { label: '5월', ym: '2026-05' },
+      { label: '6월', ym: '2026-06', current: true },
+    ].map((m) => (m.current
+      ? { ...m, budget: currentBudget.value.budget, spent: currentBudget.value.spent }
+      : { ...m, budget: monthBudget[m.ym] || 0, spent: demoMonthSummary(m.ym)?.totalExpense || 0 }))
   const w = 320
   const h = 168
   const padTop = 28
