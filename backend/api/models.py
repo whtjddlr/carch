@@ -16,6 +16,9 @@ class Transaction(models.Model):
     category = models.CharField(max_length=40)
     amount = models.IntegerField()
     approved_at = models.DateTimeField()
+    payment_type = models.CharField(max_length=20, default='lump_sum')
+    installment_months = models.PositiveSmallIntegerField(default=0)
+    is_interest_free_installment = models.BooleanField(default=False)
     icon = models.CharField(max_length=8, default='💳')
     address = models.CharField(max_length=200, blank=True, default='직접 입력')
     source_text = models.TextField(blank=True, default='')
@@ -158,6 +161,13 @@ class PurchasePlan(models.Model):
 
 
 class CommunityPost(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='community_posts',
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+    )
     title = models.CharField(max_length=120)
     body = models.TextField()
     author = models.CharField(max_length=30, default='남주현')
@@ -170,12 +180,22 @@ class CommunityPost(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+        ]
 
     def __str__(self):
         return self.title
 
 
 class CommunityComment(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='community_comments',
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+    )
     post = models.ForeignKey(CommunityPost, related_name='comment_set', on_delete=models.CASCADE)
     body = models.TextField()
     author = models.CharField(max_length=30, default='남주현')
@@ -184,9 +204,30 @@ class CommunityComment(models.Model):
 
     class Meta:
         ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+        ]
 
     def __str__(self):
         return f'{self.author}: {self.body[:20]}'
+
+
+class CommunityPostLike(models.Model):
+    post = models.ForeignKey(CommunityPost, related_name='like_set', on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='community_likes', on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['post', 'user'], name='unique_community_post_like'),
+        ]
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['post', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.user_id}:{self.post_id}'
 
 
 class AIAnalysisRecord(models.Model):

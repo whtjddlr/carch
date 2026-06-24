@@ -66,6 +66,7 @@ const groups = [
     title: '소비계획',
     items: [
       { label: '소비계획 홈', path: '/budget' },
+      { label: '예산 추가', path: '/budget/new' },
       { label: '예산 상세', path: '/budget/current' },
     ],
   },
@@ -106,6 +107,7 @@ const groups = [
     items: [
       { label: '알림', path: '/notifications' },
       { label: '설정', path: '/settings' },
+      { label: '알림 설정', path: '/settings/notifications' },
       { label: '프로필 수정', path: '/settings/profile' },
       { label: '보안 설정', path: '/settings/security' },
       { label: '검색', path: '/search' },

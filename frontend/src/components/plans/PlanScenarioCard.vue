@@ -37,7 +37,7 @@
         <p class="metric-value">{{ krw(scenario.maxMonthlySpend) }}</p>
       </div>
       <div class="metric-tile wide">
-        <p class="metric-label">실적 달성 예상 카드 수</p>
+        <p class="metric-label">다음 달 조건 충족 카드 수</p>
         <p class="metric-value">{{ scenario.achievedCards }}장</p>
       </div>
     </div>
@@ -73,6 +73,7 @@ const props = defineProps({
 const color = computed(() => ({
   '혜택 최대화': '#7C3AED',
   '예산 안정': '#059669',
+  '다음 달 조건 준비': '#0B63CE',
   '실적 균형': '#0B63CE',
   '카드 실적 균형': '#0B63CE',
 }[props.scenario.type] || '#0B63CE'))
@@ -80,6 +81,7 @@ const color = computed(() => ({
 const icon = computed(() => ({
   '혜택 최대화': Zap,
   '예산 안정': ShieldAlert,
+  '다음 달 조건 준비': SlidersHorizontal,
   '실적 균형': SlidersHorizontal,
   '카드 실적 균형': SlidersHorizontal,
 }[props.scenario.type] || SlidersHorizontal))

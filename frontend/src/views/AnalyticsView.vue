@@ -1,10 +1,10 @@
 <template>
   <section class="screen analytics-screen">
-    <header class="simple-header blue-gradient">
+    <header class="simple-header analytics-header">
       <AppBackButton fallback="/cards" />
-      <div>
+      <div class="analytics-title">
         <h1>카드 소비 분석</h1>
-        <p>소비·혜택 요약</p>
+        <p>이번 달 소비 흐름과 카드 개선 포인트</p>
       </div>
       <button
         class="refresh-analysis-button"
@@ -18,199 +18,180 @@
       </button>
     </header>
 
-    <div class="screen-scroll scrollbar-hide page-padding">
-      <div v-if="error" class="notice-card">{{ error }}</div>
-      <div v-if="isLoading" class="notice-card">최신 소비 인사이트를 준비하고 있습니다.</div>
-      <div v-if="isRefreshing" class="notice-card">새로운 소비 인사이트를 정리하고 있습니다.</div>
-
-      <div class="metric-grid">
-        <article class="app-card metric-card metric-card-total">
-          <span>지출</span>
-          <strong class="metric-value">{{ krw(totalExpense) }}</strong>
-        </article>
-        <article class="app-card metric-card metric-card-saving">
-          <span>개선</span>
-          <strong class="metric-value success">{{ krw(expectedSaving) }}</strong>
-        </article>
+    <div class="screen-scroll scrollbar-hide analytics-body">
+      <div v-if="statusMessage" class="status-banner" :class="{ error: Boolean(error) }">
+        {{ statusMessage }}
       </div>
 
-      <article v-if="spendingTrend" class="app-card trend-card">
-        <div class="section-title">
-          <span>흐름</span>
-          <small>{{ trendPeriodLabel }}</small>
+      <article class="analysis-hero app-card" :class="{ empty: !hasUsableAnalysis }">
+        <div class="hero-copy">
+          <span>{{ trendPeriodLabel }}</span>
+          <strong>{{ heroAmountLabel }}</strong>
+          <p>{{ heroMessage }}</p>
         </div>
-        <div v-if="primaryTrendChange" class="trend-primary">
-          <strong>{{ trendPrimaryTitle }}</strong>
-          <p>{{ trendPrimaryCopy }}</p>
+        <div v-if="topCategory" class="hero-focus">
+          <small>최대 지출</small>
+          <b>{{ topCategory?.category || '-' }}</b>
+          <span>{{ topCategory ? `${topCategory.percent}%` : '0%' }}</span>
         </div>
-        <ul class="trend-metrics">
-          <li v-for="item in trendHighlights" :key="item.label">
-            <small>{{ item.label }}</small>
-            <strong :class="{ success: item.tone === 'success', attention: item.tone === 'attention' }">
-              {{ item.value }}
-            </strong>
-            <span>{{ item.caption }}</span>
-          </li>
-        </ul>
-        <div v-if="pendingReviewCandidates.length" class="spend-review-panel">
-          <div class="review-copy">
-            <span>반복 여부</span>
-            <strong>앞으로도 반복될 지출인가요?</strong>
-            <p>선택하면 같은 항목은 다시 묻지 않습니다.</p>
-          </div>
-          <div class="review-list">
-            <article v-for="item in pendingReviewCandidates" :key="item.category" class="review-item">
-              <div>
-                <strong>{{ item.category }}</strong>
-                <small>평소 {{ krw(item.baselineReference) }} · 이번 달 {{ krw(item.currentAmount) }}</small>
-              </div>
-              <div class="review-toggle" role="group" :aria-label="`${item.category} 지출 반영 방식`">
-                <button
-                  type="button"
-                  @click="setRecurringOverride(item.category, false)"
-                >
-                  이번 달만
-                </button>
-                <button
-                  type="button"
-                  @click="setRecurringOverride(item.category, true)"
-                >
-                  반복
-                </button>
-              </div>
-            </article>
-          </div>
+        <div v-else class="hero-focus muted">
+          <small>상태</small>
+          <b>{{ isLoading ? '준비 중' : '대기' }}</b>
+          <span>내역 필요</span>
         </div>
       </article>
 
-      <div v-if="aiAnalysis?.summaryCards?.length" class="ai-summary-grid">
-        <article
-          v-for="card in aiAnalysis.summaryCards"
-          :key="`${card.label}-${card.value}`"
-          class="app-card ai-summary-card"
-          :class="`tone-${card.tone || 'gray'}`"
-        >
-          <span>{{ compactSummaryLabel(card.label) }}</span>
-          <strong class="summary-value">{{ card.value }}</strong>
-        </article>
-      </div>
-
-      <article v-if="aiAnalysis" class="app-card ai-card">
-        <div class="section-title">
-          <span>핵심 진단</span>
-          <small>분석 기준 <b>{{ trendPeriodLabel }}</b></small>
-        </div>
-        <div class="primary-insight compact" :class="`severity-${aiAnalysis.primaryInsight?.severity || 'info'}`">
-          <div>
-            <span>{{ conciseDiagnosis.label }}</span>
-            <strong>{{ conciseDiagnosis.title }}</strong>
-          </div>
-          <em v-if="conciseDiagnosis.amount">
-            {{ krw(conciseDiagnosis.amount) }}
-          </em>
-        </div>
-        <ul class="signal-grid">
-          <li v-for="item in analysisSignals" :key="`${item.label}-${item.value}`">
-            <small>{{ item.label }}</small>
-            <strong>{{ item.value }}</strong>
-          </li>
-        </ul>
-      </article>
-      <article v-else class="app-card empty-analysis-card">
-        <span>대기</span>
-        <strong>준비 중</strong>
-      </article>
-
-      <article v-if="recommendationAlert?.show && topRecommendation" class="app-card card-switch-card">
-        <div class="section-title">
-          <span>카드 추천</span>
-          <small>매칭 <b>{{ topRecommendation.match }}%</b></small>
-        </div>
-        <div class="switch-hero">
-          <div class="switch-card-preview">
-            <img v-if="topRecommendation.imageUrl" :src="topRecommendation.imageUrl" :alt="topRecommendation.name" />
-            <div v-else class="switch-card-fallback">
-              <small>{{ topRecommendation.issuer }}</small>
-              <strong>{{ topRecommendation.name }}</strong>
-            </div>
-          </div>
-          <div>
-            <strong>{{ cardSwitchTitle }}</strong>
-          </div>
-        </div>
-        <div class="switch-metrics">
+      <div class="insight-actions">
+        <RouterLink class="insight-action" to="/reports/monthly">
           <span>
-            <small>월</small>
+            <FileText :size="18" :stroke-width="2.2" />
+          </span>
+          <div>
+            <strong>월간 보고서</strong>
+            <small>요약 리포트 보기</small>
+          </div>
+          <ChevronRight :size="17" :stroke-width="2.2" />
+        </RouterLink>
+        <RouterLink class="insight-action teal" to="/recommendations/new">
+          <span>
+            <Sparkles :size="18" :stroke-width="2.2" />
+          </span>
+          <div>
+            <strong>카드 추천</strong>
+            <small>혜택 비교하기</small>
+          </div>
+          <ChevronRight :size="17" :stroke-width="2.2" />
+        </RouterLink>
+      </div>
+
+      <section v-if="hasUsableAnalysis" class="metric-row" aria-label="분석 핵심 지표">
+        <article v-for="metric in metricCards" :key="metric.label" class="metric-tile app-card-sm" :class="metric.tone">
+          <small>{{ metric.label }}</small>
+          <strong>{{ metric.value }}</strong>
+          <span>{{ metric.caption }}</span>
+        </article>
+      </section>
+
+      <article v-if="hasCategoryData" class="analysis-card app-card category-card">
+        <div class="section-title-row">
+          <div>
+            <span>카테고리 순위</span>
+            <strong>어디에 많이 썼는지</strong>
+          </div>
+          <small>{{ categoryCountLabel }}</small>
+        </div>
+        <ul class="category-rank-list">
+          <li v-for="category in visibleCategoryRows" :key="category.category">
+            <div class="category-row-head">
+              <span>
+                <i :style="{ background: category.color }"></i>
+                <b>{{ category.category }}</b>
+              </span>
+              <strong>{{ krw(category.amount) }}</strong>
+            </div>
+            <div class="category-track">
+              <i :style="{ width: `${category.percent}%`, background: category.color }"></i>
+            </div>
+            <small>{{ category.percent }}% · {{ category.description }}</small>
+          </li>
+        </ul>
+      </article>
+
+      <article v-else class="analysis-card app-card empty-state-card">
+        <div class="empty-icon">
+          <BarChart3 :size="22" :stroke-width="2.2" />
+        </div>
+        <strong>분석할 소비 내역이 아직 부족해요</strong>
+        <p>결제 내역을 추가하면 카테고리별 흐름과 카드 개선 포인트가 바로 정리됩니다.</p>
+        <RouterLink class="primary-inline-link" to="/transactions/new">결제내역 추가</RouterLink>
+      </article>
+
+      <article v-if="hasUsableAnalysis && cardRows.length" class="analysis-card app-card card-usage-card">
+        <div class="section-title-row">
+          <div>
+            <span>카드별 사용</span>
+            <strong>어떤 카드에 몰렸는지</strong>
+          </div>
+          <CreditCard :size="19" :stroke-width="2.2" />
+        </div>
+        <ul class="card-usage-list">
+          <li v-for="card in cardRows" :key="card.id">
+            <div class="card-usage-copy">
+              <strong>{{ card.name }}</strong>
+              <small>{{ card.caption }}</small>
+            </div>
+            <div class="card-usage-value">
+              <b>{{ krw(card.amount) }}</b>
+              <span>{{ card.percent }}%</span>
+            </div>
+          </li>
+        </ul>
+      </article>
+
+      <article v-if="pendingReviewCandidates.length" class="analysis-card app-card review-card">
+        <div class="section-title-row">
+          <div>
+            <span>반복 지출 확인</span>
+            <strong>추천 기준을 더 정확하게</strong>
+          </div>
+          <small>{{ pendingReviewCandidates.length }}개</small>
+        </div>
+        <div class="review-list">
+          <article v-for="item in pendingReviewCandidates" :key="item.category" class="review-item">
+            <div>
+              <strong>{{ item.category }}</strong>
+              <small>평소 {{ krw(item.baselineReference) }} · 이번 달 {{ krw(item.currentAmount) }}</small>
+            </div>
+            <div class="review-toggle" role="group" :aria-label="`${item.category} 지출 반영 방식`">
+              <button type="button" @click="setRecurringOverride(item.category, false)">이번 달만</button>
+              <button type="button" @click="setRecurringOverride(item.category, true)">반복</button>
+            </div>
+          </article>
+        </div>
+      </article>
+
+      <article v-if="hasUsableAnalysis && topRecommendation" class="analysis-card app-card recommendation-card">
+        <div class="section-title-row">
+          <div>
+            <span>추천 카드</span>
+            <strong>{{ recommendationTitle }}</strong>
+          </div>
+          <small>{{ topRecommendation.match || 0 }}%</small>
+        </div>
+        <div class="recommendation-body">
+          <div class="recommendation-image">
+            <img v-if="topRecommendation.imageUrl" :src="topRecommendation.imageUrl" :alt="topRecommendation.name" />
+            <Sparkles v-else :size="22" :stroke-width="2.2" />
+          </div>
+          <div>
+            <strong>{{ topRecommendation.name }}</strong>
+            <p>{{ topRecommendation.reason || topRecommendation.benefit || '현재 소비 기준으로 비교해볼 만한 카드입니다.' }}</p>
+          </div>
+        </div>
+        <div class="recommendation-metrics">
+          <span>
+            <small>월 개선</small>
             <b>{{ signedKrw(topRecommendationEconomics.monthlyDelta) }}</b>
           </span>
           <span>
-            <small>연</small>
+            <small>연 개선</small>
             <b>{{ signedKrw(topRecommendationEconomics.annualDelta) }}</b>
           </span>
-          <span>
-            <small>기준</small>
-            <b>연회비 포함</b>
-          </span>
         </div>
-        <RouterLink class="switch-link" :to="`/recommendations/r1`">
-          자세히
-        </RouterLink>
+        <RouterLink class="secondary-inline-link" to="/recommendations/new">추천 자세히 보기</RouterLink>
       </article>
-
-      <article class="app-card chart-card">
-        <div class="section-title">
-          <span>지출 분포</span>
-          <small>{{ categoryCountLabel }}</small>
-        </div>
-        <div class="donut-panel">
-          <div class="category-donut" :style="categoryChartStyle" role="img" :aria-label="categoryChartLabel">
-            <div class="donut-hole">
-              <span>최다</span>
-              <strong>{{ topCategory?.category || '-' }}</strong>
-              <small>{{ topCategory ? `${topCategory.percent}%` : '0%' }}</small>
-            </div>
-          </div>
-          <ul class="donut-legend">
-            <li v-for="category in categoryRows" :key="category.category">
-              <i :style="{ background: category.color }"></i>
-              <div>
-                <strong>{{ category.category }}</strong>
-                <small>{{ category.percent }}%</small>
-              </div>
-              <b>{{ krw(category.amount) }}</b>
-            </li>
-          </ul>
-        </div>
-      </article>
-
-      <article v-if="aiAnalysis?.categoryInsights?.length" class="app-card insight-card">
-        <div class="section-title">
-          <span>요약</span>
-          <small>TOP 3</small>
-        </div>
-        <ul class="compact-list">
-          <li v-for="(item, index) in aiAnalysis.categoryInsights.slice(0, 3)" :key="`${item.category}-${item.amount}`">
-            <div>
-              <strong>{{ item.category }}</strong>
-              <small class="amount-highlight">{{ krw(item.amount) }}</small>
-            </div>
-            <span>{{ categorySignal(index) }}</span>
-          </li>
-        </ul>
-      </article>
-
     </div>
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { RefreshCw } from 'lucide-vue-next'
+import { BarChart3, ChevronRight, CreditCard, FileText, RefreshCw, Sparkles } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { krw, transactions as mockTransactions } from '@/data/mockData'
 import { fetchCardRecommendationBundle, fetchSpendingSummary } from '@/services/api'
 
-const colors = ['#0f5fae', '#008c95', '#24364f', '#8a9aad', '#c49a49', '#5f6b77']
+const colors = ['#0f5fae', '#008c95', '#24364f', '#c49a49', '#8a9aad', '#5f6b77']
 const summary = ref(null)
 const recommendationBundle = ref(null)
 const isLoading = ref(false)
@@ -233,14 +214,14 @@ function writeStoredList(key, value) {
   try {
     window.localStorage.setItem(key, JSON.stringify([...new Set(value.filter(Boolean))]))
   } catch {
-    // localStorage can be unavailable in privacy modes; the in-memory state still works.
+    // localStorage can be unavailable; keep the in-memory choice for this session.
   }
 }
 
 const recurringOverrides = ref(readStoredList(RECURRING_STORAGE_KEY))
 const handledReviewCategories = ref(readStoredList(REVIEW_HANDLED_STORAGE_KEY))
 
-const safeSummary = computed(() => summary.value || { totalExpense: 0, totalIncome: 0, byCategory: [], byCard: [] })
+const safeSummary = computed(() => summary.value || (isLoading.value ? buildEmptySummary() : buildMockSummary()))
 const aiAnalysis = computed(() => safeSummary.value.aiAnalysis || null)
 const spendingTrend = computed(() => safeSummary.value.spendingTrend || null)
 const totalExpense = computed(() => Number(safeSummary.value.totalExpense || 0))
@@ -249,182 +230,171 @@ const expectedSaving = computed(() =>
 )
 const topRecommendation = computed(() => recommendationBundle.value?.results?.[0] || null)
 const topRecommendationEconomics = computed(() => topRecommendation.value?.economics || {})
-const recommendationAlert = computed(() => recommendationBundle.value?.alert || null)
+
 const trendPeriodLabel = computed(() => {
-  const currentMonth = spendingTrend.value?.currentMonth
-  return currentMonth ? `${currentMonth.replace('-', '.')} 기준` : '최근 6개월'
+  const currentMonth = spendingTrend.value?.currentMonth || safeSummary.value.period?.currentMonth
+  return currentMonth ? `${currentMonth.replace('-', '.')} 기준` : '이번 달 기준'
 })
+
+const rawCategoryRows = computed(() => {
+  const rows = [...(safeSummary.value.byCategory || [])]
+    .filter((item) => Number(item.amount || 0) > 0)
+    .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
+  const total = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  return rows.map((item, index) => {
+    const percent = total ? Math.round((Number(item.amount || 0) / total) * 100) : 0
+    return {
+      ...item,
+      percent: Math.max(percent, total ? 1 : 0),
+      share: total ? (Number(item.amount || 0) / total) * 100 : 0,
+      color: colors[index % colors.length],
+      description: categoryDescription(item.category, index),
+    }
+  })
+})
+
+const visibleCategoryRows = computed(() => rawCategoryRows.value.slice(0, 5))
+const hasCategoryData = computed(() => rawCategoryRows.value.length > 0)
+const categoryCountLabel = computed(() => `${rawCategoryRows.value.length}개 항목`)
+const topCategory = computed(() => rawCategoryRows.value[0] || null)
+const heroMessage = computed(() => {
+  if (!totalExpense.value) return '결제 내역을 쌓으면 소비 성향이 선명하게 보여요.'
+  if (!topCategory.value) return '이번 달 소비 데이터를 정리했습니다.'
+  return `${topCategory.value.category} 비중이 가장 높아서 이 항목의 카드 혜택을 먼저 보면 좋아요.`
+})
+
 const oneTimeCandidates = computed(() => spendingTrend.value?.oneTimeCandidates || [])
 const reviewCandidates = computed(() => spendingTrend.value?.reviewCandidates || oneTimeCandidates.value)
 const pendingReviewCandidates = computed(() =>
   reviewCandidates.value.filter((item) => !handledReviewCategories.value.includes(item.category)),
 )
-const primaryTrendChange = computed(() => {
-  const oneTime = oneTimeCandidates.value[0]
-  if (oneTime) return oneTime
-  return (spendingTrend.value?.categoryChanges || []).find((item) => Number(item.currentAmount || 0) > 0) || null
-})
-const trendPrimaryTitle = computed(() => {
-  const item = primaryTrendChange.value
-  if (!item) return '안정'
-  if (item.oneTimeCandidate) return `${item.category} 증가`
-  if (Number(item.deltaFromBaseline || 0) > 0) return `${item.category} 증가`
-  if (Number(item.deltaFromBaseline || 0) < 0) return `${item.category} 감소`
-  return `${item.category} 안정`
-})
-const trendPrimaryCopy = computed(() => {
-  const item = primaryTrendChange.value
-  if (!item) return '반복 소비 기준선을 쌓고 있습니다.'
-  const base = krw(item.baselineReference || item.baselineAverage || 0)
-  if (item.userConfirmedRecurring) {
-    return `반복 지출로 반영했습니다.`
-  }
-  if (item.oneTimeCandidate) {
-    return `평소 ${base} 기준으로 계산합니다.`
-  }
-  return `평소 ${base} 기준으로 변화를 확인했습니다.`
-})
-const trendHighlights = computed(() => {
+
+const metricCards = computed(() => {
   const total = spendingTrend.value?.total || {}
   return [
     {
-      label: '전월',
+      label: '전월 대비',
       value: signedKrw(total.deltaFromPrevious),
-      caption: '지난달 대비',
-      tone: Number(total.deltaFromPrevious || 0) > 0 ? 'attention' : 'success',
+      caption: '지난달과 비교',
+      tone: Number(total.deltaFromPrevious || 0) > 0 ? 'warning' : 'good',
     },
     {
-      label: '평소',
+      label: '평소 대비',
       value: signedKrw(total.deltaFromBaseline),
-      caption: '6개월 평균 대비',
-      tone: Number(total.deltaFromBaseline || 0) > 0 ? 'attention' : 'success',
+      caption: '최근 6개월 기준',
+      tone: Number(total.deltaFromBaseline || 0) > 0 ? 'warning' : 'good',
     },
     {
-      label: '추천 기준',
-      value: krw(total.adjustedForRecommendation),
-      caption: '평소 소비',
-      tone: 'success',
+      label: '예상 개선',
+      value: signedKrw(topRecommendationEconomics.value.monthlyDelta || expectedSaving.value),
+      caption: '월 기준 혜택',
+      tone: 'good',
     },
   ]
 })
+
+const cardRows = computed(() => {
+  const insightRows = aiAnalysis.value?.cardInsights || []
+  const sourceRows = insightRows.length
+    ? insightRows.map((item) => ({
+      id: item.cardId || item.cardName,
+      name: item.cardName || `카드 ${item.cardId}`,
+      amount: Number(item.amount || 0),
+      caption: item.fit ? `적합도 ${item.fit}` : (item.insight || '사용 흐름 확인'),
+    }))
+    : (safeSummary.value.byCard || []).map((item) => ({
+      id: item.cardId,
+      name: `카드 ${item.cardId}`,
+      amount: Number(item.amount || 0),
+      caption: '사용 흐름 확인',
+    }))
+  const total = sourceRows.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  return sourceRows
+    .filter((item) => Number(item.amount || 0) > 0)
+    .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
+    .slice(0, 3)
+    .map((item) => ({
+      ...item,
+      percent: total ? Math.round((Number(item.amount || 0) / total) * 100) : 0,
+    }))
+})
+
+const hasUsableAnalysis = computed(() =>
+  totalExpense.value > 0 || rawCategoryRows.value.length > 0 || cardRows.value.length > 0,
+)
+
+const heroAmountLabel = computed(() => {
+  if (hasUsableAnalysis.value) return krw(totalExpense.value)
+  return isLoading.value ? '준비 중' : '데이터 없음'
+})
+
+const recommendationTitle = computed(() => {
+  const delta = Number(topRecommendationEconomics.value.monthlyDelta || 0)
+  if (delta > 0) return `월 ${krw(delta)} 개선 가능`
+  return '현재 소비와 비교해볼 카드'
+})
+
 const analysisButtonLabel = computed(() => {
   if (isRefreshing.value) return '분석 중'
   return aiAnalysis.value ? '인사이트 갱신' : '인사이트 생성'
 })
-const rawCategoryRows = computed(() => {
-  const rows = [...(safeSummary.value.byCategory || [])].sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
-  const total = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0)
-  return rows.map((item, index) => ({
-    ...item,
-    percent: total ? Math.max(1, Math.round((Number(item.amount || 0) / total) * 100)) : 0,
-    share: total ? (Number(item.amount || 0) / total) * 100 : 0,
-    color: colors[index % colors.length],
-  }))
+
+const statusMessage = computed(() => {
+  if (error.value) return error.value
+  if (isRefreshing.value) return '새로운 소비 인사이트를 정리하고 있습니다.'
+  if (isLoading.value) return '최신 소비 인사이트를 준비하고 있습니다.'
+  return ''
 })
-const categoryRows = computed(() => {
-  const rows = rawCategoryRows.value
-  if (rows.length <= 6) return rows
-  const majorRows = rows.slice(0, 5)
-  const restRows = rows.slice(5)
-  const restAmount = restRows.reduce((sum, item) => sum + Number(item.amount || 0), 0)
-  const restShare = restRows.reduce((sum, item) => sum + Number(item.share || 0), 0)
-  const restPercent = restRows.reduce((sum, item) => sum + Number(item.percent || 0), 0)
-  return [
-    ...majorRows,
-    {
-      category: '기타',
-      amount: restAmount,
-      percent: Math.max(1, Math.round(restPercent)),
-      share: restShare,
-      color: '#8a9aad',
-    },
-  ]
-})
-const categoryCountLabel = computed(() => (
-  rawCategoryRows.value.length > 6 ? '상위 5개 + 기타' : `${rawCategoryRows.value.length}개`
-))
-const topCategory = computed(() => categoryRows.value[0] || null)
-const categoryChartStyle = computed(() => {
-  if (!categoryRows.value.length) {
-    return { background: '#e7edf4' }
-  }
-  let cursor = 0
-  const segments = categoryRows.value.map((item, index) => {
-    const start = cursor
-    const end = index === categoryRows.value.length - 1 ? 360 : cursor + item.share * 3.6
-    cursor = end
-    return `${item.color} ${start.toFixed(2)}deg ${end.toFixed(2)}deg`
-  })
-  return { background: `conic-gradient(${segments.join(', ')})` }
-})
-const categoryChartLabel = computed(() => {
-  if (!topCategory.value) return '카테고리별 지출 데이터 없음'
-  return `카테고리별 지출. 가장 큰 항목은 ${topCategory.value.category}, ${topCategory.value.percent}%입니다.`
-})
-const conciseDiagnosis = computed(() => {
-  const primary = aiAnalysis.value?.primaryInsight || {}
-  const top = categoryRows.value[0]
-  return {
-    label: '집중',
-    title: top ? `${top.category}` : (primary.title || '점검'),
-    amount: primary.metricValue || top?.amount || 0,
-  }
-})
-const analysisSignals = computed(() => {
-  const items = []
-  const top = categoryRows.value[0]
-  const second = categoryRows.value[1]
-  if (top) items.push({ label: '집중', value: top.category })
-  if (second) items.push({ label: '보조', value: second.category })
-  if (topRecommendation.value?.economics?.monthlyDelta > 0) {
-    items.push({ label: '개선', value: signedKrw(topRecommendation.value.economics.monthlyDelta) })
-  }
-  return items.slice(0, 3)
-})
-const cardSwitchTitle = computed(() => topRecommendation.value?.name || '추천 카드')
 
 function buildMockSummary() {
   const expenses = mockTransactions.filter((tx) => Number(tx.amt) < 0)
   const categoryMap = new Map()
+  const cardMap = new Map()
   expenses.forEach((tx) => {
     categoryMap.set(tx.cat, (categoryMap.get(tx.cat) || 0) + Math.abs(Number(tx.amt) || 0))
+    cardMap.set(String(tx.cardId), (cardMap.get(String(tx.cardId)) || 0) + Math.abs(Number(tx.amt) || 0))
   })
   const byCategory = [...categoryMap.entries()].map(([category, amount]) => ({ category, amount }))
+  const byCard = [...cardMap.entries()].map(([cardId, amount]) => ({ cardId, amount }))
   const totalExpense = expenses.reduce((sum, tx) => sum + Math.abs(Number(tx.amt) || 0), 0)
-
   return {
     totalExpense,
     totalIncome: mockTransactions
       .filter((tx) => Number(tx.amt) > 0)
       .reduce((sum, tx) => sum + Number(tx.amt || 0), 0),
     byCategory,
-    byCard: [],
-    aiAnalysis: {
-      aiMode: 'mock',
-      summaryTitle: '소비 요약',
-      confidence: 0.78,
-      headline: '상위 지출 변화에 맞춰 카드 혜택 조건 확인이 필요합니다.',
-      savingOpportunities: [
-        {
-          title: '쇼핑 결제 카드 조정',
-          reason: '쿠팡과 온라인 쇼핑 지출이 가장 크게 잡혀 있습니다.',
-          action: '카드의정석2 SHOPPER 혜택 조건을 확인하시기 바랍니다.',
-          amount: 12000,
-        },
-        {
-          title: '교육 지출 기준 확인',
-          reason: '교육 지출은 이번 달에 평소보다 크게 반영되었습니다.',
-          action: '반복 지출이면 추천 기준에 함께 반영하시기 바랍니다.',
-          amount: 8000,
-        },
-      ],
-      categoryInsights: byCategory.slice(0, 3).map((item) => ({
-        category: item.category,
-        amount: item.amount,
-        insight: `${item.category} 지출은 카드 혜택 비교 기준으로 확인할 수 있습니다.`,
-      })),
-      nextActions: ['결제내역 정리', '소비계획 만들기', '카드 추천 보기'],
+    byCard,
+    period: { currentMonth: '2026-06' },
+    spendingTrend: {
+      currentMonth: '2026-06',
+      total: {
+        deltaFromPrevious: totalExpense - 483500,
+        deltaFromBaseline: totalExpense - 463183,
+      },
+      reviewCandidates: [],
+      oneTimeCandidates: [],
     },
+    aiAnalysis: {
+      savingOpportunities: [{ amount: 12000 }],
+      cardInsights: byCard.map((item) => ({
+        cardId: item.cardId,
+        cardName: `카드 ${item.cardId}`,
+        amount: item.amount,
+        fit: '보통',
+      })),
+    },
+  }
+}
+
+function buildEmptySummary() {
+  return {
+    totalExpense: 0,
+    totalIncome: 0,
+    byCategory: [],
+    byCard: [],
+    period: { currentMonth: '2026-06' },
+    spendingTrend: { currentMonth: '2026-06', total: {} },
+    aiAnalysis: null,
   }
 }
 
@@ -443,8 +413,7 @@ async function loadSummary() {
     if (!summary.value?.aiAnalysis && summary.value?.aiAnalysisStatus === 'empty') {
       summary.value = await fetchSpendingSummary(trendRequestOptions({ ai: true, refresh: true }))
     }
-    const recommendations = await fetchCardRecommendationBundle(trendRequestOptions())
-    recommendationBundle.value = recommendations
+    recommendationBundle.value = await fetchCardRecommendationBundle(trendRequestOptions())
   } catch {
     summary.value = buildMockSummary()
     recommendationBundle.value = null
@@ -492,65 +461,75 @@ function signedKrw(value) {
   return `${amount > 0 ? '+' : amount < 0 ? '-' : ''}${krw(Math.abs(amount))}`
 }
 
-function compactSummaryLabel(label) {
-  const text = String(label || '')
-  if (text.includes('지출')) return '지출'
-  if (text.includes('절감') || text.includes('개선')) return '개선'
-  if (text.includes('점검')) return '점검'
-  if (text.includes('카드')) return '카드'
-  return text.replace(/이번 달|예상|기준|분석/g, '').trim() || '요약'
-}
-
-function categorySignal(index) {
-  return ['집중', '비교', '관리'][index] || '점검'
+function categoryDescription(category, index) {
+  if (index === 0) return '가장 먼저 볼 항목'
+  if (category === '쇼핑') return '혜택 카드 비교 추천'
+  if (category === '식비') return '반복 지출 관리'
+  if (category === '교통') return '고정 소비 확인'
+  return '이번 달 주요 지출'
 }
 
 onMounted(loadSummary)
 </script>
 
 <style scoped>
+.analytics-screen {
+  background: #f3f6f8;
+}
+
 .simple-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 12px;
-  padding: 24px 20px;
-  color: #fff;
+  align-items: center;
+  padding: 22px 20px 20px;
+  color: #17202b;
+}
+
+.analytics-header {
+  border: 1px solid rgba(138, 154, 173, 0.12);
+  border-top: 0;
+  border-radius: 0 0 28px 28px;
+  background:
+    radial-gradient(circle at 12% -10%, rgba(15, 95, 174, 0.13), transparent 42%),
+    linear-gradient(180deg, #ffffff 0%, #fbfdff 57%, #eef5fa 100%);
+  box-shadow: 0 12px 30px rgba(36, 54, 79, 0.08);
+}
+
+.analytics-title {
+  min-width: 0;
 }
 
 .simple-header h1 {
   margin: 0 0 4px;
+  color: #17202b;
   font-size: 22px;
-  font-weight: 900;
+  font-weight: 950;
+  line-height: 1.18;
 }
 
 .simple-header p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.72);
+  color: #6f7d8c;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1.45;
 }
 
 .refresh-analysis-button {
   display: inline-flex;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(36, 54, 79, 0.08);
   border-radius: 50%;
   padding: 0;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  box-shadow: 0 8px 18px rgba(7, 15, 28, 0.14);
-  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.72);
+  color: #24364f;
+  box-shadow: 0 10px 22px rgba(36, 54, 79, 0.08);
   touch-action: manipulation;
-}
-
-.refresh-analysis-button:hover {
-  background: rgba(255, 255, 255, 0.24);
 }
 
 .refresh-analysis-button:disabled {
@@ -568,149 +547,66 @@ onMounted(loadSummary)
   }
 }
 
-.page-padding {
-  padding: 18px 18px 28px;
+.analytics-body {
+  padding: 16px clamp(14px, 4.6vw, 20px) 120px;
+  background: #f3f6f8;
 }
 
-.notice-card {
+.status-banner {
   margin-bottom: 12px;
+  border: 1px solid rgba(15, 95, 174, 0.1);
   border-radius: 14px;
-  padding: 12px 14px;
-  background: #eef4ff;
+  padding: 11px 13px;
+  background: rgba(232, 241, 251, 0.72);
   color: #0f5fae;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 850;
 }
 
-.metric-grid {
+.status-banner.error {
+  border-color: rgba(196, 154, 73, 0.2);
+  background: rgba(255, 249, 235, 0.76);
+  color: #8a640e;
+}
+
+.analysis-hero {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.metric-grid article,
-.chart-card,
-.ai-card,
-.insight-card,
-.trend-card {
-  padding: 17px 16px;
-}
-
-.metric-card,
-.trend-card,
-.ai-summary-card,
-.ai-card,
-.card-switch-card,
-.chart-card,
-.insight-card {
-  border: 1px solid rgba(36, 54, 79, 0.1) !important;
-  border-radius: 18px !important;
-  background: rgba(251, 253, 255, 0.76) !important;
-  box-shadow: 0 14px 30px rgba(36, 54, 79, 0.055) !important;
-  backdrop-filter: blur(14px) saturate(1.06) !important;
-}
-
-.trend-card,
-.ai-card,
-.card-switch-card,
-.chart-card,
-.insight-card {
-  position: relative;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: end;
   overflow: hidden;
+  border: 1px solid rgba(36, 54, 79, 0.08) !important;
+  border-radius: 22px !important;
+  padding: 20px 18px !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(238, 247, 250, 0.9)),
+    radial-gradient(circle at 100% 0%, rgba(0, 140, 149, 0.16), transparent 40%) !important;
+  box-shadow: 0 16px 34px rgba(36, 54, 79, 0.08) !important;
 }
 
-.trend-card::before,
-.ai-card::before,
-.card-switch-card::before,
-.chart-card::before,
-.insight-card::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 3px;
-  background: #24364f;
-  content: '';
+.analysis-hero.empty {
+  align-items: center;
 }
 
-.ai-card::before,
-.card-switch-card::before {
-  background: #008c95;
-}
-
-.metric-card {
-  position: relative;
-  overflow: hidden;
-  border-color: rgba(36, 54, 79, 0.08);
-  background: rgba(255, 255, 255, 0.78);
-}
-
-.metric-card::before {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  height: 3px;
-  background: #24364f;
-  content: '';
-}
-
-.metric-card-saving::before {
-  background: #008c95;
-}
-
-.metric-grid span {
-  color: #6e6e73;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.metric-grid strong {
-  display: block;
-  color: #17202b;
-  font-size: 23px;
-  font-weight: 900;
-  line-height: 1.12;
-}
-
-.metric-value {
-  margin-top: 7px;
-  letter-spacing: 0;
-  text-shadow: 0 8px 22px rgba(15, 95, 174, 0.08);
-}
-
-.success {
-  color: #008c95 !important;
-}
-
-.attention {
-  color: #b45309 !important;
-}
-
-.trend-card {
-  margin-bottom: 14px;
-  border-color: rgba(36, 54, 79, 0.1);
-  background: rgba(255, 255, 255, 0.78);
-}
-
-.trend-primary {
-  border-radius: 15px;
-  margin-bottom: 10px;
-  padding: 13px;
-  background: rgba(244, 248, 251, 0.88);
-}
-
-.trend-primary strong {
-  display: block;
-  color: #17202b;
-  font-size: 20px;
+.hero-copy span,
+.section-title-row span {
+  color: #0f5fae;
+  font-size: 11px;
   font-weight: 950;
-  line-height: 1.18;
 }
 
-.trend-primary p {
-  margin: 6px 0 0;
+.hero-copy strong {
+  display: block;
+  margin-top: 7px;
+  color: #17202b;
+  font-size: clamp(30px, 8vw, 38px);
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1.03;
+}
+
+.hero-copy p {
+  margin: 10px 0 0;
   color: #5f6b77;
   font-size: 12px;
   font-weight: 800;
@@ -718,102 +614,371 @@ onMounted(loadSummary)
   word-break: keep-all;
 }
 
-.trend-metrics {
+.hero-focus {
+  display: grid;
+  min-width: 82px;
+  justify-items: center;
+  border-radius: 18px;
+  padding: 12px 10px;
+  background: #24364f;
+  color: #fff;
+  box-shadow: 0 14px 24px rgba(36, 54, 79, 0.18);
+}
+
+.hero-focus small {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.hero-focus b {
+  margin-top: 5px;
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.hero-focus span {
+  margin-top: 3px;
+  color: #9be6df;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.hero-focus.muted {
+  background: rgba(36, 54, 79, 0.08);
+  color: #24364f;
+  box-shadow: none;
+}
+
+.hero-focus.muted small,
+.hero-focus.muted span {
+  color: #7a8592;
+}
+
+.insight-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.insight-action {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 14px;
+  gap: 9px;
+  align-items: center;
+  border: 1px solid rgba(36, 54, 79, 0.08);
+  border-radius: 16px;
+  padding: 11px 10px;
+  background: rgba(255, 255, 255, 0.8);
+  color: inherit;
+  text-decoration: none;
+  box-shadow: 0 10px 22px rgba(36, 54, 79, 0.05);
+}
+
+.insight-action > span {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(15, 95, 174, 0.09);
+  color: #0f5fae;
+}
+
+.insight-action.teal > span {
+  background: rgba(0, 140, 149, 0.1);
+  color: #008c95;
+}
+
+.insight-action strong,
+.insight-action small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insight-action strong {
+  color: #17202b;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.insight-action small {
+  margin-top: 3px;
+  color: #7a8592;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.insight-action > svg {
+  color: #8a9aad;
+}
+
+.metric-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  padding: 0;
-  margin: 0;
-  list-style: none;
+  gap: 9px;
+  margin-top: 12px;
 }
 
-.trend-metrics li {
+.metric-tile {
   min-width: 0;
-  border-radius: 13px;
-  padding: 11px 10px;
-  background: rgba(251, 253, 255, 0.82);
+  border: 1px solid rgba(36, 54, 79, 0.08) !important;
+  border-radius: 16px !important;
+  padding: 12px 10px !important;
+  background: rgba(255, 255, 255, 0.78) !important;
+  box-shadow: 0 10px 22px rgba(36, 54, 79, 0.05) !important;
 }
 
-.trend-metrics small,
-.trend-metrics span {
+.metric-tile small,
+.metric-tile span {
   display: block;
   color: #8a9aad;
   font-size: 10px;
   font-weight: 900;
 }
 
-.trend-metrics strong {
+.metric-tile strong {
   display: block;
+  overflow: hidden;
   margin: 5px 0 3px;
   color: #17202b;
-  font-size: 14px;
+  font-size: clamp(13px, 3.7vw, 16px);
   font-weight: 950;
-  line-height: 1.1;
+  letter-spacing: 0;
+  line-height: 1.14;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.one-time-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  align-items: center;
-  margin-top: 10px;
+.metric-tile.good strong {
+  color: #008c95;
 }
 
-.one-time-strip span,
-.one-time-strip b {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  border-radius: 999px;
-  padding: 0 10px;
+.metric-tile.warning strong {
+  color: #b45309;
+}
+
+.analysis-card {
+  margin-top: 12px;
+  border: 1px solid rgba(36, 54, 79, 0.08) !important;
+  border-radius: 18px !important;
+  padding: 16px !important;
+  background: rgba(255, 255, 255, 0.82) !important;
+  box-shadow: 0 13px 28px rgba(36, 54, 79, 0.055) !important;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.section-title-row strong {
+  display: block;
+  margin-top: 3px;
+  color: #17202b;
+  font-size: 16px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.section-title-row > small,
+.section-title-row > svg {
+  flex: 0 0 auto;
+  color: #8a9aad;
   font-size: 11px;
   font-weight: 900;
 }
 
-.one-time-strip span {
-  background: rgba(36, 54, 79, 0.08);
-  color: #5f6b77;
+.category-rank-list,
+.card-usage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
 }
 
-.one-time-strip b {
-  background: rgba(180, 83, 9, 0.09);
-  color: #b45309;
+.category-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.spend-review-panel {
-  margin-top: 12px;
-  border-top: 1px solid rgba(36, 54, 79, 0.08);
-  padding-top: 12px;
+.category-row-head span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
 }
 
-.review-copy span {
-  color: #008c95;
-  font-size: 10px;
-  font-weight: 950;
+.category-row-head i {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 50%;
 }
 
-.review-copy strong {
-  display: block;
-  margin-top: 3px;
+.category-row-head b {
+  overflow: hidden;
   color: #17202b;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.review-copy p {
-  margin: 4px 0 0;
-  color: #6e6e73;
+.category-row-head strong {
+  color: #17202b;
+  font-size: 14px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.category-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  margin-top: 8px;
+  background: #e7edf4;
+}
+
+.category-track i {
+  display: block;
+  height: 100%;
+  min-width: 7px;
+  border-radius: inherit;
+}
+
+.category-rank-list li > small {
+  display: block;
+  margin-top: 6px;
+  color: #7a8592;
   font-size: 11px;
   font-weight: 800;
-  line-height: 1.45;
+}
+
+.empty-state-card {
+  text-align: left;
+}
+
+.empty-icon {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 15px;
+  background: rgba(15, 95, 174, 0.09);
+  color: #0f5fae;
+}
+
+.empty-state-card strong {
+  display: block;
+  margin-top: 12px;
+  color: #17202b;
+  font-size: 17px;
+  font-weight: 950;
+}
+
+.empty-state-card p {
+  margin: 7px 0 0;
+  color: #5f6b77;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.primary-inline-link,
+.secondary-inline-link {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  margin-top: 13px;
+  padding: 0 15px;
+  background: #24364f;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 950;
+  text-decoration: none;
+}
+
+.secondary-inline-link {
+  width: 100%;
+  background: rgba(15, 95, 174, 0.09);
+  color: #0f5fae;
+}
+
+.card-usage-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 14px;
+  padding: 12px;
+  background: #f5f8fb;
+}
+
+.card-usage-copy {
+  min-width: 0;
+}
+
+.card-usage-copy strong,
+.recommendation-body strong {
+  display: block;
+  overflow: hidden;
+  color: #17202b;
+  font-size: 14px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-usage-copy small {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  color: #7a8592;
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-usage-value {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.card-usage-value b {
+  display: block;
+  color: #17202b;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.card-usage-value span {
+  display: block;
+  margin-top: 3px;
+  color: #008c95;
+  font-size: 11px;
+  font-weight: 950;
 }
 
 .review-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 10px;
 }
 
 .review-item {
@@ -822,8 +987,8 @@ onMounted(loadSummary)
   gap: 10px;
   align-items: center;
   border-radius: 14px;
-  padding: 10px;
-  background: rgba(251, 253, 255, 0.82);
+  padding: 11px;
+  background: #f5f8fb;
 }
 
 .review-item strong {
@@ -835,7 +1000,7 @@ onMounted(loadSummary)
 
 .review-item small {
   display: block;
-  margin-top: 3px;
+  margin-top: 4px;
   color: #7a8592;
   font-size: 10px;
   font-weight: 850;
@@ -846,9 +1011,9 @@ onMounted(loadSummary)
   display: inline-grid;
   grid-template-columns: 1fr 1fr;
   overflow: hidden;
-  border: 1px solid rgba(36, 54, 79, 0.1);
+  border: 1px solid rgba(36, 54, 79, 0.08);
   border-radius: 999px;
-  background: rgba(237, 242, 247, 0.86);
+  background: #edf2f7;
 }
 
 .review-toggle button {
@@ -856,572 +1021,103 @@ onMounted(loadSummary)
   border: 0;
   padding: 0 10px;
   background: transparent;
-  color: #6e6e73;
+  color: #5f6b77;
   font-size: 11px;
   font-weight: 950;
   white-space: nowrap;
-  cursor: pointer;
   touch-action: manipulation;
 }
 
-.review-toggle button.active {
+.review-toggle button:active {
   background: #24364f;
   color: #fff;
-  box-shadow: 0 8px 18px rgba(36, 54, 79, 0.16);
 }
 
-.ai-summary-grid {
+.recommendation-card {
+  background:
+    linear-gradient(180deg, rgba(240, 253, 250, 0.88), rgba(255, 255, 255, 0.86)) !important;
+}
+
+.recommendation-body {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.ai-summary-card {
-  padding: 14px;
-  border-color: rgba(36, 54, 79, 0.09);
-  background: rgba(255, 255, 255, 0.72);
-}
-
-.ai-summary-card span {
-  display: block;
-  color: #6e6e73;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.ai-summary-card strong,
-.summary-value {
-  display: block;
-  margin-top: 4px;
-  color: #17202b;
-  font-size: 17px;
-  font-weight: 900;
-}
-
-.ai-summary-card small {
-  display: block;
-  margin-top: 3px;
-  color: #8a9aad;
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.ai-summary-card.tone-teal strong {
-  color: #008c95;
-}
-
-.ai-summary-card.tone-gold strong {
-  color: #a66f00;
-}
-
-.primary-insight {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: start;
-  margin-bottom: 12px;
-  border: 1px solid rgba(15, 95, 174, 0.12);
-  border-radius: 14px;
-  padding: 12px;
-  background: rgba(232, 241, 255, 0.62);
-}
-
-.primary-insight.compact {
-  margin-bottom: 10px;
-}
-
-.primary-insight > div > span {
-  color: #0f5fae;
-  font-size: 10px;
-  font-weight: 900;
-}
-
-.primary-insight strong {
-  display: block;
-  margin-top: 3px;
-  color: #17202b;
-  font-size: 20px;
-  font-weight: 900;
-  line-height: 1.12;
-}
-
-.primary-insight p {
-  margin: 4px 0 0;
-  color: #5f6b77;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.5;
-  word-break: keep-all;
-}
-
-.primary-insight em {
-  align-self: start;
-  border-radius: 12px;
-  padding: 8px 10px;
-  background: rgba(15, 95, 174, 0.1);
-  color: #0f5fae;
-  font-size: 16px;
-  font-style: normal;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.primary-insight.severity-warning {
-  border-color: rgba(220, 38, 38, 0.15);
-  background: rgba(254, 242, 242, 0.72);
-}
-
-.primary-insight.severity-warning span,
-.primary-insight.severity-warning em {
-  color: #dc2626;
-}
-
-.signal-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.signal-grid li {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-  border-radius: 12px;
-  padding: 10px;
-  background: rgba(246, 248, 251, 0.82);
-}
-
-.signal-grid small {
-  color: #8a9aad;
-  font-size: 10px;
-  font-weight: 900;
-}
-
-.signal-grid strong {
-  overflow: hidden;
-  color: #17202b;
-  font-size: 13px;
-  font-weight: 900;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.empty-analysis-card {
-  padding: 16px;
-  margin-bottom: 14px;
-}
-
-.empty-analysis-card span {
-  color: #0f5fae;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.empty-analysis-card strong {
-  display: block;
-  margin-top: 5px;
-  color: #17202b;
-  font-size: 16px;
-  font-weight: 900;
-  line-height: 1.4;
-}
-
-.empty-analysis-card p {
-  margin: 6px 0 0;
-  color: #5f6b77;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.5;
-}
-
-.card-switch-card {
-  margin-bottom: 14px;
-  padding: 16px;
-  border-color: rgba(0, 140, 149, 0.18);
-  background: linear-gradient(180deg, rgba(240, 253, 250, 0.82), rgba(255, 255, 255, 0.78));
-}
-
-.switch-hero {
-  display: grid;
-  grid-template-columns: 74px minmax(0, 1fr);
+  grid-template-columns: 66px minmax(0, 1fr);
   gap: 13px;
   align-items: center;
 }
 
-.switch-card-preview {
+.recommendation-image {
   display: flex;
-  min-height: 96px;
+  min-height: 88px;
   align-items: center;
   justify-content: center;
   border-radius: 15px;
-  background: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.7);
+  color: #008c95;
 }
 
-.switch-card-preview img {
-  width: 56px;
-  height: 88px;
-  object-fit: contain;
-  filter: drop-shadow(0 10px 14px rgba(16, 24, 40, 0.18));
-}
-
-.switch-card-fallback {
-  display: flex;
-  width: 56px;
-  height: 88px;
-  flex-direction: column;
-  justify-content: space-between;
-  border-radius: 9px;
-  padding: 9px 7px;
-  background: #24364f;
-  color: #fff;
-  box-shadow: 0 10px 14px rgba(16, 24, 40, 0.18);
-}
-
-.switch-card-fallback small,
-.switch-card-fallback strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.switch-card-fallback small {
-  font-size: 8px;
-  font-weight: 800;
-  opacity: 0.76;
-}
-
-.switch-card-fallback strong {
-  font-size: 10px;
-  font-weight: 900;
-}
-
-.switch-hero strong {
+.recommendation-image img {
   display: block;
-  color: #17202b;
-  font-size: 18px;
-  font-weight: 900;
-  line-height: 1.35;
+  width: 52px;
+  max-height: 82px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 14px rgba(36, 54, 79, 0.16));
 }
 
-.switch-hero p {
+.recommendation-body p {
+  display: -webkit-box;
+  overflow: hidden;
   margin: 6px 0 0;
   color: #5f6b77;
   font-size: 12px;
   font-weight: 800;
-  line-height: 1.5;
+  line-height: 1.48;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.switch-metrics {
+.recommendation-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-top: 13px;
+  margin-top: 12px;
 }
 
-.switch-metrics span {
-  min-width: 0;
-  border: 1px solid rgba(0, 140, 149, 0.08);
-  border-radius: 12px;
-  padding: 10px;
-  background: rgba(255, 255, 255, 0.72);
+.recommendation-metrics span {
+  border-radius: 13px;
+  padding: 10px 11px;
+  background: rgba(255, 255, 255, 0.74);
 }
 
-.switch-metrics small {
+.recommendation-metrics small {
   display: block;
-  color: #6e6e73;
+  color: #7a8592;
   font-size: 10px;
   font-weight: 900;
 }
 
-.switch-metrics b {
+.recommendation-metrics b {
   display: block;
   margin-top: 3px;
   color: #008c95;
   font-size: 15px;
-  font-weight: 900;
-  word-break: keep-all;
-}
-
-.switch-link {
-  display: inline-flex;
-  min-height: 40px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  margin-top: 13px;
-  padding: 10px 13px;
-  background: #17202b;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 900;
-  text-decoration: none;
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.section-title span {
-  color: #17202b;
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.section-title small {
-  color: #6e6e73;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.section-title small b {
-  color: #008c95;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-h2 {
-  margin: 0 0 12px;
-  color: #17202b;
-  font-size: 16px;
-  font-weight: 900;
-  line-height: 1.4;
-}
-
-.compact-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.compact-list li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  border-radius: 12px;
-  padding: 11px 12px;
-  background: #fbfdff;
-}
-
-.compact-list strong {
-  color: #17202b;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.compact-list .amount-highlight {
-  color: #008c95;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.compact-list span {
-  border-radius: 999px;
-  padding: 5px 8px;
-  background: rgba(15, 95, 174, 0.08);
-  color: #0f5fae;
-  font-size: 11px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.chart-card,
-.insight-card {
-  margin-top: 14px;
-}
-
-.donut-panel {
-  display: grid;
-  grid-template-columns: minmax(138px, 158px) minmax(0, 1fr);
-  align-items: center;
-  gap: 16px;
-}
-
-.category-donut {
-  position: relative;
-  width: min(158px, 100%);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(23, 32, 43, 0.04), 0 18px 38px rgba(15, 95, 174, 0.1);
-}
-
-.category-donut::after {
-  position: absolute;
-  inset: 15px;
-  border: 1px solid rgba(219, 228, 238, 0.74);
-  border-radius: inherit;
-  background: rgba(251, 253, 255, 0.96);
-  content: '';
-}
-
-.donut-hole {
-  position: absolute;
-  inset: 32px;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  text-align: center;
-}
-
-.donut-hole span {
-  color: #7a8593;
-  font-size: 10px;
-  font-weight: 900;
-}
-
-.donut-hole strong {
-  max-width: 72px;
-  overflow: hidden;
-  color: #17202b;
-  font-size: 15px;
-  font-weight: 900;
-  line-height: 1.15;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.donut-hole small {
-  color: #008c95;
-  font-size: 18px;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.donut-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.donut-legend li {
-  display: grid;
-  grid-template-columns: 9px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-}
-
-.donut-legend i {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  box-shadow: 0 0 0 3px rgba(23, 32, 43, 0.04);
-}
-
-.donut-legend div {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: 5px;
-}
-
-.donut-legend strong {
-  overflow: hidden;
-  color: #17202b;
-  font-size: 12px;
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.donut-legend small {
-  flex: 0 0 auto;
-  color: #008c95;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.donut-legend b {
-  color: #17202b;
-  font-size: 13px;
-  font-weight: 900;
-  text-align: right;
-  white-space: nowrap;
+  font-weight: 950;
 }
 
 @media (max-width: 380px) {
-  .simple-header {
-    align-items: stretch;
-  }
-
-  .donut-panel {
+  .metric-row {
     grid-template-columns: 1fr;
-    justify-items: center;
   }
 
-  .donut-legend {
-    width: 100%;
+  .analysis-hero {
+    grid-template-columns: 1fr;
   }
 
-  .refresh-analysis-button {
-    width: 36px;
-    height: 36px;
-    flex-basis: 36px;
+  .hero-focus {
+    justify-items: start;
   }
-}
 
-/* ── 카드 메인 페이지 톤 통일 (플랫/헤어라인) ── */
-.metric-card,
-.trend-card,
-.ai-card,
-.empty-analysis-card,
-.card-switch-card,
-.chart-card,
-.insight-card,
-.trend-primary,
-.primary-insight,
-.ai-summary-card,
-.switch-card-fallback {
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-}
-
-.trend-metrics li,
-.signal-grid li,
-.compact-list li,
-.switch-metrics span {
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-.trend-card,
-.ai-card,
-.empty-analysis-card,
-.card-switch-card,
-.chart-card,
-.insight-card {
-  margin-top: 14px !important;
-  border-top: 1px solid rgba(32, 36, 42, 0.085) !important;
-  padding: 16px 0 2px !important;
-}
-
-.metric-card {
-  padding: 4px 0 !important;
-}
-
-.switch-link {
-  background: linear-gradient(150deg, #2c4e72, #1c3149) !important;
+  .insight-actions {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

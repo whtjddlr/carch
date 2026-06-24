@@ -1,0 +1,268 @@
+{
+  "generatedAt": "2026-06-24T12:19:14",
+  "cardMasterDb": "C:\\Users\\SSAFY\\Desktop\\finalpjt\\pjt-08-db-bundle-20260529\\card_master_api.sqlite",
+  "summary": {
+    "benefitRows": 6201,
+    "fieldCoverage": {
+      "rate_percent": {
+        "count": 5248,
+        "ratio": 0.846
+      },
+      "amount_krw": {
+        "count": 560,
+        "ratio": 0.09
+      },
+      "required_previous_month_spend_krw": {
+        "count": 5703,
+        "ratio": 0.92
+      },
+      "min_payment_amount_krw": {
+        "count": 1041,
+        "ratio": 0.168
+      },
+      "monthly_benefit_limit_krw": {
+        "count": 747,
+        "ratio": 0.12
+      },
+      "target_merchants_json": {
+        "count": 939,
+        "ratio": 0.151
+      },
+      "exclusion_keywords_json": {
+        "count": 1803,
+        "ratio": 0.291
+      }
+    }
+  },
+  "demoCandidateCriteria": [
+    "카테고리/할인값/전월실적/월한도 필드가 많이 채워진 카드",
+    "자동 계산 가능 행이 많고 수동 검수 비율이 낮은 카드",
+    "남주현 시나리오는 이 후보 중 소비 패턴과 맞는 카드만 사용"
+  ],
+  "demoCandidates": [
+    {
+      "card_ad_id": 10447,
+      "card_name": "KB국민 기후동행카드",
+      "issuer_name": "KB국민카드",
+      "official_url": "https://card.kbcard.com/CRD/DVIEW/HCAMCXPRICAC0076?cooperationcode=04918&mainCC=a",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=10447",
+      "benefit_count": 17,
+      "has_value": 16,
+      "has_required": 17,
+      "has_min_payment": 16,
+      "has_monthly_limit": 16,
+      "has_merchants": 5,
+      "has_exclusions": 6,
+      "has_shared": 0,
+      "auto_usable": 16,
+      "manual_review": 1,
+      "coverageScore": 0.84,
+      "manualReviewRatio": 0.059,
+      "officialFetch": {
+        "ok": true,
+        "contentType": "text/html; charset=UTF-8",
+        "textLength": 22943,
+        "hints": {
+          "requiredPreviousMonthSpendKrw": [
+            500,
+            400000
+          ],
+          "monthlyBenefitLimitKrw": [
+            100000
+          ],
+          "minPaymentAmountKrw": [
+            10000,
+            400000
+          ],
+          "perTransactionLimitKrw": [],
+          "hasSharedMonthlyLimitEvidence": false,
+          "hasPerformanceExclusionEvidence": true
+        },
+        "manualReviewRecommended": false
+      }
+    },
+    {
+      "card_ad_id": 10492,
+      "card_name": "카드의정석2",
+      "issuer_name": "우리카드",
+      "official_url": "https://pc.wooricard.com/dcpc/yh1/crd/crd01/H1CRD101S02.do?cdPrdCd=102997&canvasser=88801076&utm_source=naver_cs&utm_medium=cpc&utm_campaign=PC_%ec%b9%b4%eb%93%9c%ec%84%b9%ec%85%98&utm_content={keyword}&utm_term=%EC%B9%B4%EB%93%9C%EC%9D%98%EC%A0%95%EC%84%9D2",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=10492",
+      "benefit_count": 45,
+      "has_value": 45,
+      "has_required": 45,
+      "has_min_payment": 0,
+      "has_monthly_limit": 45,
+      "has_merchants": 6,
+      "has_exclusions": 1,
+      "has_shared": 0,
+      "auto_usable": 45,
+      "manual_review": 0,
+      "coverageScore": 0.741,
+      "manualReviewRatio": 0.0,
+      "officialFetch": {
+        "ok": true,
+        "contentType": "text/html; charset=UTF-8",
+        "textLength": 5310,
+        "hints": {
+          "requiredPreviousMonthSpendKrw": [],
+          "monthlyBenefitLimitKrw": [
+            100000
+          ],
+          "minPaymentAmountKrw": [],
+          "perTransactionLimitKrw": [],
+          "hasSharedMonthlyLimitEvidence": false,
+          "hasPerformanceExclusionEvidence": false
+        },
+        "manualReviewRecommended": true
+      }
+    },
+    {
+      "card_ad_id": 10612,
+      "card_name": "카드의정석2 SHOPPER",
+      "issuer_name": "우리카드",
+      "official_url": "https://pc.wooricard.com/dcpc/yh1/crd/crd01/H1CRD101S02.do?cdPrdCd=104151&canvasser=88801076&utm_source=naver_cs&utm_medium=cpc&utm_campaign=PC_카드섹션&utm_content=%EC%B9%B4%EB%93%9C%EC%9D%98%EC%A0%95%EC%84%9D2%20SHOPPER",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=10612",
+      "benefit_count": 8,
+      "has_value": 7,
+      "has_required": 8,
+      "has_min_payment": 0,
+      "has_monthly_limit": 7,
+      "has_merchants": 1,
+      "has_exclusions": 7,
+      "has_shared": 7,
+      "auto_usable": 0,
+      "manual_review": 8,
+      "coverageScore": 0.591,
+      "manualReviewRatio": 1.0,
+      "officialFetch": {
+        "ok": true,
+        "contentType": "text/html; charset=UTF-8",
+        "textLength": 5310,
+        "hints": {
+          "requiredPreviousMonthSpendKrw": [],
+          "monthlyBenefitLimitKrw": [
+            100000
+          ],
+          "minPaymentAmountKrw": [],
+          "perTransactionLimitKrw": [],
+          "hasSharedMonthlyLimitEvidence": false,
+          "hasPerformanceExclusionEvidence": false
+        },
+        "manualReviewRecommended": true
+      }
+    }
+  ],
+  "enrichmentTargets": [
+    {
+      "card_ad_id": 10612,
+      "card_name": "카드의정석2 SHOPPER",
+      "issuer_name": "우리카드",
+      "official_url": "https://pc.wooricard.com/dcpc/yh1/crd/crd01/H1CRD101S02.do?cdPrdCd=104151&canvasser=88801076&utm_source=naver_cs&utm_medium=cpc&utm_campaign=PC_카드섹션&utm_content=%EC%B9%B4%EB%93%9C%EC%9D%98%EC%A0%95%EC%84%9D2%20SHOPPER",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=10612",
+      "benefit_count": 8,
+      "has_value": 7,
+      "has_required": 8,
+      "has_min_payment": 0,
+      "has_monthly_limit": 7,
+      "has_merchants": 1,
+      "has_exclusions": 7,
+      "has_shared": 7,
+      "auto_usable": 0,
+      "manual_review": 8,
+      "coverageScore": 0.591,
+      "manualReviewRatio": 1.0,
+      "officialFetch": {
+        "ok": true,
+        "contentType": "text/html; charset=UTF-8",
+        "textLength": 5310,
+        "hints": {
+          "requiredPreviousMonthSpendKrw": [],
+          "monthlyBenefitLimitKrw": [
+            100000
+          ],
+          "minPaymentAmountKrw": [],
+          "perTransactionLimitKrw": [],
+          "hasSharedMonthlyLimitEvidence": false,
+          "hasPerformanceExclusionEvidence": false
+        },
+        "manualReviewRecommended": true
+      }
+    },
+    {
+      "card_ad_id": 10492,
+      "card_name": "카드의정석2",
+      "issuer_name": "우리카드",
+      "official_url": "https://pc.wooricard.com/dcpc/yh1/crd/crd01/H1CRD101S02.do?cdPrdCd=102997&canvasser=88801076&utm_source=naver_cs&utm_medium=cpc&utm_campaign=PC_%ec%b9%b4%eb%93%9c%ec%84%b9%ec%85%98&utm_content={keyword}&utm_term=%EC%B9%B4%EB%93%9C%EC%9D%98%EC%A0%95%EC%84%9D2",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=10492",
+      "benefit_count": 45,
+      "has_value": 45,
+      "has_required": 45,
+      "has_min_payment": 0,
+      "has_monthly_limit": 45,
+      "has_merchants": 6,
+      "has_exclusions": 1,
+      "has_shared": 0,
+      "auto_usable": 45,
+      "manual_review": 0,
+      "coverageScore": 0.741,
+      "manualReviewRatio": 0.0,
+      "officialFetch": {
+        "ok": true,
+        "contentType": "text/html; charset=UTF-8",
+        "textLength": 5310,
+        "hints": {
+          "requiredPreviousMonthSpendKrw": [],
+          "monthlyBenefitLimitKrw": [
+            100000
+          ],
+          "minPaymentAmountKrw": [],
+          "perTransactionLimitKrw": [],
+          "hasSharedMonthlyLimitEvidence": false,
+          "hasPerformanceExclusionEvidence": false
+        },
+        "manualReviewRecommended": true
+      }
+    },
+    {
+      "card_ad_id": 10447,
+      "card_name": "KB국민 기후동행카드",
+      "issuer_name": "KB국민카드",
+      "official_url": "https://card.kbcard.com/CRD/DVIEW/HCAMCXPRICAC0076?cooperationcode=04918&mainCC=a",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=10447",
+      "benefit_count": 17,
+      "has_value": 16,
+      "has_required": 17,
+      "has_min_payment": 16,
+      "has_monthly_limit": 16,
+      "has_merchants": 5,
+      "has_exclusions": 6,
+      "has_shared": 0,
+      "auto_usable": 16,
+      "manual_review": 1,
+      "coverageScore": 0.84,
+      "manualReviewRatio": 0.059,
+      "officialFetch": {
+        "ok": true,
+        "contentType": "text/html; charset=UTF-8",
+        "textLength": 22943,
+        "hints": {
+          "requiredPreviousMonthSpendKrw": [
+            500,
+            400000
+          ],
+          "monthlyBenefitLimitKrw": [
+            100000
+          ],
+          "minPaymentAmountKrw": [
+            10000,
+            400000
+          ],
+          "perTransactionLimitKrw": [],
+          "hasSharedMonthlyLimitEvidence": false,
+          "hasPerformanceExclusionEvidence": true
+        },
+        "manualReviewRecommended": false
+      }
+    }
+  ]
+}

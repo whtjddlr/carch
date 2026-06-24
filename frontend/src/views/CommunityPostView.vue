@@ -2,7 +2,7 @@
   <section class="screen">
     <header class="detail-header blue-gradient">
       <AppBackButton fallback="/community" />
-      <div class="header-actions">
+      <div v-if="post?.editable" class="header-actions">
         <button class="ghost-button" type="button" @click="router.push(`/community/${route.params.id}/edit`)">
           <Pencil :size="15" />
           수정
@@ -64,7 +64,7 @@
               <small>{{ comment.date }}</small>
               <p>{{ comment.body || comment.text }}</p>
             </div>
-            <button type="button" aria-label="댓글 삭제" @click="handleCommentDelete(comment.id)">
+            <button v-if="comment.editable" type="button" aria-label="댓글 삭제" @click="handleCommentDelete(comment.id)">
               <Trash2 :size="14" />
             </button>
           </li>
@@ -108,8 +108,9 @@ async function loadPost() {
     if (fallbackPost) {
       post.value = {
         ...fallbackPost,
+        editable: true,
         commentItems: [
-          { id: `${fallbackPost.id}-comment-1`, author: '남주현', avatar: '남', date: '방금 전', body: '댓글 흐름을 확인할 수 있습니다.' },
+          { id: `${fallbackPost.id}-comment-1`, author: '남주현', avatar: '남', date: '방금 전', body: '댓글 흐름을 확인할 수 있습니다.', editable: true },
         ],
       }
       isFallbackData.value = true
@@ -168,8 +169,12 @@ async function handleCommentDelete(commentId) {
 
 async function handleDelete() {
   if (!post.value) return
-  await deleteCommunityPost(post.value.id)
-  router.push('/community')
+  try {
+    await deleteCommunityPost(post.value.id)
+    router.push('/community')
+  } catch {
+    error.value = '게시글을 삭제할 권한이 없습니다.'
+  }
 }
 
 onMounted(loadPost)

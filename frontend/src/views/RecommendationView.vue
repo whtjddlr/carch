@@ -24,7 +24,7 @@
 
           <div class="economics-grid">
             <span>
-              <small>예상 월 혜택</small>
+              <small>{{ benefitTimingLabel(recommendation) }}</small>
               <b>{{ krw(recommendation.economics.expectedMonthlyBenefit) }}</b>
             </span>
             <span>
@@ -37,24 +37,24 @@
             </span>
             <span>
               <small>현재 사용 대비</small>
-              <b :class="{ positive: recommendation.economics.monthlyDelta > 0 }">
-                {{ signedKrw(recommendation.economics.monthlyDelta) }}
+              <b :class="{ positive: recommendationImpact(recommendation).positive }">
+                {{ recommendationImpact(recommendation).value }}
               </b>
             </span>
           </div>
 
           <div class="payback-panel">
-            <span>연회비 반영</span>
-            <strong>{{ signedKrw(recommendation.economics.monthlyDelta) }}</strong>
-            <p>연간 기준 {{ signedKrw(recommendation.economics.annualDelta) }}</p>
+            <span>{{ recommendationImpact(recommendation).label }}</span>
+            <strong>{{ recommendationImpact(recommendation).value }}</strong>
+            <p>{{ recommendationImpact(recommendation).caption }}</p>
           </div>
 
           <div v-if="recommendation.performanceFill" class="performance-fill-detail">
-            <span>실적을 채우면</span>
+            <span>다음 달 조건 준비</span>
             <strong>{{ signedKrw(recommendation.performanceFill.monthlyGain) }} / 월</strong>
             <p>
-              {{ krw(recommendation.performanceFill.remaining) }}을 더 채우면
-              채운 금액 대비 {{ recommendation.performanceFill.efficiency }}%의 추가 혜택률입니다.
+              이번 달 {{ krw(recommendation.performanceFill.remaining) }}을 더 사용하면
+              다음 달 혜택 조건 기준 {{ recommendation.performanceFill.efficiency }}%의 추가 혜택률입니다.
             </p>
           </div>
 
@@ -169,11 +169,11 @@
               <p>{{ item.reason }}</p>
               <div v-if="item.performanceFill" class="fill-economics">
                 <span>
-                  <small>실적까지</small>
+                  <small>다음 달 조건</small>
                   <b>{{ krw(item.performanceFill.remaining) }}</b>
                 </span>
                 <span>
-                  <small>채우면</small>
+                  <small>조건 후</small>
                   <b>{{ signedKrw(item.performanceFill.monthlyGain) }}/월</b>
                 </span>
                 <span>
@@ -182,8 +182,8 @@
                 </span>
               </div>
               <div v-else class="mini-economics">
-                <b>{{ signedKrw(item.economics.monthlyDelta) }}</b>
-                <small>월 개선 예상</small>
+                <b>{{ recommendationImpact(item).value }}</b>
+                <small>{{ recommendationImpact(item).label }}</small>
               </div>
             </div>
           </article>
@@ -215,7 +215,10 @@ const defaultEconomics = {
 
 const recommendationItems = ref(recommendations.map(normalizeRecommendation))
 const isDetail = computed(() => Boolean(route.params.id))
-const recommendation = computed(() => recommendationItems.value.find((item) => item.id === route.params.id) || recommendationItems.value[0])
+const recommendation = computed(() => {
+  if (!isDetail.value) return recommendationItems.value[0]
+  return recommendationItems.value.find((item) => item.id === route.params.id) || null
+})
 const routingSuggestions = computed(() => {
   const items = bundle.value?.routingSuggestions || []
   return items
@@ -230,8 +233,54 @@ function signedKrw(value) {
   return `${amount > 0 ? '+' : amount < 0 ? '-' : ''}${krw(Math.abs(amount))}`
 }
 
+function recommendationImpact(item = {}) {
+  const economics = item.economics || {}
+  const delta = Number(economics.monthlyDelta || 0)
+  const net = Number(economics.monthlyNetBenefit || 0)
+  const expected = Number(economics.expectedMonthlyBenefit || 0)
+  const annual = Number(economics.annualDelta || 0)
+  if (delta > 0) {
+    return {
+      value: signedKrw(delta),
+      label: economics.benefitTiming === 'future_after_performance' ? '다음 달 개선 예상' : '월 개선 예상',
+      caption: annual
+        ? `전월 실적 충족 후 연간 기준 ${signedKrw(annual)}`
+        : '현재 카드 조합과 비교한 개선액입니다.',
+      positive: true,
+    }
+  }
+  if (net > 0) {
+    return {
+      value: krw(net),
+      label: economics.benefitTiming === 'future_after_performance' ? '조건 충족 후 순혜택' : '월 순혜택 예상',
+      caption: '연회비를 월 단위로 나누어 반영한 순혜택입니다.',
+      positive: true,
+    }
+  }
+  if (expected > 0) {
+    return {
+      value: krw(expected),
+      label: economics.benefitTiming === 'future_after_performance' ? '조건 충족 후 혜택' : '월 혜택 예상',
+      caption: '주요 소비 카테고리와 실적 조건을 함께 반영한 예상 혜택입니다.',
+      positive: false,
+    }
+  }
+  return {
+    value: '조건 확인',
+    label: '혜택 조건',
+    caption: '혜택 조건과 할인 한도를 확인해보세요.',
+    positive: false,
+  }
+}
+
+function benefitTimingLabel(item = {}) {
+  return item.economics?.benefitTiming === 'future_after_performance'
+    ? '조건 충족 후 월 혜택'
+    : '예상 월 혜택'
+}
+
 function buildPerformanceFill(economics = {}) {
-  const remaining = Number(economics.remainingSpendForBenefit || 0)
+  const remaining = Number(economics.remainingCurrentSpendForNextMonthBenefit || economics.remainingSpendForBenefit || 0)
   const eligibleRatio = Number(economics.eligibleRatio ?? 1)
   const currentNet = Number(economics.monthlyNetBenefit || 0)
   const currentGross = Number(economics.expectedMonthlyBenefit || 0)
@@ -767,38 +816,19 @@ ul {
   text-decoration: none;
 }
 
-/* ── 카드 메인 페이지 톤 통일 (플랫/헤어라인) ── */
-.result-card,
-.routing-card,
-.profile-card,
-.alert-card,
-.recommend-card,
-.recommendation-art,
-.payback-panel,
-.performance-fill-detail,
-.route-card-mini {
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
+:global(.app-backdrop .phone-shell .recommendation-body .routing-card),
+:global(.app-backdrop .phone-shell .recommendation-body .profile-card),
+:global(.app-backdrop .phone-shell .recommendation-body .alert-card),
+:global(.app-backdrop .phone-shell .recommendation-body .result-card),
+:global(.app-backdrop .phone-shell .recommendation-body .recommend-card) {
+  border: 1px solid rgba(36, 54, 79, 0.08) !important;
+  border-radius: 18px !important;
+  background: rgba(255, 255, 255, 0.86) !important;
+  box-shadow: 0 12px 26px rgba(36, 54, 79, 0.06) !important;
+  backdrop-filter: blur(12px) saturate(1.04) !important;
 }
 
-.economics-grid > div,
-.mini-economics > div,
-.routing-metrics li {
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-.recommendation-art {
-  height: 200px;
-}
-
-.recommend-card {
-  margin-top: 0 !important;
-  border-top: 1px solid rgba(32, 36, 42, 0.085) !important;
-  padding: 14px 0 2px !important;
+:global(.app-backdrop .phone-shell .recommendation-body .recommend-card) {
+  padding: 16px !important;
 }
 </style>

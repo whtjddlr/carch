@@ -6,7 +6,7 @@
         id="plan-prompt"
         :value="rawPrompt"
         class="form-field prompt-textarea"
-        rows="5"
+        rows="4"
         placeholder="예: 다음 달 큰 지출 예산 80만 원을 관리하고 싶어요.
 정장 셔츠, 구두, 증명사진, 토익스피킹 응시료를 순서대로 결제할 예정입니다."
         @input="$emit('update:rawPrompt', $event.target.value)"
@@ -51,23 +51,19 @@
 
     <div class="month-grid">
       <div>
-        <label class="field-label" for="start-month">시작 월</label>
-        <input
-          id="start-month"
-          :value="planForm.startMonth"
-          class="form-field"
-          type="month"
-          @input="patch('startMonth', $event.target.value)"
+        <AppCalendarPicker
+          :model-value="planForm.startMonth"
+          label="시작 월"
+          mode="month"
+          @update:model-value="patch('startMonth', $event)"
         />
       </div>
       <div>
-        <label class="field-label" for="end-month">종료 월</label>
-        <input
-          id="end-month"
-          :value="planForm.endMonth"
-          class="form-field"
-          type="month"
-          @input="patch('endMonth', $event.target.value)"
+        <AppCalendarPicker
+          :model-value="planForm.endMonth"
+          label="종료 월"
+          mode="month"
+          @update:model-value="patch('endMonth', $event)"
         />
       </div>
     </div>
@@ -98,6 +94,7 @@
 <script setup>
 import AiRoleNotice from './AiRoleNotice.vue'
 import PlanExampleChips from './PlanExampleChips.vue'
+import AppCalendarPicker from '@/components/AppCalendarPicker.vue'
 
 const emit = defineEmits(['submit', 'update:rawPrompt', 'update:planForm'])
 const props = defineProps({
@@ -118,11 +115,13 @@ const patch = (key, value) => {
 .prompt-form {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .prompt-textarea {
+  min-height: 102px;
   resize: vertical;
+  line-height: 1.5;
 }
 
 .field-with-unit {
@@ -146,45 +145,51 @@ const patch = (key, value) => {
 .month-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 10px;
 }
 
 .strategy-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 6px;
 }
 
 .expense-mode-grid {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .expense-mode-button {
   display: flex;
-  min-height: 66px;
+  min-height: 64px;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   border: 1px solid #dbe4ee;
-  border-radius: 14px;
-  padding: 12px 13px;
+  border-radius: 13px;
+  padding: 10px 8px;
   background: rgba(255, 255, 255, 0.82);
-  text-align: left;
+  text-align: center;
 }
 
 .expense-mode-button strong {
   color: #20242a;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 900;
+  line-height: 1.25;
 }
 
 .expense-mode-button small {
+  display: -webkit-box;
+  overflow: hidden;
   color: #6e6e73;
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .expense-mode-button.active {
@@ -199,13 +204,14 @@ const patch = (key, value) => {
 }
 
 .strategy-button {
-  min-height: 44px;
+  min-height: 40px;
   border: 1px solid #dbe4ee;
   border-radius: 12px;
   background: #fff;
   color: #6e6e73;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
+  line-height: 1.25;
 }
 
 .strategy-button.active {

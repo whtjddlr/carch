@@ -35,14 +35,14 @@
           />
         </div>
         <div class="summary-progress">
-          <i :style="{ width: `${percent}%` }" />
+          <i :style="{ width: `${budgetProgressWidth(percent)}%`, background: budgetRiskColor(percent) }" />
         </div>
         <p>{{ isEditingBudget ? '이번 달 전체 예산을 입력하고 ✓ 를 누르세요' : `전체 예산의 ${percent}% 사용 중` }}</p>
       </div>
     </header>
 
     <div class="screen-scroll scrollbar-hide budget-body">
-      <article v-for="category in budgetCategories" :key="category.id" class="app-card budget-row">
+      <article v-for="category in displayBudgetCategories" :key="category.id" class="app-card budget-row">
         <div class="budget-row-head">
           <div>
             <span class="category-icon">{{ category.icon }}</span>
@@ -54,7 +54,12 @@
           </p>
         </div>
         <div class="category-track">
-          <i :style="{ width: `${Math.min((category.spent / category.budget) * 100, 100)}%`, background: category.spent > category.budget ? '#D92D20' : category.color }" />
+          <i
+            :style="{
+              width: `${budgetProgressWidth(categoryUsagePercent(category))}%`,
+              background: budgetRiskColor(categoryUsagePercent(category)),
+            }"
+          />
         </div>
         <small>{{ category.spent > category.budget ? `${krw(category.spent - category.budget)} 초과` : `${krw(category.budget - category.spent)} 남음` }}</small>
       </article>
@@ -67,13 +72,17 @@ import { computed, ref } from 'vue'
 import { Check, Pencil } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, krw } from '@/data/mockData'
+import { readBudgetOverride, readCustomBudgetCategories, writeBudgetOverride } from '@/services/budgetStorage'
+import { budgetProgressWidth, budgetRiskColor, budgetUsagePercent } from '@/utils/budgetRisk'
 
-const totalBudget = computed(() => budgetCategories.reduce((sum, category) => sum + category.budget, 0))
-const totalSpent = computed(() => budgetCategories.reduce((sum, category) => sum + category.spent, 0))
+const customBudgetCategories = ref(readCustomBudgetCategories())
+const displayBudgetCategories = computed(() => [...budgetCategories, ...customBudgetCategories.value])
+const totalBudget = computed(() => displayBudgetCategories.value.reduce((sum, category) => sum + category.budget, 0))
+const totalSpent = computed(() => displayBudgetCategories.value.reduce((sum, category) => sum + category.spent, 0))
 
-const budgetOverride = ref(null)
+const budgetOverride = ref(readBudgetOverride())
 const displayBudget = computed(() => budgetOverride.value ?? totalBudget.value)
-const percent = computed(() => Math.min(Math.round((totalSpent.value / displayBudget.value) * 100), 100))
+const percent = computed(() => budgetUsagePercent(totalSpent.value, displayBudget.value))
 
 const isEditingBudget = ref(false)
 const editBudget = ref(0)
@@ -85,15 +94,27 @@ function startEditBudget() {
 
 function saveBudget() {
   const next = Number(editBudget.value)
-  budgetOverride.value = next > 0 ? next : displayBudget.value
+  budgetOverride.value = next > 0 ? next : null
+  writeBudgetOverride(budgetOverride.value)
   isEditingBudget.value = false
+}
+
+function categoryUsagePercent(category) {
+  return budgetUsagePercent(category.spent, category.budget)
 }
 </script>
 
 <style scoped>
 .budget-header {
   padding: 24px 20px;
-  color: #fff;
+  border: 1px solid rgba(138, 154, 173, 0.12);
+  border-top: 0;
+  border-radius: 0 0 28px 28px;
+  color: #17202b;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(15, 95, 174, 0.1), transparent 38%),
+    linear-gradient(180deg, #ffffff 0%, #fbfdff 62%, #edf4fb 100%) !important;
+  box-shadow: 0 14px 36px rgba(36, 54, 79, 0.1);
 }
 
 .header-row {
@@ -112,15 +133,18 @@ h1 {
 
 .header-row p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.68);
+  color: #6f7d8c;
   font-size: 12px;
   font-weight: 700;
 }
 
 .budget-summary-box {
+  border: 1px solid rgba(36, 54, 79, 0.08);
   border-radius: 18px;
   padding: 16px;
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 14px 28px rgba(36, 54, 79, 0.07);
+  backdrop-filter: blur(12px) saturate(1.04);
 }
 
 .budget-summary-box {
@@ -130,13 +154,14 @@ h1 {
 }
 
 .budget-summary-box span {
-  color: rgba(255, 255, 255, 0.68);
+  color: #6f7d8c;
   font-size: 12px;
   font-weight: 700;
 }
 
 .budget-summary-box strong {
   display: block;
+  color: #17202b;
   font-size: 22px;
   font-weight: 900;
 }
@@ -145,11 +170,11 @@ h1 {
   width: 100%;
   margin-top: 2px;
   border: 0;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.6);
+  border-bottom: 2px solid rgba(15, 95, 174, 0.28);
   border-radius: 0;
   padding: 0 0 3px;
   background: transparent;
-  color: #fff;
+  color: #17202b;
   font-size: 22px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
@@ -161,20 +186,21 @@ h1 {
   height: 10px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.22);
+  background: #e7edf4;
 }
 
 .summary-progress i {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #fff;
+  box-shadow: 0 5px 12px rgba(36, 54, 79, 0.12);
+  transition: width 0.2s ease, background-color 0.2s ease;
 }
 
 .budget-summary-box p {
   grid-column: 1 / -1;
   margin: 0;
-  color: rgba(255, 255, 255, 0.68);
+  color: #6f7d8c;
   font-size: 12px;
   font-weight: 700;
 }
@@ -182,7 +208,7 @@ h1 {
 .budget-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   padding: 18px 20px 116px;
 }
 
@@ -243,7 +269,7 @@ h1 {
 }
 
 .budget-row {
-  padding: 15px;
+  padding: 14px;
 }
 
 .budget-row-head {
@@ -251,7 +277,7 @@ h1 {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .budget-row-head div {
@@ -275,8 +301,13 @@ h1 {
 .budget-row small {
   margin: 0;
   color: #6e6e73;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+}
+
+.budget-row-head p {
+  text-align: right;
+  white-space: nowrap;
 }
 
 .category-track {
@@ -290,5 +321,7 @@ h1 {
   display: block;
   height: 100%;
   border-radius: inherit;
+  box-shadow: 0 5px 12px rgba(36, 54, 79, 0.1);
+  transition: width 0.2s ease, background-color 0.2s ease;
 }
 </style>

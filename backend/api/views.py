@@ -13,6 +13,7 @@ from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core import signing
 from django.core.exceptions import ValidationError
+from django.db import transaction as db_transaction
 from django.http import FileResponse, Http404, JsonResponse
 from django.db.models import Max, Q
 from django.shortcuts import redirect
@@ -22,7 +23,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .ai_service import chat_with_ai, analyze_spending_with_ai, get_ai_status, parse_purchase_plan_with_ai, parse_transaction_with_ai
 from .card_repository import fetch_card, fetch_cards
-from .models import AIAnalysisRecord, AuthSession, CommunityComment, CommunityPost, OwnedCard, PurchasePlan, SocialAccount, Transaction
+from .models import AIAnalysisRecord, AuthSession, CommunityComment, CommunityPost, CommunityPostLike, OwnedCard, PurchasePlan, SocialAccount, Transaction
 from .seed_data import PURCHASE_PLANS, TRANSACTIONS
 
 
@@ -57,17 +58,23 @@ MERCHANT_HINTS = [
 ]
 
 CARD_HINTS = [
+    ('LOCA LIKIT Eat', '10106'),
+    ('LIKIT Eat', '10106'),
+    ('리킷 Eat', '10106'),
+    ('LOCA LIKIT Shop', '10107'),
+    ('LIKIT Shop', '10107'),
     ('LOCA 100', '10029'),
-    ('로카', '10029'),
-    ('롯데', '10029'),
     ('SHOPPER', '10612'),
     ('카드의정석', '10612'),
     ('우리', '10612'),
-    ('이마트 신한', '10609'),
-    ('신한', '10609'),
+    ('로카', '10029'),
 ]
 
-DEFAULT_OWNED_CARD_IDS = ['10029', '10612', '10609']
+DEFAULT_OWNED_CARD_IDS = ['10106', '10612', '10029']
+LEGACY_DEFAULT_OWNED_CARD_ID_SETS = [
+    {'10029', '10612', '10609'},
+    {'10033', '10612', '10607'},
+]
 DEMO_USER_EMAIL = 'demo@carch.local'
 DEMO_USER_NAME = '남주현'
 
@@ -153,8 +160,71 @@ def get_demo_user():
     return user
 
 
+def get_dev_admin_user():
+    User = get_user_model()
+    email = settings.DEV_ADMIN_EMAIL
+    user = User.objects.filter(email__iexact=email).first()
+    if not user:
+        user = User.objects.create_user(
+            username=_unique_username(email.split('@')[0] or 'admin'),
+            email=email,
+            password=settings.DEV_ADMIN_PASSWORD,
+            first_name=settings.DEV_ADMIN_NAME[:30],
+        )
+        changed_fields = []
+    elif not user.has_usable_password():
+        user.set_password(settings.DEV_ADMIN_PASSWORD)
+        changed_fields = ['password']
+    else:
+        changed_fields = []
+
+    if user.first_name != settings.DEV_ADMIN_NAME[:30]:
+        user.first_name = settings.DEV_ADMIN_NAME[:30]
+        changed_fields.append('first_name')
+    if not user.is_staff:
+        user.is_staff = True
+        changed_fields.append('is_staff')
+    if not user.is_superuser:
+        user.is_superuser = True
+        changed_fields.append('is_superuser')
+    if not user.is_active:
+        user.is_active = True
+        changed_fields.append('is_active')
+    if user.has_usable_password() and not user.check_password(settings.DEV_ADMIN_PASSWORD):
+        # Keep an existing custom password intact. Auto-login issues a token directly.
+        pass
+    if changed_fields:
+        user.save(update_fields=changed_fields)
+    elif user.pk:
+        user.save()
+    return user
+
+
 def get_effective_user(request):
     return get_request_user(request) or get_demo_user()
+
+
+def auth_required_response():
+    return json_response({'detail': '로그인이 필요합니다.'}, status=401)
+
+
+def forbidden_response():
+    return json_response({'detail': '권한이 없습니다.'}, status=403)
+
+
+def require_request_user(request):
+    user = get_request_user(request)
+    if not user:
+        return None, auth_required_response()
+    return user, None
+
+
+def user_display_name(user):
+    return (user.first_name or user.username or user.email or 'CARCH 사용자')[:30]
+
+
+def user_avatar(user):
+    return user_display_name(user)[:1] or 'C'
 
 
 def _find_user_by_email(email):
@@ -324,10 +394,29 @@ def auth_providers(request):
     return json_response(
         {
             'email': {'enabled': settings.EMAIL_AUTH_ENABLED},
+            'devLogin': {
+                'enabled': bool(settings.DEBUG and settings.DEV_AUTO_LOGIN_ENABLED),
+                'email': settings.DEV_ADMIN_EMAIL,
+                'name': settings.DEV_ADMIN_NAME,
+            },
             'providers': providers,
             'frontendUrl': settings.FRONTEND_URL,
         }
     )
+
+
+@csrf_exempt
+def dev_login(request):
+    if request.method != 'POST':
+        return json_response({'detail': 'POST 요청만 지원합니다.'}, status=405)
+    if not (settings.DEBUG and settings.DEV_AUTO_LOGIN_ENABLED):
+        return json_response({'detail': '개발용 자동 로그인이 비활성화되어 있습니다.'}, status=403)
+
+    user = get_dev_admin_user()
+    token, _ = _create_auth_session(user, 'dev-admin')
+    payload = _auth_payload(user, token, 'dev-admin')
+    payload['devAutoLogin'] = True
+    return json_response(payload)
 
 
 @csrf_exempt
@@ -527,10 +616,103 @@ def parse_approved_at(value):
     return timezone.localtime(approved_at).replace(second=0, microsecond=0)
 
 
+PAYMENT_TYPE_LUMP_SUM = 'lump_sum'
+PAYMENT_TYPE_INSTALLMENT = 'installment'
+
+
+def _coerce_boolish(value, fallback=False):
+    if isinstance(value, bool):
+        return value
+    if value in (None, ''):
+        return fallback
+    if isinstance(value, (int, float)):
+        return bool(value)
+    lowered = str(value).strip().lower()
+    if lowered in {'true', '1', 'yes', 'y', 'on', 'interest_free'}:
+        return True
+    if lowered in {'false', '0', 'no', 'n', 'off'}:
+        return False
+    return fallback
+
+
+def normalize_payment_terms(payload=None, text=''):
+    payload = payload or {}
+    source_text = str(
+        text
+        or payload.get('sourceText')
+        or payload.get('source_text')
+        or payload.get('rawText')
+        or payload.get('text')
+        or ''
+    )
+    search_text = source_text.replace(' ', '')
+
+    raw_payment_type = str(
+        payload.get('paymentType')
+        or payload.get('payment_type')
+        or payload.get('payType')
+        or ''
+    ).strip().lower()
+    raw_months = (
+        payload.get('installmentMonths')
+        or payload.get('installment_months')
+        or payload.get('months')
+        or 0
+    )
+    try:
+        installment_months = int(raw_months or 0)
+    except (TypeError, ValueError):
+        installment_months = 0
+
+    month_match = re.search(r'(\d{1,2})\s*(?:개월|month|months)', source_text, re.IGNORECASE)
+    if month_match:
+        installment_months = max(installment_months, int(month_match.group(1)))
+
+    is_interest_free = _coerce_boolish(
+        payload.get('isInterestFreeInstallment')
+        if 'isInterestFreeInstallment' in payload
+        else payload.get('is_interest_free_installment'),
+        fallback=False,
+    ) or '무이자' in search_text
+
+    is_installment = (
+        raw_payment_type in {PAYMENT_TYPE_INSTALLMENT, 'installment', 'installments', '할부'}
+        or installment_months > 1
+        or '할부' in search_text
+        or is_interest_free
+    )
+    if raw_payment_type in {PAYMENT_TYPE_LUMP_SUM, 'lump', 'single', '일시불'} and not ('할부' in search_text or is_interest_free):
+        is_installment = False
+
+    if is_installment:
+        installment_months = max(installment_months, 2)
+        payment_type = PAYMENT_TYPE_INSTALLMENT
+    else:
+        installment_months = 0
+        is_interest_free = False
+        payment_type = PAYMENT_TYPE_LUMP_SUM
+
+    return {
+        'paymentType': payment_type,
+        'payment_type': payment_type,
+        'installmentMonths': installment_months,
+        'installment_months': installment_months,
+        'isInterestFreeInstallment': bool(is_interest_free),
+        'is_interest_free_installment': bool(is_interest_free),
+    }
+
+
 def serialize_transaction(transaction):
     approved_at = timezone.localtime(transaction.approved_at)
     approved_at_text = approved_at.isoformat()
     amount = int(transaction.amount)
+    payment_terms = normalize_payment_terms(
+        {
+            'paymentType': getattr(transaction, 'payment_type', PAYMENT_TYPE_LUMP_SUM),
+            'installmentMonths': getattr(transaction, 'installment_months', 0),
+            'isInterestFreeInstallment': getattr(transaction, 'is_interest_free_installment', False),
+        }
+    )
     return {
         'id': transaction.public_id,
         'rawId': transaction.id,
@@ -545,6 +727,7 @@ def serialize_transaction(transaction):
         'amt': amount,
         'approvedAt': approved_at_text,
         'approved_at': approved_at_text,
+        **payment_terms,
         'date': approved_at.date().isoformat(),
         'time': approved_at.strftime('%H:%M'),
         'icon': transaction.icon or '💳',
@@ -593,6 +776,9 @@ def ensure_transactions_seeded(user=None):
                 category=item['category'],
                 amount=int(item['amount']),
                 approved_at=parse_approved_at(item['approvedAt']),
+                payment_type=item.get('paymentType') or PAYMENT_TYPE_LUMP_SUM,
+                installment_months=int(item.get('installmentMonths') or 0),
+                is_interest_free_installment=bool(item.get('isInterestFreeInstallment') or False),
                 icon=item.get('icon') or '💳',
                 address=item.get('address') or '-',
             )
@@ -797,6 +983,9 @@ def create_transaction_from_payload(payload, user=None):
         category=data['category'],
         amount=data['amount'],
         approved_at=parse_approved_at(data['approvedAt']),
+        payment_type=data['paymentType'],
+        installment_months=data['installmentMonths'],
+        is_interest_free_installment=data['isInterestFreeInstallment'],
         icon=data.get('icon') or '💳',
         address=data.get('address') or '직접 입력',
         source_text=payload.get('sourceText') or payload.get('source_text') or '',
@@ -807,13 +996,14 @@ def ensure_community_seeded():
     if CommunityPost.objects.exists():
         return
 
+    demo_user = get_demo_user()
     seed_posts = [
         {
-            'title': 'LOCA 100 vs 카드의정석2 SHOPPER 비교 후기',
-            'body': '6개월 사용 후 솔직한 후기입니다. LOCA 100은 일상 할인 폭이 안정적이고, 카드의정석2 SHOPPER는 쇼핑 혜택이 매력적이에요.',
+            'title': 'LOCA LIKIT Eat vs 카드의정석2 SHOPPER 비교 후기',
+            'body': '6개월 사용 후 솔직한 후기입니다. LIKIT Eat는 식비와 카페 결제 관리가 편하고, 카드의정석2 SHOPPER는 쇼핑 혜택이 매력적이에요.',
             'author': '이승민',
             'avatar': '이',
-            'tags': ['카드비교', '롯데카드', '우리카드'],
+            'tags': ['카드비교', '생활카드', '우리카드'],
             'likes': 47,
             'liked': False,
             'comments': [
@@ -832,11 +1022,11 @@ def ensure_community_seeded():
             'comments': [{'author': '최민준', 'avatar': '최', 'body': '교통비랑 구독 먼저 묶는 팁 좋네요.'}],
         },
         {
-            'title': '이마트 신한카드 이 혜택 아셨나요?',
-            'body': '많은 분들이 모르고 있는 이마트 신한카드의 마트 혜택과 기본 적립 조건을 소개합니다.',
+            'title': 'LOCA 100을 보조 카드로 두는 방식',
+            'body': '주력 할인 카드가 애매한 결제는 LOCA 100 같은 기본 할인 카드로 받쳐두는 방식이 깔끔했습니다.',
             'author': '최민준',
             'avatar': '최',
-            'tags': ['신한카드', '마트'],
+            'tags': ['롯데카드', '생활'],
             'likes': 34,
             'liked': False,
             'comments': [],
@@ -845,16 +1035,17 @@ def ensure_community_seeded():
 
     for item in seed_posts:
         comments = item.pop('comments')
-        post = CommunityPost.objects.create(**item)
+        post = CommunityPost.objects.create(user=demo_user, **item)
         for comment in comments:
-            CommunityComment.objects.create(post=post, **comment)
+            CommunityComment.objects.create(user=demo_user, post=post, **comment)
 
 
-def serialize_comment(comment):
+def serialize_comment(comment, viewer=None):
     created_at = timezone.localtime(comment.created_at)
     return {
         'id': f'cm{comment.id}',
         'rawId': comment.id,
+        'editable': bool(viewer and comment.user_id == viewer.id),
         'author': comment.author,
         'avatar': comment.avatar,
         'body': comment.body,
@@ -864,11 +1055,20 @@ def serialize_comment(comment):
     }
 
 
-def serialize_community_post(post, include_comments=False):
+def viewer_liked_post(post, viewer=None):
+    if not viewer:
+        return False
+    if hasattr(post, '_viewer_liked'):
+        return bool(post._viewer_liked)
+    return CommunityPostLike.objects.filter(post=post, user=viewer).exists()
+
+
+def serialize_community_post(post, include_comments=False, viewer=None):
     created_at = timezone.localtime(post.created_at)
     payload = {
         'id': f'c{post.id}',
         'rawId': post.id,
+        'editable': bool(viewer and post.user_id == viewer.id),
         'title': post.title,
         'body': post.body,
         'author': post.author,
@@ -877,13 +1077,13 @@ def serialize_community_post(post, include_comments=False):
         'createdAt': created_at.isoformat(),
         'updatedAt': timezone.localtime(post.updated_at).isoformat(),
         'likes': post.likes,
-        'liked': post.liked,
+        'liked': viewer_liked_post(post, viewer),
         'comments': post.comment_set.count(),
         'commentCount': post.comment_set.count(),
         'tags': post.tags or [],
     }
     if include_comments:
-        payload['commentItems'] = [serialize_comment(comment) for comment in post.comment_set.all()]
+        payload['commentItems'] = [serialize_comment(comment, viewer=viewer) for comment in post.comment_set.all()]
     return payload
 
 
@@ -958,6 +1158,7 @@ def normalize_plan_items(value):
             amount = abs(int(item.get('amount') or 0))
         except (TypeError, ValueError):
             amount = 0
+        payment_terms = normalize_payment_terms(item)
         items.append(
             {
                 'id': str(item.get('id') or f'i{index}'),
@@ -965,6 +1166,9 @@ def normalize_plan_items(value):
                 'category': str(item.get('category') or '기타').strip()[:40],
                 'amount': amount,
                 'targetMonth': str(item.get('targetMonth') or item.get('target_month') or '')[:7],
+                'paymentType': payment_terms['paymentType'],
+                'installmentMonths': payment_terms['installmentMonths'],
+                'isInterestFreeInstallment': payment_terms['isInterestFreeInstallment'],
                 'required': bool(item.get('required', True)),
                 'flexible': bool(item.get('flexible', True)),
             }
@@ -1018,9 +1222,9 @@ def build_plan_scenarios(plan):
         {
             'name': item.get('name'),
             'amount': item.get('amount'),
-            'card': 'LOCA 100',
+            'card': 'LOCA LIKIT Eat',
             'benefit': min(int(item.get('amount') or 0) // 100, 30000),
-            'note': '월 실적과 기본 할인 혜택을 함께 고려한 배정입니다.',
+            'note': '식비와 카페 생활권 혜택을 함께 고려한 배정입니다.',
             'status': '구매 예정',
         }
         for item in items[:2]
@@ -1047,14 +1251,14 @@ def build_plan_scenarios(plan):
             'budgetDiff': budget_diff,
             'maxMonthlySpend': max_monthly_spend,
             'achievedCards': 2,
-            'reasons': ['보유 카드 혜택을 우선 배정했습니다.', '전월 실적 충족 가능성을 함께 고려했습니다.'],
+            'reasons': ['보유 카드 혜택을 우선 배정했습니다.', '다음 달 혜택 조건 가능성을 함께 고려했습니다.'],
             'warning': None,
             'monthlyPlan': [
                 {'month': plan.start_month, 'items': first_month_items},
                 {'month': plan.end_month, 'items': last_month_items},
             ],
             'cardSummary': [
-                {'cardName': 'LOCA 100', 'totalAmount': sum(int(item.get('amount') or 0) for item in items[:2]), 'benefit': 45000, 'achieved': True, 'remainingLimit': 100000, 'itemCount': len(items[:2])},
+                {'cardName': 'LOCA LIKIT Eat', 'totalAmount': sum(int(item.get('amount') or 0) for item in items[:2]), 'benefit': 45000, 'achieved': True, 'remainingLimit': 100000, 'itemCount': len(items[:2])},
                 {'cardName': '카드의정석2 SHOPPER', 'totalAmount': sum(int(item.get('amount') or 0) for item in items[2:]), 'benefit': 30000, 'achieved': True, 'remainingLimit': 50000, 'itemCount': len(items[2:])},
             ],
             'aiExplanation': '입력한 품목을 월별로 나누고 보유 카드 혜택이 큰 카드부터 배정했습니다.',
@@ -1110,7 +1314,7 @@ def card_image(request, filename):
     return FileResponse(path.open('rb'))
 
 
-def search_limit(request, default=8, maximum=24):
+def search_limit(request, default=8, maximum=50):
     try:
         value = int(request.GET.get('limit', default))
     except (TypeError, ValueError):
@@ -1169,7 +1373,7 @@ def build_card_search_item(card, query, owned_ids):
         'title': title,
         'description': join_search_parts(issuer, benefit),
         'path': f'/cards/{card_id}' if owned else f'/cards/apply/{card_id}',
-        'badge': '보유 카드' if owned else '비교 카드',
+        'badge': '보유중' if owned else '',
         'imageUrl': card.get('imageUrl') or card.get('image_url') or '',
         'meta': {
             'issuer': issuer,
@@ -1225,13 +1429,17 @@ def build_community_search_item(post, query):
 
 
 def search_items(request):
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
     query = (request.GET.get('q') or request.GET.get('search') or '').strip()
     search_type = (request.GET.get('type') or 'all').strip()
     if search_type not in {'all', 'card', 'transaction', 'community'}:
         search_type = 'all'
 
-    limit = search_limit(request)
+    limit = search_limit(request, default=12 if search_type == 'all' else 24)
     per_section_limit = limit if search_type != 'all' else min(5, limit)
+    card_section_limit = limit if search_type == 'card' else min(8, limit)
     sections = []
     items = []
 
@@ -1241,7 +1449,7 @@ def search_items(request):
     if search_type in {'all', 'card'}:
         card_candidates = []
         if query:
-            card_candidates = fetch_cards(request, limit=limit * 3, search=query)
+            card_candidates = fetch_cards(request, limit=max(card_section_limit * 4, 36), search=query)
             for owned_card in owned_cards:
                 already_included = any(
                     str(card.get('cardAdId') or card.get('id')) == str(owned_card.card_id)
@@ -1253,20 +1461,16 @@ def search_items(request):
                 if card and search_score(query, card.get('cardName'), card.get('issuerName'), card.get('benefitSummary')) > 0:
                     card_candidates.append(card)
         else:
-            if search_type == 'card':
-                card_candidates = fetch_cards(request, limit=limit * 2)
-            else:
-                for owned_card in owned_cards:
-                    card = serialize_owned_card(owned_card, request)
-                    if card:
-                        card_candidates.append(card)
-                if not card_candidates:
-                    card_candidates = fetch_cards(request, limit=per_section_limit, active_only=True)
+            card_candidates = fetch_cards(
+                request,
+                limit=max(card_section_limit * 3, 36),
+                active_only=search_type == 'all',
+            )
 
         card_items = clip_search_items(
             [build_card_search_item(card, query, owned_ids) for card in card_candidates],
             query,
-            per_section_limit,
+            card_section_limit,
         )
         sections.append({'type': 'card', 'title': '카드', 'count': len(card_items), 'items': card_items})
         items.extend(card_items)
@@ -1347,6 +1551,13 @@ def card_detail(request, card_ad_id):
 
 def ensure_owned_cards_seeded(user=None):
     user = user or get_demo_user()
+    existing = list(OwnedCard.objects.filter(user=user).order_by('display_order', 'id'))
+    if existing:
+        existing_ids = {str(card.card_id) for card in existing}
+        if any(existing_ids == legacy_ids and len(existing) == len(legacy_ids) for legacy_ids in LEGACY_DEFAULT_OWNED_CARD_ID_SETS):
+            OwnedCard.objects.filter(user=user).delete()
+        else:
+            return
     if OwnedCard.objects.filter(user=user).exists():
         return
     OwnedCard.objects.bulk_create(
@@ -1381,7 +1592,9 @@ def serialize_owned_card(owned_card, request):
 
 @csrf_exempt
 def owned_card_list(request):
-    user = get_effective_user(request)
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
     owned_cards = owned_card_queryset(user=user)
 
     if request.method == 'GET':
@@ -1425,7 +1638,10 @@ def owned_card_list(request):
 
 @csrf_exempt
 def owned_card_detail(request, card_id):
-    owned_cards = owned_card_queryset(request)
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
+    owned_cards = owned_card_queryset(user=user)
 
     raw_id = str(card_id).strip()
     try:
@@ -1459,7 +1675,9 @@ def owned_card_detail(request, card_id):
 
 @csrf_exempt
 def transaction_list(request):
-    user = get_effective_user(request)
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
     if request.method == 'POST':
         try:
             payload = json.loads(request.body.decode('utf-8') or '{}')
@@ -1480,6 +1698,9 @@ def transaction_list(request):
 
 
 def transaction_detail(request, transaction_id):
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
     transaction = get_transaction_or_404(request, transaction_id)
     return json_response(serialize_transaction(transaction))
 
@@ -1542,6 +1763,7 @@ def build_transaction(payload):
     public_id = payload.get('id') or f'u{int(datetime.now().timestamp() * 1000)}'
     if Transaction.objects.filter(public_id=public_id).exists():
         public_id = f'u{int(datetime.now().timestamp() * 1000)}'
+    payment_terms = normalize_payment_terms(payload)
     return {
         'id': public_id,
         'cardId': str(payload.get('cardId') or payload.get('card_id') or '10029'),
@@ -1549,6 +1771,7 @@ def build_transaction(payload):
         'category': payload.get('category') or payload.get('cat') or '기타',
         'amount': amount,
         'approvedAt': approved_at,
+        **payment_terms,
         'icon': payload.get('icon') or '💳',
         'address': payload.get('address') or payload.get('addr') or '직접 입력',
     }
@@ -1556,7 +1779,9 @@ def build_transaction(payload):
 
 @csrf_exempt
 def parse_transaction(request):
-    user = get_effective_user(request)
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
     if request.method != 'POST':
         return json_response({'detail': 'POST 요청만 지원합니다.'}, status=405)
     try:
@@ -1580,18 +1805,20 @@ def parse_transaction(request):
         return json_response(ai_parsed)
 
     merchant, category, icon = infer_merchant(text)
+    payment_terms = normalize_payment_terms(text=text)
     parsed = {
         'cardId': infer_card_id(text),
         'merchantName': merchant,
         'category': category,
         'amount': infer_amount(text),
         'approvedAt': infer_approved_at(text),
+        **payment_terms,
         'icon': icon,
         'address': '직접 입력',
         'sourceText': text,
         'aiMode': 'mock',
         'confidence': 0.82 if merchant != '가맹점 미확인' and infer_amount(text) != 0 else 0.58,
-        'reviewFields': ['merchantName', 'amount', 'approvedAt', 'cardId'],
+        'reviewFields': ['merchantName', 'amount', 'approvedAt', 'cardId', 'paymentType'],
     }
     save_analysis_record(
         'transaction_parse',
@@ -1604,7 +1831,9 @@ def parse_transaction(request):
 
 
 def spending_summary(request):
-    user = get_effective_user(request)
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
     transactions = [serialize_transaction(item) for item in transaction_queryset(user=user)]
     spending_trend = _build_spending_trend(transactions, _parse_category_overrides(request))
     current_month = spending_trend['currentMonth']
@@ -1765,7 +1994,9 @@ def analysis_record_list(request):
     if request.method != 'GET':
         return json_response({'detail': 'GET 요청만 지원합니다.'}, status=405)
 
-    user = get_effective_user(request)
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
     records = AIAnalysisRecord.objects.filter(user=user)
     analysis_type = (request.GET.get('type') or request.GET.get('analysisType') or '').strip()
     if analysis_type:
@@ -1813,7 +2044,7 @@ def build_chat_context(request):
     }
 
     cards = []
-    card_ids = [*by_card.keys(), '10029', '10612', '10609']
+    card_ids = [*by_card.keys(), '10106', '10612', '10029']
     for raw_id in dict.fromkeys(str(card_id) for card_id in card_ids):
         if raw_id.isdigit():
             card = fetch_card(int(raw_id), request)
@@ -1885,7 +2116,9 @@ def fallback_chat_response(message, context):
 
 @csrf_exempt
 def chat_message(request):
-    user = get_effective_user(request)
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
     if request.method != 'POST':
         return json_response({'detail': 'POST 요청만 지원합니다.'}, status=405)
 
@@ -1920,8 +2153,12 @@ def chat_message(request):
 @csrf_exempt
 def community_post_list(request):
     ensure_community_seeded()
+    viewer = get_request_user(request)
 
     if request.method == 'POST':
+        user, error_response = require_request_user(request)
+        if error_response:
+            return error_response
         payload, error_response = parse_request_body(request)
         if error_response:
             return error_response
@@ -1933,15 +2170,16 @@ def community_post_list(request):
         if not body:
             return json_response({'detail': '본문을 입력해 주세요.'}, status=400)
 
-        author = (payload.get('author') or '남주현').strip()
+        author = user_display_name(user)
         post = CommunityPost.objects.create(
+            user=user,
             title=title[:120],
             body=body,
             author=author[:30],
-            avatar=(payload.get('avatar') or author[:1] or '남')[:2],
+            avatar=user_avatar(user)[:2],
             tags=normalize_tags(payload.get('tags')),
         )
-        return json_response(serialize_community_post(post, include_comments=True), status=201)
+        return json_response(serialize_community_post(post, include_comments=True, viewer=user), status=201)
 
     if request.method != 'GET':
         return json_response({'detail': '지원하지 않는 요청입니다.'}, status=405)
@@ -1950,18 +2188,24 @@ def community_post_list(request):
     search = (request.GET.get('search') or '').strip()
     if search:
         posts = posts.filter(title__icontains=search)
-    return json_response({'count': posts.count(), 'results': [serialize_community_post(post) for post in posts]})
+    return json_response({'count': posts.count(), 'results': [serialize_community_post(post, viewer=viewer) for post in posts]})
 
 
 @csrf_exempt
 def community_post_detail(request, post_id):
     ensure_community_seeded()
     post = get_community_post_or_404(post_id)
+    viewer = get_request_user(request)
 
     if request.method == 'GET':
-        return json_response(serialize_community_post(post, include_comments=True))
+        return json_response(serialize_community_post(post, include_comments=True, viewer=viewer))
 
     if request.method in {'PATCH', 'PUT'}:
+        user, error_response = require_request_user(request)
+        if error_response:
+            return error_response
+        if post.user_id != user.id:
+            return forbidden_response()
         payload, error_response = parse_request_body(request)
         if error_response:
             return error_response
@@ -1979,9 +2223,14 @@ def community_post_detail(request, post_id):
         if 'tags' in payload:
             post.tags = normalize_tags(payload.get('tags'))
         post.save()
-        return json_response(serialize_community_post(post, include_comments=True))
+        return json_response(serialize_community_post(post, include_comments=True, viewer=user))
 
     if request.method == 'DELETE':
+        user, error_response = require_request_user(request)
+        if error_response:
+            return error_response
+        if post.user_id != user.id:
+            return forbidden_response()
         post.delete()
         return json_response({'ok': True})
 
@@ -1993,40 +2242,55 @@ def community_post_like(request, post_id):
     ensure_community_seeded()
     if request.method != 'POST':
         return json_response({'detail': 'POST 요청만 지원합니다.'}, status=405)
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
 
     post = get_community_post_or_404(post_id)
-    post.liked = not post.liked
-    if post.liked:
-        post.likes += 1
-    else:
-        post.likes = max(post.likes - 1, 0)
-    post.save(update_fields=['liked', 'likes', 'updated_at'])
-    return json_response(serialize_community_post(post, include_comments=True))
+    with db_transaction.atomic():
+        post = CommunityPost.objects.select_for_update().get(id=post.id)
+        existing_like = CommunityPostLike.objects.filter(post=post, user=user).first()
+        if existing_like:
+            existing_like.delete()
+            post.likes = max(post.likes - 1, 0)
+            liked = False
+        else:
+            CommunityPostLike.objects.create(post=post, user=user)
+            post.likes += 1
+            liked = True
+        post.save(update_fields=['likes', 'updated_at'])
+        post._viewer_liked = liked
+    return json_response(serialize_community_post(post, include_comments=True, viewer=user))
 
 
 @csrf_exempt
 def community_comment_list(request, post_id):
     ensure_community_seeded()
     post = get_community_post_or_404(post_id)
+    viewer = get_request_user(request)
 
     if request.method == 'GET':
-        return json_response({'count': post.comment_set.count(), 'results': [serialize_comment(comment) for comment in post.comment_set.all()]})
+        return json_response({'count': post.comment_set.count(), 'results': [serialize_comment(comment, viewer=viewer) for comment in post.comment_set.all()]})
 
     if request.method == 'POST':
+        user, error_response = require_request_user(request)
+        if error_response:
+            return error_response
         payload, error_response = parse_request_body(request)
         if error_response:
             return error_response
         body = (payload.get('body') or payload.get('text') or payload.get('content') or '').strip()
         if not body:
             return json_response({'detail': '댓글을 입력해 주세요.'}, status=400)
-        author = (payload.get('author') or '남주현').strip()
+        author = user_display_name(user)
         comment = CommunityComment.objects.create(
+            user=user,
             post=post,
             body=body,
             author=author[:30],
-            avatar=(payload.get('avatar') or author[:1] or '남')[:2],
+            avatar=user_avatar(user)[:2],
         )
-        return json_response(serialize_comment(comment), status=201)
+        return json_response(serialize_comment(comment, viewer=user), status=201)
 
     return json_response({'detail': '지원하지 않는 요청입니다.'}, status=405)
 
@@ -2043,13 +2307,20 @@ def community_comment_detail(request, comment_id):
         raise Http404('댓글을 찾을 수 없습니다.')
 
     if request.method == 'DELETE':
+        user, error_response = require_request_user(request)
+        if error_response:
+            return error_response
+        if comment.user_id != user.id:
+            return forbidden_response()
         comment.delete()
         return json_response({'ok': True})
     return json_response({'detail': '지원하지 않는 요청입니다.'}, status=405)
 
 @csrf_exempt
 def purchase_plan_list(request):
-    user = get_effective_user(request)
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
     if request.method == 'GET':
         ensure_purchase_plans_seeded(user)
         plans = [serialize_purchase_plan(plan) for plan in PurchasePlan.objects.filter(user=user)]
@@ -2067,6 +2338,9 @@ def purchase_plan_list(request):
 
 @csrf_exempt
 def purchase_plan_detail(request, plan_id):
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
     plan = get_purchase_plan_or_404(request, plan_id)
 
     if request.method == 'GET':
@@ -2110,6 +2384,9 @@ def purchase_plan_detail(request, plan_id):
 def purchase_plan_scenarios(request, plan_id):
     if request.method != 'POST':
         return json_response({'detail': 'POST 요청만 지원합니다.'}, status=405)
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
 
     plan = get_purchase_plan_or_404(request, plan_id)
     plan.scenarios = build_plan_scenarios(plan)
@@ -2122,6 +2399,9 @@ def purchase_plan_scenarios(request, plan_id):
 def purchase_plan_select(request, plan_id):
     if request.method != 'POST':
         return json_response({'detail': 'POST 요청만 지원합니다.'}, status=405)
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
 
     payload, error_response = parse_request_body(request)
     if error_response:
@@ -2140,7 +2420,9 @@ def purchase_plan_select(request, plan_id):
 
 @csrf_exempt
 def parse_purchase_plan(request):
-    user = get_effective_user(request)
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
     if request.method != 'POST':
         return json_response({'detail': 'POST 요청만 지원합니다.'}, status=405)
     try:
@@ -2233,6 +2515,9 @@ def parse_purchase_plan(request):
                 'category': category,
                 'amount': amount,
                 'targetMonth': start_month if index < 2 else end_month,
+                'paymentType': PAYMENT_TYPE_LUMP_SUM,
+                'installmentMonths': 0,
+                'isInterestFreeInstallment': False,
                 'required': index < 3,
                 'flexible': index != 0,
             }
@@ -2260,13 +2545,13 @@ def ai_contract(request):
                     'input': {'rawText': '오늘 컴포즈커피 역삼센터필드점 3,800원 결제'},
                     'output': {
                         'schemaVersion': 'transaction-parse-v2',
-                        'cardId': '10029',
+                        'cardId': '10106',
                         'merchantName': '컴포즈커피 역삼센터필드점',
                         'category': '카페',
                         'amount': -3800,
                         'approvedAt': '2026-06-23T09:30:00+09:00',
                         'displayTitle': '컴포즈커피 결제',
-                        'displaySubtitle': '카페 · 3,800원 · LOCA 100',
+                        'displaySubtitle': '카페 · 3,800원 · LOCA LIKIT Eat',
                         'corrections': [],
                         'confidence': 0.85,
                         'reviewFields': ['amount', 'approvedAt'],
@@ -2321,6 +2606,15 @@ CARD_RECOMMENDATION_CATEGORY_KEYWORDS = {
 }
 
 
+COLD_START_CATEGORY_ROWS = [
+    {'category': '식비', 'amount': 320000},
+    {'category': '쇼핑', 'amount': 220000},
+    {'category': '카페', 'amount': 70000},
+    {'category': '교통', 'amount': 90000},
+    {'category': '편의점', 'amount': 60000},
+]
+
+
 def _as_int(value, fallback=0):
     try:
         return int(value or 0)
@@ -2334,6 +2628,40 @@ def _krw(value):
 
 def _category_keywords(category):
     return CARD_RECOMMENDATION_CATEGORY_KEYWORDS.get(str(category), [str(category)])
+
+
+def _payment_context_from_mapping(mapping=None):
+    terms = normalize_payment_terms(mapping or {})
+    return {
+        'paymentType': terms['paymentType'],
+        'installmentMonths': terms['installmentMonths'],
+        'isInterestFreeInstallment': terms['isInterestFreeInstallment'],
+    }
+
+
+def _payment_context_label(context):
+    if (context or {}).get('paymentType') != PAYMENT_TYPE_INSTALLMENT:
+        return '일시불'
+    months = _as_int((context or {}).get('installmentMonths'), 0)
+    prefix = f'{months}개월 ' if months else ''
+    return f'{prefix}무이자 할부' if (context or {}).get('isInterestFreeInstallment') else f'{prefix}할부'
+
+
+def _benefit_item_excludes_payment(item, payment_context=None):
+    context = payment_context or {}
+    if context.get('paymentType') != PAYMENT_TYPE_INSTALLMENT:
+        return False
+
+    excluded_methods = set(item.get('excludedPaymentMethods') or [])
+    rules = item.get('paymentMethodRules') or {}
+    if 'installment' in excluded_methods or rules.get('installmentBenefitEligible') is False:
+        return True
+    if context.get('isInterestFreeInstallment') and (
+        'interest_free_installment' in excluded_methods
+        or rules.get('interestFreeInstallmentEligible') is False
+    ):
+        return True
+    return False
 
 
 def _is_general_benefit_label(label):
@@ -2356,10 +2684,16 @@ def _build_spending_profile(request=None, adjusted_for_recommendation=False, rec
     transactions = [serialize_transaction(item) for item in transaction_queryset(request)]
     spending_trend = _build_spending_trend(transactions, recurring_overrides)
     current_month = spending_trend['currentMonth']
+    previous_month = spending_trend['previousMonth']
     expenses = [
         item
         for item in transactions
         if _as_int(item.get('amount')) < 0 and _month_key_from_transaction(item) == current_month
+    ]
+    previous_expenses = [
+        item
+        for item in transactions
+        if _as_int(item.get('amount')) < 0 and _month_key_from_transaction(item) == previous_month
     ]
     adjustments = {
         item['category']: _as_int(item.get('adjustedAmount'))
@@ -2371,12 +2705,20 @@ def _build_spending_profile(request=None, adjusted_for_recommendation=False, rec
 
     by_category = defaultdict(int)
     by_card = defaultdict(int)
+    actual_by_card = defaultdict(int)
+    previous_by_card = defaultdict(int)
+    by_category_payment = defaultdict(int)
     by_category_card = defaultdict(lambda: {'amount': 0, 'actualAmount': 0, 'merchants': []})
+
+    for item in previous_expenses:
+        previous_by_card[str(item.get('cardId') or item.get('card_id') or '')] += abs(_as_int(item.get('amount')))
 
     for item in expenses:
         raw_amount = abs(_as_int(item.get('amount')))
         category = item.get('category') or item.get('cat') or '기타'
         card_id = str(item.get('cardId') or item.get('card_id') or '')
+        payment_context = _payment_context_from_mapping(item)
+        actual_by_card[card_id] += raw_amount
         category_actual = actual_by_category[category] or raw_amount
         if adjusted_for_recommendation:
             category_adjusted = adjustments.get(category, category_actual)
@@ -2386,7 +2728,23 @@ def _build_spending_profile(request=None, adjusted_for_recommendation=False, rec
             amount = raw_amount
         by_category[category] += amount
         by_card[card_id] += amount
-        category_card = by_category_card[(category, card_id)]
+        by_category_payment[
+            (
+                category,
+                payment_context['paymentType'],
+                payment_context['installmentMonths'],
+                payment_context['isInterestFreeInstallment'],
+            )
+        ] += amount
+        category_card = by_category_card[
+            (
+                category,
+                card_id,
+                payment_context['paymentType'],
+                payment_context['installmentMonths'],
+                payment_context['isInterestFreeInstallment'],
+            )
+        ]
         category_card['amount'] += amount
         category_card['actualAmount'] += raw_amount
         merchant = item.get('merchantName') or item.get('merchant') or ''
@@ -2398,6 +2756,42 @@ def _build_spending_profile(request=None, adjusted_for_recommendation=False, rec
         key=lambda item: item['amount'],
         reverse=True,
     )
+    data_source = 'transactions'
+    if not category_rows:
+        category_rows = [dict(row) for row in COLD_START_CATEGORY_ROWS]
+        data_source = 'cold_start_defaults'
+    benefit_evaluation_rows = sorted(
+        [
+            {
+                'category': category,
+                'amount': amount,
+                'paymentType': payment_type,
+                'installmentMonths': installment_months,
+                'isInterestFreeInstallment': is_interest_free,
+                'paymentLabel': _payment_context_label(
+                    {
+                        'paymentType': payment_type,
+                        'installmentMonths': installment_months,
+                        'isInterestFreeInstallment': is_interest_free,
+                    }
+                ),
+            }
+            for (category, payment_type, installment_months, is_interest_free), amount in by_category_payment.items()
+        ],
+        key=lambda item: item['amount'],
+        reverse=True,
+    )
+    if not benefit_evaluation_rows:
+        benefit_evaluation_rows = [
+            {
+                **row,
+                'paymentType': PAYMENT_TYPE_LUMP_SUM,
+                'installmentMonths': 0,
+                'isInterestFreeInstallment': False,
+                'paymentLabel': '일시불',
+            }
+            for row in category_rows
+        ]
     total_expense = sum(row['amount'] for row in category_rows)
     top_category = category_rows[0]['category'] if category_rows else '기타'
     recurring_category_set = {
@@ -2426,21 +2820,36 @@ def _build_spending_profile(request=None, adjusted_for_recommendation=False, rec
         style_tags.append(f'{top_category} 집중형')
     if len(category_rows) >= 4:
         style_tags.append('분산 소비형')
+    if data_source == 'cold_start_defaults':
+        style_tags = ['학습 초기', '조건부 추천', f'{top_category} 가정']
 
     return {
         'totalExpense': total_expense,
         'categoryRows': category_rows,
+        'benefitEvaluationRows': benefit_evaluation_rows,
         'byCard': [{'cardId': key, 'amount': value} for key, value in by_card.items()],
+        'currentByCard': [{'cardId': key, 'amount': value} for key, value in actual_by_card.items()],
+        'previousByCard': [{'cardId': key, 'amount': value} for key, value in previous_by_card.items()],
         'categoryCardRows': sorted(
             [
                 {
                     'category': category,
                     'cardId': card_id,
+                    'paymentType': payment_type,
+                    'installmentMonths': installment_months,
+                    'isInterestFreeInstallment': is_interest_free,
+                    'paymentLabel': _payment_context_label(
+                        {
+                            'paymentType': payment_type,
+                            'installmentMonths': installment_months,
+                            'isInterestFreeInstallment': is_interest_free,
+                        }
+                    ),
                     'amount': value['amount'],
                     'actualAmount': value['actualAmount'],
                     'merchantExamples': value['merchants'][:3],
                 }
-                for (category, card_id), value in by_category_card.items()
+                for (category, card_id, payment_type, installment_months, is_interest_free), value in by_category_card.items()
             ],
             key=lambda item: item['amount'],
             reverse=True,
@@ -2458,10 +2867,103 @@ def _build_spending_profile(request=None, adjusted_for_recommendation=False, rec
         'spendingTrend': spending_trend,
         'actualTotalExpense': sum(actual_by_category.values()),
         'adjustedForRecommendation': adjusted_for_recommendation,
+        'dataSource': data_source,
+        'transactionCount': len(transactions),
+        'expenseTransactionCount': len(expenses),
+        'activeMonthCount': len(
+            {
+                _month_key_from_transaction(item)
+                for item in transactions
+                if _as_int(item.get('amount')) < 0 and _month_key_from_transaction(item)
+            }
+        ),
     }
 
 
-def _benefit_rate_for_category(card, category):
+def _recommendation_data_readiness(profile, owned_ids):
+    transaction_count = _as_int(profile.get('expenseTransactionCount'))
+    active_months = _as_int(profile.get('activeMonthCount'))
+    has_owned_cards = bool(owned_ids)
+    data_source = profile.get('dataSource') or 'transactions'
+
+    if not has_owned_cards and transaction_count == 0:
+        stage, confidence = 'empty', 0.25
+        label = '학습 전'
+        message = '보유 카드와 첫 소비 계획을 입력하면 조건부 추천부터 시작할 수 있어요.'
+    elif data_source == 'cold_start_defaults' or transaction_count == 0:
+        stage, confidence = 'cold_start', 0.42
+        label = '학습 초기'
+        message = '거래 데이터가 부족해 일반 생활비 패턴으로 조건부 추천합니다.'
+    elif active_months < 2 or transaction_count < 8:
+        stage, confidence = 'warming_up', 0.62
+        label = '학습 중'
+        message = '최근 거래가 적어 예상 혜택을 보수적으로 계산합니다.'
+    elif active_months < 3 or transaction_count < 20:
+        stage, confidence = 'developing', 0.76
+        label = '패턴 확인 중'
+        message = '소비 패턴이 보이기 시작했지만 일부 추천은 조건부로 봐야 합니다.'
+    else:
+        stage, confidence = 'learned', 0.92
+        label = '패턴 기반'
+        message = '반복 소비 패턴을 기준으로 추천합니다.'
+
+    return {
+        'stage': stage,
+        'label': label,
+        'confidence': confidence,
+        'message': message,
+        'transactionCount': transaction_count,
+        'activeMonthCount': active_months,
+        'dataSource': data_source,
+        'recommendationMode': 'conditional' if confidence < 0.75 else 'calculated',
+    }
+
+
+def _benefit_rule_quality(card):
+    status = card.get('benefitDataStatus') or {}
+    status_key = status.get('status')
+    total = _as_int(status.get('totalBenefitCount'))
+    verified = _as_int(status.get('verifiedBenefitCount'))
+    verified_ratio = verified / total if total else 0
+
+    if status_key == 'verified':
+        confidence = 1.0
+    elif status_key == 'partial':
+        confidence = 0.68 + min(0.18, verified_ratio * 0.18)
+    elif status_key == 'needs_input':
+        confidence = 0.5
+    elif status_key == 'missing':
+        confidence = 0.35
+    elif card.get('benefitItems'):
+        confidence = 1.0
+    else:
+        confidence = 0.48
+
+    missing_fields = set(status.get('missingRuleFields') or [])
+    if {'benefitValue', 'monthlyLimit'} & missing_fields:
+        confidence -= 0.12
+    if 'previousMonthSpend' in missing_fields:
+        confidence -= 0.08
+
+    confidence = max(0.25, min(1.0, confidence))
+    default_label = {
+        'verified': '검증 완료',
+        'partial': '일부 보완 필요',
+        'needs_input': '정보 보완 필요',
+        'missing': '혜택 데이터 없음',
+    }.get(status_key, '혜택 데이터 확인 필요')
+    return {
+        'status': status_key or 'unknown',
+        'label': status.get('label') or default_label,
+        'confidence': round(confidence, 2),
+        'verifiedBenefitCount': verified,
+        'totalBenefitCount': total,
+        'missingRuleFields': sorted(missing_fields),
+        'manualInputAvailable': bool(status.get('manualInputAvailable', status_key != 'verified')),
+    }
+
+
+def _benefit_rate_for_category(card, category, payment_context=None):
     keywords = [keyword.lower() for keyword in _category_keywords(category)]
     benefit_items = card.get('benefitItems') or []
     best_rate = 0.0
@@ -2470,8 +2972,12 @@ def _benefit_rate_for_category(card, category):
     broad_rate = 0.0
     broad_limit = None
     broad_label = ''
+    skipped_for_payment = 0
 
     for item in benefit_items:
+        if _benefit_item_excludes_payment(item, payment_context):
+            skipped_for_payment += 1
+            continue
         label = ' '.join(
             str(value or '')
             for value in [item.get('label'), item.get('scope'), item.get('type')]
@@ -2498,6 +3004,8 @@ def _benefit_rate_for_category(card, category):
         return best_rate, _as_int(best_limit, 0) or None, best_label
     if broad_rate:
         return broad_rate, _as_int(broad_limit, 0) or None, broad_label or '기본 혜택'
+    if benefit_items and skipped_for_payment == len(benefit_items):
+        return 0.0, None, f'{_payment_context_label(payment_context)} 혜택 제외'
     if benefit_items:
         return 0.0, None, '해당 카테고리 혜택 없음'
 
@@ -2525,8 +3033,8 @@ def _benefit_rate_for_category(card, category):
     return 0.0, None, '해당 카테고리 혜택 없음'
 
 
-def _estimate_raw_category_benefit(card, category, amount):
-    rate, limit, label = _benefit_rate_for_category(card, category)
+def _estimate_raw_category_benefit(card, category, amount, payment_context=None):
+    rate, limit, label = _benefit_rate_for_category(card, category, payment_context=payment_context)
     estimated = round(_as_int(amount) * rate / 100)
     if limit is not None:
         estimated = min(estimated, limit)
@@ -2535,6 +3043,24 @@ def _estimate_raw_category_benefit(card, category, amount):
         'estimatedBenefit': estimated,
         'benefitLabel': label,
         'limit': limit,
+    }
+
+
+def _apply_monthly_limit(raw, limit_usage=None):
+    limit = raw.get('limit')
+    if limit is None:
+        return raw
+    key = (raw.get('benefitLabel') or '', _as_int(limit))
+    used = _as_int((limit_usage or {}).get(key))
+    available = max(_as_int(limit) - used, 0)
+    capped = min(_as_int(raw.get('estimatedBenefit')), available)
+    if limit_usage is not None:
+        limit_usage[key] = used + capped
+    return {
+        **raw,
+        'estimatedBenefit': capped,
+        'limitRemainingAfter': max(available - capped, 0),
+        'limitUsageKey': f'{key[0]}:{key[1]}',
     }
 
 
@@ -2555,17 +3081,28 @@ def _card_min_spend(card):
     return _as_int(card.get('previousMonthMinSpend') or card.get('previous_month_min_spend'))
 
 
-def _estimate_card_value(card, profile, owned=False, evaluation_spend=None):
+def _estimate_card_value(
+    card,
+    profile,
+    owned=False,
+    evaluation_spend=None,
+    benefit_eligibility_spend=None,
+    performance_spend=None,
+):
     annual_fee = _as_int(card.get('annualFee') or card.get('domesticAnnualFee') or card.get('domestic_annual_fee'))
     monthly_annual_fee = round(annual_fee / 12)
     min_spend = _as_int(card.get('previousMonthMinSpend') or card.get('previous_month_min_spend'))
     total_spend = _as_int(profile.get('totalExpense'))
     evaluation_spend = total_spend if evaluation_spend is None else _as_int(evaluation_spend)
-    eligible_for_benefit = not min_spend or evaluation_spend >= min_spend
+    benefit_eligibility_spend = evaluation_spend if benefit_eligibility_spend is None else _as_int(benefit_eligibility_spend)
+    performance_spend = evaluation_spend if performance_spend is None else _as_int(performance_spend)
+    eligible_for_benefit = not min_spend or benefit_eligibility_spend >= min_spend
+    next_month_eligible = not min_spend or performance_spend >= min_spend
     eligible_ratio = 1 if eligible_for_benefit else 0
     remaining_spend = 0
     if min_spend and not eligible_for_benefit:
-        remaining_spend = min_spend - evaluation_spend
+        remaining_spend = min_spend - benefit_eligibility_spend
+    remaining_current_spend = max(min_spend - performance_spend, 0) if min_spend else 0
 
     category_breakdown = []
     gross_benefit = 0
@@ -2573,12 +3110,17 @@ def _estimate_card_value(card, profile, owned=False, evaluation_spend=None):
     matched_categories = []
     recurring_matched_categories = []
     one_time_categories = set(profile.get('oneTimeCategories') or [])
-    for row in profile.get('categoryRows') or []:
+    limit_usage = {}
+    for row in profile.get('benefitEvaluationRows') or profile.get('categoryRows') or []:
         amount = _as_int(row.get('amount'))
         if amount <= 0:
             continue
         category = row.get('category')
-        raw = _estimate_raw_category_benefit(card, category, amount)
+        payment_context = _payment_context_from_mapping(row)
+        raw = _apply_monthly_limit(
+            _estimate_raw_category_benefit(card, category, amount, payment_context=payment_context),
+            limit_usage,
+        )
         potential_estimated = raw['estimatedBenefit']
         estimated = potential_estimated if eligible_for_benefit else 0
         potential_gross_benefit += potential_estimated
@@ -2595,24 +3137,42 @@ def _estimate_card_value(card, profile, owned=False, evaluation_spend=None):
                 'estimatedBenefit': estimated,
                 'potentialBenefit': potential_estimated,
                 'benefitLabel': raw['benefitLabel'],
+                'paymentType': payment_context['paymentType'],
+                'installmentMonths': payment_context['installmentMonths'],
+                'isInterestFreeInstallment': payment_context['isInterestFreeInstallment'],
+                'paymentLabel': _payment_context_label(payment_context),
             }
         )
 
+    benefit_rule_quality = _benefit_rule_quality(card)
+    rule_confidence = benefit_rule_quality['confidence']
+    raw_gross_benefit = gross_benefit
+    raw_potential_gross_benefit = potential_gross_benefit
+    gross_benefit = round(gross_benefit * rule_confidence)
+    potential_gross_benefit = round(potential_gross_benefit * rule_confidence)
     monthly_net = gross_benefit - monthly_annual_fee
     annual_net = monthly_net * 12
     return {
         'expectedMonthlyBenefit': gross_benefit,
+        'rawExpectedMonthlyBenefit': raw_gross_benefit,
         'monthlyAnnualFee': monthly_annual_fee,
         'monthlyNetBenefit': monthly_net,
         'annualNetBenefit': annual_net,
         'annualFee': annual_fee,
         'previousMonthMinSpend': min_spend,
         'evaluationSpend': evaluation_spend,
+        'benefitEligibilitySpend': benefit_eligibility_spend,
+        'currentMonthPerformanceSpend': performance_spend,
         'eligibleForBenefit': eligible_for_benefit,
+        'nextMonthEligibleForBenefit': next_month_eligible,
         'remainingSpendForBenefit': remaining_spend,
+        'remainingCurrentSpendForNextMonthBenefit': remaining_current_spend,
         'eligibleRatio': round(eligible_ratio, 2),
         'potentialMonthlyBenefit': potential_gross_benefit,
+        'rawPotentialMonthlyBenefit': raw_potential_gross_benefit,
         'potentialMonthlyNetBenefit': potential_gross_benefit - monthly_annual_fee,
+        'benefitRuleQuality': benefit_rule_quality,
+        'benefitRuleConfidence': rule_confidence,
         'matchedCategories': list(dict.fromkeys(matched_categories))[:4],
         'recurringMatchedCategories': list(dict.fromkeys(recurring_matched_categories))[:4],
         'primaryMatchedCategory': (
@@ -2627,6 +3187,10 @@ def _estimate_card_value(card, profile, owned=False, evaluation_spend=None):
 
 def _recommendation_reason(card, value, profile, monthly_delta):
     top_category = value.get('primaryMatchedCategory') or profile.get('recommendationTopCategory') or profile.get('topCategory') or '주요 소비'
+    if value.get('benefitRuleConfidence', 1) < 0.65:
+        return f'{top_category} 지출과 맞지만 혜택 조건 검수가 필요해 보수적으로 계산했습니다.'
+    if value.get('benefitTiming') == 'future_after_performance' and monthly_delta > 0:
+        return f'{top_category} 소비 패턴상 전월실적을 채운 뒤 월 {_krw(monthly_delta)}의 순혜택 개선이 예상됩니다.'
     if monthly_delta > 0:
         return f'{top_category} 소비 기준으로 월 {_krw(monthly_delta)}의 순혜택 개선이 예상됩니다.'
     if value.get('remainingSpendForBenefit'):
@@ -2661,33 +3225,57 @@ def _topic_particle(text):
     return '은'
 
 
-def _estimate_category_benefit(card, category, amount, evaluation_spend=None):
+def _estimate_category_benefit(
+    card,
+    category,
+    amount,
+    evaluation_spend=None,
+    payment_context=None,
+    limit_usage=None,
+):
     min_spend = _card_min_spend(card)
     evaluation_spend = _as_int(evaluation_spend)
     eligible = not min_spend or evaluation_spend >= min_spend
-    raw = _estimate_raw_category_benefit(card, category, amount)
-    estimated = raw['estimatedBenefit'] if eligible else 0
+    payment_context = _payment_context_from_mapping(payment_context)
+    raw = _apply_monthly_limit(
+        _estimate_raw_category_benefit(card, category, amount, payment_context=payment_context),
+        limit_usage,
+    )
+    rule_confidence = _benefit_rule_quality(card)['confidence']
+    raw_estimated = raw['estimatedBenefit'] if eligible else 0
+    estimated = round(raw_estimated * rule_confidence)
+    potential = round(raw['estimatedBenefit'] * rule_confidence)
     return {
         'rate': raw['rate'],
         'benefitLabel': raw['benefitLabel'],
         'estimatedBenefit': estimated,
-        'potentialBenefit': raw['estimatedBenefit'],
+        'rawEstimatedBenefit': raw_estimated,
+        'potentialBenefit': potential,
+        'rawPotentialBenefit': raw['estimatedBenefit'],
+        'benefitRuleConfidence': rule_confidence,
         'eligibleForBenefit': eligible,
+        'paymentType': payment_context['paymentType'],
+        'installmentMonths': payment_context['installmentMonths'],
+        'isInterestFreeInstallment': payment_context['isInterestFreeInstallment'],
+        'paymentLabel': _payment_context_label(payment_context),
     }
 
 
-def _profile_card_spend_map(profile):
+def _profile_card_spend_map(profile, key='byCard'):
     return {
         str(item.get('cardId') or ''): _as_int(item.get('amount'))
-        for item in profile.get('byCard') or []
+        for item in profile.get(key) or []
     }
 
 
 def _estimate_current_portfolio_value(profile, cards_by_id, owned_ids):
     card_spend = _profile_card_spend_map(profile)
+    current_card_spend = _profile_card_spend_map(profile, 'currentByCard') or card_spend
+    previous_card_spend = _profile_card_spend_map(profile, 'previousByCard')
     gross_benefit = 0
     potential_benefit = 0
     breakdown = []
+    limit_usage_by_card = defaultdict(dict)
 
     for row in profile.get('categoryCardRows') or []:
         card_id = str(row.get('cardId') or '')
@@ -2699,7 +3287,9 @@ def _estimate_current_portfolio_value(profile, cards_by_id, owned_ids):
             card,
             row.get('category') or '기타',
             amount,
-            evaluation_spend=card_spend.get(card_id, 0),
+            evaluation_spend=previous_card_spend.get(card_id, 0),
+            payment_context=row,
+            limit_usage=limit_usage_by_card[card_id],
         )
         gross_benefit += estimate['estimatedBenefit']
         potential_benefit += estimate['potentialBenefit']
@@ -2735,6 +3325,8 @@ def _estimate_current_portfolio_value(profile, cards_by_id, owned_ids):
         'monthlyAnnualFee': monthly_fee,
         'annualFee': annual_fee,
         'annualNetBenefit': monthly_net * 12,
+        'currentMonthPerformanceByCard': current_card_spend,
+        'previousMonthPerformanceByCard': previous_card_spend,
         'breakdown': breakdown[:8],
     }
 
@@ -2743,6 +3335,7 @@ def _build_routing_suggestions(profile, owned_values, result_cards, owned_ids):
     cards_by_id = {}
     destinations = []
     card_spend = _profile_card_spend_map(profile)
+    previous_card_spend = _profile_card_spend_map(profile, 'previousByCard')
     one_time_categories = {
         item.get('category')
         for item in (profile.get('spendingTrend') or {}).get('categoryChanges') or []
@@ -2754,17 +3347,6 @@ def _build_routing_suggestions(profile, owned_values, result_cards, owned_ids):
         if card_id:
             cards_by_id[card_id] = card
             destinations.append({'card': card, 'rank': 99, 'monthlyDelta': 0})
-    for index, card in enumerate(result_cards):
-        card_id = _card_id(card)
-        if card_id:
-            cards_by_id.setdefault(card_id, card)
-            destinations.append(
-                {
-                    'card': card,
-                    'rank': index,
-                    'monthlyDelta': _as_int((card.get('economics') or {}).get('monthlyDelta')),
-                }
-            )
 
     suggestions = []
     seen = set()
@@ -2780,7 +3362,8 @@ def _build_routing_suggestions(profile, owned_values, result_cards, owned_ids):
             source_card,
             category,
             amount,
-            evaluation_spend=card_spend.get(source_card_id, 0),
+            evaluation_spend=previous_card_spend.get(source_card_id, 0),
+            payment_context=row,
         )
         for destination_item in destinations:
             destination = destination_item['card']
@@ -2789,22 +3372,26 @@ def _build_routing_suggestions(profile, owned_values, result_cards, owned_ids):
                 continue
 
             owned_target = target_card_id in owned_ids
-            target_evaluation_spend = (
-                card_spend.get(target_card_id, 0) + amount
-                if owned_target
-                else _as_int(profile.get('totalExpense'))
-            )
+            target_evaluation_spend = previous_card_spend.get(target_card_id, 0)
             target_estimate = _estimate_category_benefit(
                 destination,
                 category,
                 amount,
                 evaluation_spend=target_evaluation_spend,
+                payment_context=row,
             )
             monthly_gain = target_estimate['estimatedBenefit'] - source_estimate['estimatedBenefit']
             if monthly_gain < 1000:
                 continue
 
-            key = (category, source_card_id, target_card_id)
+            key = (
+                category,
+                source_card_id,
+                target_card_id,
+                row.get('paymentType') or PAYMENT_TYPE_LUMP_SUM,
+                row.get('installmentMonths') or 0,
+                bool(row.get('isInterestFreeInstallment')),
+            )
             if key in seen:
                 continue
             seen.add(key)
@@ -2829,9 +3416,13 @@ def _build_routing_suggestions(profile, owned_values, result_cards, owned_ids):
                     'toRate': target_estimate['rate'],
                     'toBenefit': target_estimate['estimatedBenefit'],
                     'benefitLabel': target_estimate['benefitLabel'],
+                    'paymentType': row.get('paymentType') or PAYMENT_TYPE_LUMP_SUM,
+                    'installmentMonths': _as_int(row.get('installmentMonths')),
+                    'isInterestFreeInstallment': bool(row.get('isInterestFreeInstallment')),
+                    'paymentLabel': row.get('paymentLabel') or _payment_context_label(row),
                     'merchantExamples': row.get('merchantExamples') or [],
-                    'scope': 'owned' if owned_target else 'candidate',
-                    'scopeLabel': '보유 카드 조정' if owned_target else '비교 카드',
+                    'scope': 'owned',
+                    'scopeLabel': '보유 카드 조정',
                     'destinationRank': destination_item['rank'],
                     'destinationMonthlyDelta': destination_item['monthlyDelta'],
                     'title': f'{category}{_topic_particle(category)} {target_name}',
@@ -2861,12 +3452,18 @@ def _build_routing_suggestions(profile, owned_values, result_cards, owned_ids):
 
 
 def card_recommendations(request):
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
     profile = _build_spending_profile(
         request,
         adjusted_for_recommendation=True,
         recurring_overrides=_parse_category_overrides(request),
     )
     owned_ids = {str(item.card_id) for item in owned_card_queryset(request)}
+    data_readiness = _recommendation_data_readiness(profile, owned_ids)
+    current_card_spend = _profile_card_spend_map(profile, 'currentByCard')
+    previous_card_spend = _profile_card_spend_map(profile, 'previousByCard')
 
     owned_values = []
     owned_cards_by_id = {}
@@ -2874,21 +3471,46 @@ def card_recommendations(request):
         if card_id.isdigit():
             card = fetch_card(int(card_id), request)
             if card:
-                owned_cards_by_id[str(_card_id(card))] = card
-                owned_values.append({'card': card, **_estimate_card_value(card, profile, owned=True)})
+                normalized_card_id = str(_card_id(card))
+                owned_cards_by_id[normalized_card_id] = card
+                owned_values.append(
+                    {
+                        'card': card,
+                        **_estimate_card_value(
+                            card,
+                            profile,
+                            owned=True,
+                            evaluation_spend=previous_card_spend.get(normalized_card_id, 0),
+                            benefit_eligibility_spend=previous_card_spend.get(normalized_card_id, 0),
+                            performance_spend=current_card_spend.get(normalized_card_id, 0),
+                        ),
+                    }
+                )
 
     baseline = _estimate_current_portfolio_value(profile, owned_cards_by_id, owned_ids)
     current_monthly_net = _as_int(baseline.get('monthlyNetBenefit'))
+    current_monthly_gross = _as_int(baseline.get('expectedMonthlyBenefit'))
 
     candidates = fetch_cards(request, limit=36, active_only=True)
     ranked = []
     for card in candidates:
         detailed = fetch_card(int(card['cardAdId']), request) or card
         is_owned = str(detailed.get('cardAdId')) in owned_ids
-        value = _estimate_card_value(detailed, profile, owned=is_owned)
-        monthly_delta = value['monthlyNetBenefit'] - current_monthly_net
+        if is_owned:
+            continue
+        value = _estimate_card_value(
+            detailed,
+            profile,
+            owned=False,
+            evaluation_spend=_as_int(profile.get('totalExpense')),
+            benefit_eligibility_spend=_as_int(profile.get('totalExpense')),
+            performance_spend=0,
+        )
+        value['benefitTiming'] = 'future_after_performance'
+        comparison_monthly_net = value['expectedMonthlyBenefit'] - value['monthlyAnnualFee']
+        monthly_delta = comparison_monthly_net - current_monthly_gross
         annual_delta = monthly_delta * 12
-        annual_fee_delta = 0 if is_owned else max(0, value['annualFee'] - _as_int((baseline or {}).get('annualFee')))
+        annual_fee_delta = value['annualFee']
         payback_months = None
         if monthly_delta > 0 and annual_fee_delta > 0:
             payback_months = max(1, round(annual_fee_delta / monthly_delta))
@@ -2898,10 +3520,23 @@ def card_recommendations(request):
         match += min(8, len(value['matchedCategories']) * 3)
         if value['remainingSpendForBenefit']:
             match -= 8
-        if value['owned']:
-            match -= 6
+        if value.get('benefitRuleConfidence', 1) < 0.75:
+            match -= round((0.75 - value['benefitRuleConfidence']) * 20)
+        if data_readiness['confidence'] < 0.75:
+            match -= round((0.75 - data_readiness['confidence']) * 18)
         match = max(45, min(98, match))
-        notification = annual_delta >= 30000 and monthly_delta > 0 and (payback_months is None or payback_months <= 8)
+        notification = (
+            data_readiness['confidence'] >= 0.6
+            and value.get('benefitRuleConfidence', 1) >= 0.55
+            and annual_delta >= 30000
+            and monthly_delta > 0
+            and (payback_months is None or payback_months <= 8)
+        )
+        recommendation_confidence = round(
+            min(data_readiness['confidence'], value.get('benefitRuleConfidence', 1)),
+            2,
+        )
+        ranking_gain = round(monthly_delta * recommendation_confidence)
 
         ranked.append(
             {
@@ -2915,25 +3550,50 @@ def card_recommendations(request):
                     'recommendationTopCategory': profile.get('recommendationTopCategory'),
                     'matchedCategories': value['matchedCategories'],
                     'categoryBreakdown': value['categoryBreakdown'],
+                    'dataReadiness': data_readiness,
                 },
                 'economics': {
                     **value,
                     'currentMonthlyNetBenefit': current_monthly_net,
+                    'currentMonthlyGrossBenefit': current_monthly_gross,
+                    'comparisonMonthlyNetBenefit': comparison_monthly_net,
                     'monthlyDelta': monthly_delta,
                     'annualDelta': annual_delta,
                     'paybackMonths': payback_months,
                     'annualFeeDelta': annual_fee_delta,
                 },
+                'recommendationConfidence': recommendation_confidence,
+                'recommendationMode': data_readiness['recommendationMode'],
+                'rankingGain': ranking_gain,
                 'notification': {
                     'show': notification,
-                    'title': '카드 사용 조정으로 혜택이 개선될 수 있습니다',
-                    'body': f'현재 소비 기준 월 {_krw(max(0, monthly_delta))}의 순혜택 개선이 예상됩니다.',
+                    'title': (
+                        '조건을 확인하면 추천 정확도가 올라갑니다'
+                        if data_readiness['recommendationMode'] == 'conditional'
+                        else '카드 사용 조정으로 혜택이 개선될 수 있습니다'
+                    ),
+                    'body': (
+                        data_readiness['message']
+                        if data_readiness['recommendationMode'] == 'conditional'
+                        else f'현재 소비 기준 월 {_krw(max(0, monthly_delta))}의 순혜택 개선이 예상됩니다.'
+                    ),
                     'severity': 'attention' if notification else 'info',
                 },
             }
         )
 
-    ranked.sort(key=lambda item: (item['economics']['monthlyDelta'], item['economics']['monthlyNetBenefit'], item['match']), reverse=True)
+    ranked.sort(
+        key=lambda item: (
+            item['rankingGain'] > 0,
+            item['rankingGain'],
+            item['recommendationConfidence'] >= 0.55,
+            item['recommendationConfidence'],
+            item['economics']['monthlyDelta'],
+            item['match'],
+            item['economics']['monthlyNetBenefit'],
+        ),
+        reverse=True,
+    )
     results = ranked[:5]
     top = results[0] if results else None
     alert = (top or {}).get('notification') or {'show': False}
@@ -2943,6 +3603,7 @@ def card_recommendations(request):
         {
             'count': len(results),
             'profile': profile,
+            'dataReadiness': data_readiness,
             'baseline': {
                 'cardId': baseline.get('cardId'),
                 'cardName': baseline.get('cardName'),
@@ -2956,6 +3617,10 @@ def card_recommendations(request):
             'alert': alert,
             'routingSuggestions': routing_suggestions,
             'results': results,
+            'warnings': [
+                data_readiness['message'],
+                '혜택 규칙이 검증되지 않은 카드는 예상 혜택을 보수적으로 반영했습니다.',
+            ],
         }
     )
 

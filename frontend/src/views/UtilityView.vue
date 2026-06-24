@@ -149,17 +149,67 @@
       </form>
 
       <section v-else-if="props.type === 'report'" class="report-view">
-        <div class="report-summary app-card">
-          <span>6월 카드 소비</span>
-          <strong>{{ krw(reportTotalSpent) }}</strong>
-          <p>가장 큰 지출 카테고리는 {{ topCategory?.cat || '-' }}입니다.</p>
-        </div>
-        <div class="metric-list">
-          <article v-for="metric in reportMetrics" :key="metric.label" class="app-card-sm metric-panel">
-            <span>{{ metric.label }}</span>
-            <strong>{{ metric.value }}</strong>
+        <div class="report-card-grid">
+          <article class="app-card report-overview-card report-recommend-card">
+            <span class="report-kicker">추천 카드</span>
+            <small>Carch 추천</small>
+            <strong>이번 달 점검할 지출</strong>
+            <b>{{ krw(reportFocusAmount) }}</b>
+            <div class="report-card-art">
+              <img v-if="reportFocusCard?.imageUrl" :src="reportFocusCard.imageUrl" :alt="reportFocusCard.name" />
+              <WalletCards v-else :size="42" />
+            </div>
+            <p>{{ reportFocusCopy }}</p>
+            <RouterLink class="report-mini-button" to="/recommendations/new">추천 내역 보기</RouterLink>
+          </article>
+
+          <article class="app-card report-overview-card report-spending-card">
+            <span class="report-kicker">소비 요약 카드</span>
+            <small>이번 달 소비 요약</small>
+            <strong>{{ krw(reportTotalSpent) }}</strong>
+            <em>{{ budgetUsePercent }}% 예산 사용</em>
+            <div class="report-donut-panel">
+              <div class="report-donut" :style="{ background: reportDonutBackground }">
+                <span>최다</span>
+                <b>{{ topCategory?.cat || '-' }}</b>
+              </div>
+              <ul class="report-donut-legend">
+                <li v-for="item in reportLegendCategories" :key="item.cat">
+                  <i :style="{ background: item.color }"></i>
+                  <span>{{ item.cat }}</span>
+                  <b>{{ krw(item.amount) }}</b>
+                </li>
+              </ul>
+            </div>
+            <RouterLink class="report-mini-button" to="/analytics">상세 분석 보기</RouterLink>
+          </article>
+
+          <article class="app-card report-overview-card report-planner-card">
+            <div class="report-card-title-row">
+              <span class="report-kicker">캘린더 / 플래너 카드</span>
+              <RouterLink to="/budget" aria-label="예산 플래너 보기">
+                <ChevronRight :size="16" />
+              </RouterLink>
+            </div>
+            <strong>{{ reportPeriodLabel }}</strong>
+            <div class="report-calendar" aria-label="이번 달 지출 캘린더">
+              <span v-for="day in reportWeekdays" :key="day" class="report-weekday">{{ day }}</span>
+              <span
+                v-for="day in reportCalendarDays"
+                :key="day.key"
+                class="report-day"
+                :class="{ empty: day.empty, active: day.active, latest: day.latest }"
+              >
+                {{ day.label }}
+              </span>
+            </div>
+            <div class="report-plan-chip" :class="{ warning: reportPlannerWarning }">
+              <span>{{ reportLatestDayLabel }} 기준</span>
+              <b>{{ reportPlannerText }}</b>
+            </div>
           </article>
         </div>
+
         <section class="app-card report-section">
           <h2>카테고리별 지출</h2>
           <div v-for="item in reportCategories" :key="item.cat" class="report-row">
@@ -168,7 +218,7 @@
               <b>{{ krw(item.amount) }}</b>
             </div>
             <div class="report-track">
-              <i :style="{ width: `${item.percent}%` }" />
+              <i :style="{ width: `${item.percent}%`, background: item.color }" />
             </div>
           </div>
         </section>
@@ -198,17 +248,20 @@
               <strong>{{ notice.title }}</strong>
               <span>{{ notice.time }}</span>
             </div>
-            <p>{{ notice.body }}</p>
+          <p>{{ notice.body }}</p>
           </div>
         </article>
       </section>
 
       <section v-else-if="props.type === 'settings'" class="settings-view">
         <article class="profile-summary app-card">
-          <div class="profile-avatar">{{ user.initials }}</div>
+          <div class="profile-avatar">
+            <img v-if="displayProfile.avatarUrl" :src="displayProfile.avatarUrl" alt="프로필 사진" />
+            <b v-else>{{ displayProfile.initials }}</b>
+          </div>
           <div>
-            <strong>{{ user.name }}</strong>
-            <span>{{ user.email }}</span>
+            <strong>{{ displayProfile.name }}</strong>
+            <span>{{ displayProfile.email }}</span>
           </div>
           <RouterLink to="/settings/profile" aria-label="프로필 수정">수정</RouterLink>
         </article>
@@ -226,6 +279,43 @@
           </div>
           <ChevronRight :size="17" />
         </RouterLink>
+        <button
+          class="app-card setting-row logout-row"
+          type="button"
+          :disabled="isLoggingOut"
+          @click="handleLogout"
+        >
+          <LogOut :size="18" />
+          <div>
+            <strong>{{ isLoggingOut ? '로그아웃 중' : '로그아웃' }}</strong>
+            <span>현재 계정 세션을 종료합니다.</span>
+          </div>
+          <ChevronRight :size="17" />
+        </button>
+      </section>
+
+      <section v-else-if="props.type === 'notificationSettings'" class="notification-settings-view">
+        <article
+          v-for="item in notificationSettingItems"
+          :key="item.id"
+          class="app-card notification-setting-row"
+        >
+          <div class="notification-setting-icon">
+            <component :is="notificationIcon(item.id)" :size="18" />
+          </div>
+          <div>
+            <strong>{{ item.label }}</strong>
+            <span class="notification-setting-description">{{ item.description }}</span>
+          </div>
+          <label class="switch-control">
+            <input
+              v-model="item.enabled"
+              type="checkbox"
+              :aria-label="`${item.label} 알림`"
+            />
+            <span aria-hidden="true" />
+          </label>
+        </article>
       </section>
 
       <section v-else-if="props.type === 'security'" class="security-view">
@@ -248,12 +338,36 @@
 
       <form v-else-if="props.type === 'profile'" class="app-card form-card" @submit.prevent="saveProfileDraft">
         <div class="profile-edit-head">
-          <div class="profile-avatar large">{{ profileForm.initials || '김' }}</div>
+          <div class="profile-avatar large">
+            <img v-if="profileForm.avatarUrl" :src="profileForm.avatarUrl" alt="프로필 사진 미리보기" />
+            <b v-else>{{ profileInitials }}</b>
+          </div>
           <div>
             <strong>프로필 정보</strong>
             <p>카드 추천과 커뮤니티에 표시되는 기본 정보입니다.</p>
           </div>
         </div>
+        <section class="profile-photo-panel">
+          <div>
+            <strong>프로필 사진</strong>
+            <p>1MB 이하의 이미지를 등록할 수 있습니다.</p>
+          </div>
+          <div class="profile-photo-actions">
+            <label class="profile-photo-upload">
+              사진 선택
+              <input type="file" accept="image/*" @change="handleProfileImageChange" />
+            </label>
+            <button
+              v-if="profileForm.avatarUrl"
+              class="muted-button profile-photo-remove"
+              type="button"
+              @click="removeProfileImage"
+            >
+              삭제
+            </button>
+          </div>
+          <p v-if="profileImageError" class="field-error">{{ profileImageError }}</p>
+        </section>
         <label>
           <span class="field-label">이름</span>
           <input v-model.trim="profileForm.name" class="form-field" type="text" />
@@ -293,32 +407,56 @@
             {{ type.label }}
           </button>
         </div>
-        <article v-if="searchLoading" class="app-card empty-card search-status">
+        <article v-if="searchLoading && hasSearchTerm" class="app-card empty-card search-status">
           <Search :size="28" />
           <strong>검색 중입니다</strong>
           <p>카드, 거래, 커뮤니티를 함께 확인하고 있어요.</p>
         </article>
-        <article v-else-if="searchError" class="app-card empty-card search-status">
+        <article v-else-if="searchError && hasSearchTerm" class="app-card empty-card search-status">
           <Search :size="28" />
           <strong>검색을 불러오지 못했어요</strong>
           <p>잠시 후 다시 시도해 주세요.</p>
         </article>
-        <RouterLink
-          v-if="!searchLoading && !searchError"
-          v-for="result in searchResults"
-          :key="`${result.type}-${result.id}`"
-          class="app-card search-result"
-          :to="result.path"
-        >
-          <component :is="result.icon" :size="18" />
-          <div>
-            <strong>{{ result.title }}</strong>
-            <span>{{ result.description }}</span>
-            <small v-if="result.badge">{{ result.badge }}</small>
+        <article v-else-if="!hasSearchTerm" class="app-card empty-card search-status search-idle">
+          <Search :size="28" />
+          <strong>찾고 싶은 내용을 입력해 주세요</strong>
+          <p>카드명, 혜택, 가맹점, 거래 내역까지 한 번에 찾을 수 있어요.</p>
+          <div class="search-suggestion-chips" aria-label="추천 검색어">
+            <button
+              v-for="suggestion in searchSuggestions"
+              :key="suggestion"
+              type="button"
+              @click="searchTerm = suggestion"
+            >
+              {{ suggestion }}
+            </button>
           </div>
-          <ChevronRight :size="17" />
-        </RouterLink>
-        <article v-if="!searchLoading && !searchError && searchResults.length === 0" class="app-card empty-card">
+        </article>
+        <template v-else>
+          <RouterLink
+            v-for="result in searchResults"
+            :key="`${result.type}-${result.id}`"
+            class="app-card search-result"
+            :to="result.path"
+          >
+            <span class="search-result-media" :class="searchResultMediaClass(result)">
+              <img
+                v-if="searchResultImage(result)"
+                :src="searchResultImage(result)"
+                :alt="`${result.title} 카드 이미지`"
+                @load="rememberSearchImageOrientation(result, $event)"
+              />
+              <component v-else :is="result.icon" :size="18" />
+            </span>
+            <div>
+              <strong>{{ result.title }}</strong>
+              <span>{{ result.description }}</span>
+              <small v-if="result.badge">{{ result.badge }}</small>
+            </div>
+            <ChevronRight :size="17" />
+          </RouterLink>
+        </template>
+        <article v-if="hasSearchTerm && !searchLoading && !searchError && searchResults.length === 0" class="app-card empty-card">
           <Search :size="28" />
           <strong>검색 결과가 없어요</strong>
           <p>카드명, 가맹점명, 커뮤니티 제목으로 검색해보세요.</p>
@@ -342,7 +480,6 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  BarChart3,
   Bell,
   BookOpen,
   CalendarDays,
@@ -350,6 +487,7 @@ import {
   ChevronRight,
   CreditCard,
   Edit3,
+  LogOut,
   Lock,
   MapPin,
   MessageSquare,
@@ -373,7 +511,9 @@ import {
   user,
 } from '@/data/mockData'
 import AppBackButton from '@/components/AppBackButton.vue'
+import { appendCustomBudgetCategory } from '@/services/budgetStorage'
 import { deleteOwnedCard, fetchCard, fetchOwnedCards, fetchSearchResults, fetchTransactions, normalizeCard } from '@/services/api'
+import { logout } from '@/services/auth'
 
 const props = defineProps({
   type: { type: String, default: 'default' },
@@ -390,6 +530,7 @@ const backFallback = computed(() => {
     report: '/analytics',
     notifications: '/cards',
     settings: '/cards',
+    notificationSettings: '/settings',
     profile: '/settings',
     security: '/settings',
     search: '/cards',
@@ -404,13 +545,18 @@ const communityRows = ref(mockCommunityPosts)
 const applySubmitted = ref(false)
 const budgetSaved = ref(false)
 const profileSaved = ref(false)
+const profileImageError = ref('')
+const isLoggingOut = ref(false)
 const searchTerm = ref('')
 const searchType = ref('all')
 const searchRows = ref([])
 const searchLoading = ref(false)
 const searchError = ref('')
 const searchLoaded = ref(false)
+const searchImageOrientations = ref({})
 let searchRequestId = 0
+const normalizedSearchTerm = computed(() => searchTerm.value.trim())
+const hasSearchTerm = computed(() => normalizedSearchTerm.value.length > 0)
 const readNotificationIds = ref(new Set(notifications.filter((notice) => notice.read).map((notice) => notice.id)))
 
 const isCardDetail = computed(() => props.type === 'card')
@@ -461,12 +607,54 @@ const budgetForm = reactive({
   color: '#0f5fae',
 })
 
+const PROFILE_SETTINGS_KEY = 'carch.profile.v1'
+const PROFILE_IMAGE_MAX_BYTES = 1024 * 1024
+
+function profileInitialsFrom(name, email) {
+  const source = String(name || email || '').trim()
+  if (!source) return user.initials || '김'
+  const compact = source.replace(/\s+/g, '')
+  return compact.slice(0, 2).toUpperCase()
+}
+
+function readProfileSettings() {
+  const defaults = {
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    initials: user.initials,
+    avatarUrl: '',
+  }
+  if (typeof window === 'undefined') return defaults
+
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(PROFILE_SETTINGS_KEY) || '{}')
+    return {
+      ...defaults,
+      name: saved.name || defaults.name,
+      email: saved.email || defaults.email,
+      phone: saved.phone || defaults.phone,
+      initials: saved.initials || defaults.initials,
+      avatarUrl: saved.avatarUrl || '',
+    }
+  } catch (error) {
+    return defaults
+  }
+}
+
+const savedProfile = readProfileSettings()
 const profileForm = reactive({
+  ...savedProfile,
+})
+
+const profileInitials = computed(() => profileInitialsFrom(profileForm.name, profileForm.email))
+const displayProfile = computed(() => ({
   name: user.name,
   email: user.email,
   phone: user.phone,
-  initials: user.initials,
-})
+  ...profileForm,
+  initials: profileInitials.value,
+}))
 
 const budgetColors = ['#0f5fae', '#008c95', '#d92d20', '#24364f', '#c49a49', '#5f6b77']
 const canSaveBudget = computed(() => budgetForm.name.length > 0 && Number(budgetForm.amount) > 0)
@@ -478,6 +666,13 @@ const applySteps = [
   { title: '신청 제출', description: '심사 결과와 발급 상태를 알림으로 확인합니다.' },
 ]
 
+const reportPalette = ['#0f5fae', '#008c95', '#d92d20', '#24364f', '#c49a49', '#8a9aad']
+
+function reportCategoryColor(cat, index) {
+  const budgetCategory = budgetCategories.find((category) => category.name === cat)
+  return budgetCategory?.color || reportPalette[index % reportPalette.length]
+}
+
 const reportExpenseRows = computed(() => transactionRows.value.filter((tx) => Number(tx.amt) < 0))
 const reportTotalSpent = computed(() => reportExpenseRows.value.reduce((sum, tx) => sum + Math.abs(Number(tx.amt) || 0), 0))
 const reportCategories = computed(() => {
@@ -487,14 +682,16 @@ const reportCategories = computed(() => {
     map.set(key, (map.get(key) || 0) + Math.abs(Number(tx.amt) || 0))
   })
   return [...map.entries()]
-    .map(([cat, amount]) => ({
+    .map(([cat, amount], index) => ({
       cat,
       amount,
       percent: reportTotalSpent.value ? Math.round((amount / reportTotalSpent.value) * 100) : 0,
+      color: reportCategoryColor(cat, index),
     }))
     .sort((a, b) => b.amount - a.amount)
 })
 const topCategory = computed(() => reportCategories.value[0])
+const reportLegendCategories = computed(() => reportCategories.value.slice(0, 4))
 const reportMetrics = computed(() => [
   { label: '거래 건수', value: `${reportExpenseRows.value.length}건` },
   { label: '평균 결제', value: krw(Math.round(reportTotalSpent.value / Math.max(reportExpenseRows.value.length, 1))) },
@@ -506,22 +703,153 @@ const budgetUsePercent = computed(() => {
   return Math.min(Math.round((reportTotalSpent.value / totalBudget) * 100), 100)
 })
 
+const reportFocusAmount = computed(() => topCategory.value?.amount || 0)
+const reportFocusCard = computed(() => {
+  const amountsByCard = new Map()
+  reportExpenseRows.value.forEach((tx) => {
+    const id = String(tx.cardId || '')
+    amountsByCard.set(id, (amountsByCard.get(id) || 0) + Math.abs(Number(tx.amt) || 0))
+  })
+  const [cardId] = [...amountsByCard.entries()].sort((a, b) => b[1] - a[1])[0] || []
+  return cardRows.value.find((card) => String(card.id) === String(cardId)) || cardRows.value[0]
+})
+const reportFocusCopy = computed(() => {
+  if (!topCategory.value) return '이번 달 카드 사용 내역을 먼저 확인해보세요.'
+  return `${topCategory.value.cat} 지출이 가장 큽니다. ${reportFocusCard.value?.name || '보유 카드'} 기준으로 혜택을 점검하세요.`
+})
+const reportDonutBackground = computed(() => {
+  const total = reportTotalSpent.value
+  if (!total || !reportCategories.value.length) return '#e7edf4'
+  let start = 0
+  const segments = reportCategories.value.map((item) => {
+    const end = start + (item.amount / total) * 100
+    const segment = `${item.color} ${start}% ${end}%`
+    start = end
+    return segment
+  })
+  return `conic-gradient(${segments.join(', ')})`
+})
+
+const reportPeriod = computed(() => {
+  const latest = [...reportExpenseRows.value].sort((a, b) => String(b.date).localeCompare(String(a.date)))[0]
+  const date = latest?.date ? new Date(`${latest.date}T00:00:00`) : new Date()
+  return {
+    year: date.getFullYear(),
+    monthIndex: date.getMonth(),
+    month: date.getMonth() + 1,
+  }
+})
+const reportPeriodLabel = computed(() => `${reportPeriod.value.year}.${String(reportPeriod.value.month).padStart(2, '0')}`)
+const reportWeekdays = ['일', '월', '화', '수', '목', '금', '토']
+const reportLatestDay = computed(() => {
+  const latest = [...reportExpenseRows.value].sort((a, b) => String(b.date).localeCompare(String(a.date)))[0]
+  if (!latest?.date) return null
+  return new Date(`${latest.date}T00:00:00`).getDate()
+})
+const reportLatestDayLabel = computed(() => {
+  if (!reportLatestDay.value) return `${reportPeriod.value.month}월`
+  return `${reportPeriod.value.month}월 ${reportLatestDay.value}일`
+})
+const reportCalendarDays = computed(() => {
+  const { year, monthIndex } = reportPeriod.value
+  const leadingDays = new Date(year, monthIndex, 1).getDay()
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
+  const activeDays = new Set(
+    reportExpenseRows.value
+      .filter((tx) => {
+        const date = new Date(`${tx.date}T00:00:00`)
+        return date.getFullYear() === year && date.getMonth() === monthIndex
+      })
+      .map((tx) => new Date(`${tx.date}T00:00:00`).getDate()),
+  )
+  return [
+    ...Array.from({ length: leadingDays }, (_, index) => ({ key: `empty-${index}`, label: '', empty: true })),
+    ...Array.from({ length: daysInMonth }, (_, index) => {
+      const label = index + 1
+      return {
+        key: `day-${label}`,
+        label,
+        empty: false,
+        active: activeDays.has(label),
+        latest: label === reportLatestDay.value,
+      }
+    }),
+  ]
+})
+const reportPlannerInfo = computed(() => {
+  const category = topCategory.value
+  if (!category) return { text: '이번 달 지출 내역을 확인하세요.', warning: false }
+  const budgetCategory = budgetCategories.find((item) => item.name === category.cat)
+  if (!budgetCategory) return { text: `${category.cat} 지출 ${krw(category.amount)} 확인`, warning: false }
+  const remaining = budgetCategory.budget - category.amount
+  if (remaining >= 0) return { text: `${category.cat} 예산 ${krw(remaining)} 남음`, warning: false }
+  return { text: `${category.cat} 예산 ${krw(Math.abs(remaining))} 초과`, warning: true }
+})
+const reportPlannerText = computed(() => reportPlannerInfo.value.text)
+const reportPlannerWarning = computed(() => reportPlannerInfo.value.warning)
+
+const firstTransactionPath = computed(() => {
+  const id = transactionRows.value[0]?.id || mockTransactions[0]?.id || 't1'
+  return `/transactions/${id}`
+})
+
 const notificationItems = computed(() =>
   notifications.map((notice) => ({
     ...notice,
     read: readNotificationIds.value.has(notice.id),
     route: {
-      payment: '/transactions/t1',
+      payment: firstTransactionPath.value,
       budget: '/budget/current',
       recommend: '/recommendations/new',
     }[notice.type],
   })),
 )
 
+const NOTIFICATION_SETTINGS_KEY = 'carch.notificationSettings.v1'
+const defaultNotificationSettings = [
+  { id: 'payment', label: '결제 알림', description: '카드 승인과 취소 내역을 받습니다.', enabled: true },
+  { id: 'budget', label: '예산 경고', description: '카테고리 예산 임박과 초과 알림을 받습니다.', enabled: true },
+  { id: 'recommend', label: '추천 인사이트', description: '카드 교체와 혜택 추천을 받습니다.', enabled: true },
+  { id: 'community', label: '커뮤니티 반응', description: '내 글의 댓글과 좋아요 알림을 받습니다.', enabled: false },
+]
+
+function readNotificationSettings() {
+  if (typeof window === 'undefined') {
+    return defaultNotificationSettings.map((item) => ({ ...item }))
+  }
+
+  try {
+    const savedItems = JSON.parse(window.localStorage.getItem(NOTIFICATION_SETTINGS_KEY) || '[]')
+    const savedMap = new Map(
+      Array.isArray(savedItems)
+        ? savedItems.map((item) => [item.id, Boolean(item.enabled)])
+        : [],
+    )
+    return defaultNotificationSettings.map((item) => ({
+      ...item,
+      enabled: savedMap.has(item.id) ? savedMap.get(item.id) : item.enabled,
+    }))
+  } catch (error) {
+    return defaultNotificationSettings.map((item) => ({ ...item }))
+  }
+}
+
+const notificationSettingItems = ref(readNotificationSettings())
+
+watch(
+  notificationSettingItems,
+  (items) => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(
+      NOTIFICATION_SETTINGS_KEY,
+      JSON.stringify(items.map(({ id, enabled }) => ({ id, enabled }))),
+    )
+  },
+  { deep: true },
+)
+
 const settingItems = [
-  { label: '알림 설정', description: '결제, 예산, 추천 알림 관리', path: '/notifications', icon: Bell },
-  { label: '월간 보고서', description: '이번 달 소비 리포트 확인', path: '/reports/monthly', icon: BarChart3 },
-  { label: '목표 지출 계획', description: '월 예산 밖의 큰 지출과 카드 배분', path: '/plans', icon: CalendarDays },
+  { label: '알림 설정', description: '결제, 예산, 추천 알림 관리', path: '/settings/notifications', icon: Bell },
   { label: '보안', description: '로그인과 개인정보 보호 설정', path: '/settings/security', icon: Lock },
 ]
 
@@ -537,6 +865,7 @@ const searchTypes = [
   { label: '거래', value: 'transaction' },
   { label: '커뮤니티', value: 'community' },
 ]
+const searchSuggestions = ['LOCA LIKIT Eat', '쇼핑 할인', '컴포즈커피']
 
 const searchIconMap = {
   card: CreditCard,
@@ -552,6 +881,7 @@ const searchableItems = computed(() => [
     description: `${card.issuer} · ${card.benefitSummary}`,
     path: `/cards/${card.id}`,
     icon: CreditCard,
+    imageUrl: card.imageUrl,
   })),
   ...transactionRows.value.map((tx) => ({
     id: tx.id,
@@ -572,25 +902,61 @@ const searchableItems = computed(() => [
 ])
 
 const localSearchResults = computed(() => {
-  const term = searchTerm.value.toLowerCase()
+  const term = normalizedSearchTerm.value.toLowerCase()
+  if (!term) return []
   return searchableItems.value
     .filter((item) => searchType.value === 'all' || item.type === searchType.value)
-    .filter((item) => !term || `${item.title} ${item.description}`.toLowerCase().includes(term))
+    .filter((item) => `${item.title} ${item.description}`.toLowerCase().includes(term))
     .slice(0, 12)
 })
 
 const searchResults = computed(() => {
+  if (!hasSearchTerm.value) return []
   if (props.type === 'search' && searchLoaded.value) {
     return searchRows.value.map((item) => ({
       ...item,
       id: item.id || `${item.type}-${item.title}`,
       path: item.path || '/search',
       description: item.description || item.badge || '',
+      imageUrl: item.imageUrl || item.image_url || item.meta?.imageUrl || '',
+      imageOrientation: item.imageOrientation || item.image_orientation || item.meta?.imageOrientation || '',
       icon: searchIconMap[item.type] || Search,
     }))
   }
   return localSearchResults.value
 })
+
+function searchResultImage(result) {
+  if (result.type !== 'card') return ''
+  return result.imageUrl || result.image_url || ''
+}
+
+function searchResultKey(result) {
+  return `${result.type}-${result.id || result.title}`
+}
+
+function searchResultOrientation(result) {
+  return result.imageOrientation || result.image_orientation || searchImageOrientations.value[searchResultKey(result)] || ''
+}
+
+function searchResultMediaClass(result) {
+  const hasImage = Boolean(searchResultImage(result))
+  const orientation = hasImage ? searchResultOrientation(result) : ''
+  return {
+    'has-card-image': hasImage,
+    'is-landscape': orientation === 'landscape',
+    'is-portrait': orientation === 'portrait',
+  }
+}
+
+function rememberSearchImageOrientation(result, event) {
+  const image = event.target
+  const orientation = image.naturalWidth >= image.naturalHeight ? 'landscape' : 'portrait'
+  searchImageOrientations.value = {
+    ...searchImageOrientations.value,
+    [searchResultKey(result)]: orientation,
+  }
+}
 
 const content = computed(() => {
   const map = {
@@ -600,7 +966,8 @@ const content = computed(() => {
     budgetNew: { title: '예산 추가', description: '새 예산 카테고리를 추가하세요.', body: '카테고리명과 월 예산을 입력하는 화면입니다.', icon: Target },
     report: { title: '월간 보고서', description: '이번 달 소비 요약', body: '월간 리포트입니다.', icon: BookOpen },
     notifications: { title: '알림', description: '중요한 카드 알림', body: '결제 알림, 예산 경고, 추천 알림을 모아 보여줍니다.', icon: Bell },
-    settings: { title: '설정', description: '사용자 메뉴', body: '사용자 메뉴입니다.', icon: Settings, planLink: true },
+    settings: { title: '설정', description: '계정과 앱 설정', body: '계정과 앱 설정 메뉴입니다.', icon: Settings },
+    notificationSettings: { title: '알림 설정', description: '받을 알림을 선택하세요.', body: '알림 수신 범위를 조정합니다.', icon: Bell },
     profile: { title: '프로필 수정', description: '내 정보를 관리하세요.', body: '프로필 정보를 입력하고 저장할 수 있습니다.', icon: User },
     security: { title: '보안', description: '로그인과 개인정보 보호 설정', body: '보안 설정을 확인하세요.', icon: ShieldCheck },
     search: { title: '검색', description: '거래와 카드를 검색하세요.', body: '검색어를 입력하세요.', icon: Search },
@@ -624,15 +991,84 @@ const pageDescription = computed(() => {
 
 function saveBudgetDraft() {
   if (!canSaveBudget.value) return
+  appendCustomBudgetCategory({
+    name: budgetForm.name,
+    amount: budgetForm.amount,
+    color: budgetForm.color,
+  })
   budgetSaved.value = true
   window.setTimeout(() => router.push('/budget'), 550)
 }
 
+function writeProfileSettings() {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(
+    PROFILE_SETTINGS_KEY,
+    JSON.stringify({
+      name: profileForm.name,
+      email: profileForm.email,
+      phone: profileForm.phone,
+      initials: profileInitials.value,
+      avatarUrl: profileForm.avatarUrl,
+    }),
+  )
+}
+
 function saveProfileDraft() {
+  try {
+    profileForm.initials = profileInitials.value
+    writeProfileSettings()
+  } catch (error) {
+    profileImageError.value = '프로필을 저장하지 못했습니다. 이미지 용량을 줄여보세요.'
+    return
+  }
   profileSaved.value = true
   window.setTimeout(() => {
     profileSaved.value = false
   }, 1200)
+}
+
+function handleProfileImageChange(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  profileImageError.value = ''
+  if (!file) return
+
+  if (!file.type.startsWith('image/')) {
+    profileImageError.value = '이미지 파일만 등록할 수 있습니다.'
+    return
+  }
+
+  if (file.size > PROFILE_IMAGE_MAX_BYTES) {
+    profileImageError.value = '1MB 이하 이미지로 등록해 주세요.'
+    return
+  }
+
+  const reader = new FileReader()
+  reader.onload = () => {
+    profileForm.avatarUrl = String(reader.result || '')
+  }
+  reader.onerror = () => {
+    profileImageError.value = '이미지를 불러오지 못했습니다.'
+  }
+  reader.readAsDataURL(file)
+}
+
+function removeProfileImage() {
+  profileForm.avatarUrl = ''
+  profileImageError.value = ''
+}
+
+async function handleLogout() {
+  if (isLoggingOut.value) return
+  isLoggingOut.value = true
+  try {
+    await logout()
+    router.replace({ name: 'Login', query: { next: '/cards' } })
+  } catch (error) {
+    isLoggingOut.value = false
+    window.alert('로그아웃을 완료하지 못했습니다.')
+  }
 }
 
 function markAllNotificationsRead() {
@@ -658,15 +1094,23 @@ function notificationIcon(type) {
 
 async function loadSearchResults() {
   if (props.type !== 'search') return
+  const query = normalizedSearchTerm.value
   const requestId = ++searchRequestId
+  if (!query) {
+    searchLoading.value = false
+    searchError.value = ''
+    searchRows.value = []
+    searchLoaded.value = false
+    return
+  }
   searchLoading.value = true
   searchError.value = ''
 
   try {
     const data = await fetchSearchResults({
-      q: searchTerm.value,
+      q: query,
       type: searchType.value,
-      limit: searchType.value === 'card' ? 24 : 12,
+      limit: searchType.value === 'card' ? 50 : 20,
     })
     if (requestId !== searchRequestId) return
     searchRows.value = data.results || []
@@ -701,7 +1145,7 @@ onMounted(async () => {
       apiCard.value = normalizeCard(card, 0, transactions)
     }
 
-    if (props.type === 'transaction' || props.type === 'report') {
+    if (props.type === 'transaction' || props.type === 'report' || props.type === 'notifications') {
       const [transactions, ownedCards] = await Promise.all([
         fetchTransactions(),
         fetchOwnedCards(),
@@ -826,6 +1270,7 @@ onMounted(async () => {
 .apply-card,
 .transaction-detail-card,
 .form-card,
+.report-overview-card,
 .report-summary,
 .report-section {
   padding: 18px;
@@ -1141,6 +1586,7 @@ onMounted(async () => {
 
 .report-view,
 .notification-view,
+.notification-settings-view,
 .settings-view,
 .search-view {
   display: flex;
@@ -1148,19 +1594,329 @@ onMounted(async () => {
   gap: 12px;
 }
 
-.report-summary strong {
-  display: block;
-  margin-top: 4px;
-  color: #17202b;
-  font-size: 28px;
+.report-card-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.report-overview-card {
+  display: flex;
+  min-width: 0;
+  min-height: auto;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid rgba(36, 54, 79, 0.08);
+  border-radius: 18px !important;
+  padding: 16px !important;
+  background: rgba(251, 253, 255, 0.86);
+}
+
+.report-kicker,
+.report-overview-card small {
+  color: #0f5fae;
+  font-size: 11px;
   font-weight: 900;
 }
 
-.report-summary p {
-  margin: 8px 0 0;
+.report-overview-card small {
+  margin-top: 6px;
+}
+
+.report-overview-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #17202b;
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.report-overview-card > b {
+  display: block;
+  margin-top: 7px;
+  color: #17202b;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.08;
+}
+
+.report-overview-card p {
+  margin: 9px 0 0;
   color: #6e6e73;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+.report-recommend-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 122px;
+  grid-template-areas:
+    "kicker art"
+    "sub art"
+    "title art"
+    "amount art"
+    "copy copy"
+    "action action";
+  column-gap: 12px;
+  align-items: center;
+}
+
+.report-recommend-card .report-kicker {
+  grid-area: kicker;
+}
+
+.report-recommend-card small {
+  grid-area: sub;
+}
+
+.report-recommend-card strong {
+  grid-area: title;
+}
+
+.report-recommend-card > b {
+  grid-area: amount;
+}
+
+.report-recommend-card .report-card-art {
+  grid-area: art;
+}
+
+.report-recommend-card p {
+  grid-area: copy;
+}
+
+.report-recommend-card .report-mini-button {
+  grid-area: action;
+}
+
+.report-card-art {
+  display: grid;
+  height: 82px;
+  place-items: center;
+  margin: 10px 0 4px;
+}
+
+.report-card-art img {
+  display: block;
+  max-width: 118px;
+  max-height: 78px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 16px rgba(36, 54, 79, 0.14));
+}
+
+.report-mini-button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  margin-top: auto;
+  border-radius: 11px;
+  padding: 0 12px;
+  background: rgba(15, 95, 174, 0.08);
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 950;
+  text-decoration: none;
+}
+
+.report-spending-card em {
+  display: block;
+  margin-top: 5px;
+  color: #0f5fae;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.report-donut-panel {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  margin: 14px 0 14px;
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(232, 241, 251, 0.55);
+}
+
+.report-donut {
+  position: relative;
+  display: grid;
+  width: 96px;
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 50%;
+  box-shadow: 0 12px 24px rgba(36, 54, 79, 0.08);
+}
+
+.report-donut::after {
+  position: absolute;
+  inset: 19px;
+  border-radius: inherit;
+  background: #fff;
+  content: '';
+}
+
+.report-donut span,
+.report-donut b {
+  position: relative;
+  z-index: 1;
+  display: block;
+  max-width: 48px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-donut span {
+  color: #8a9aad;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.report-donut b {
+  color: #17202b;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.report-donut-legend {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.report-donut-legend li {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  min-width: 0;
+  min-height: 20px;
+}
+
+.report-donut-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.report-donut-legend span,
+.report-donut-legend b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-donut-legend span {
+  color: #4a5663;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.report-donut-legend b {
+  color: #8a9aad;
+  font-size: 11px;
+  font-weight: 850;
+  text-align: right;
+}
+
+.report-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.report-card-title-row a {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(15, 95, 174, 0.08);
+  color: #0f5fae;
+}
+
+.report-planner-card > strong {
+  margin-top: 8px;
+  font-size: 19px;
+}
+
+.report-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 13px;
+}
+
+.report-weekday,
+.report-day {
+  display: inline-flex;
+  aspect-ratio: 1;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.report-weekday {
+  color: #8a9aad;
+}
+
+.report-day {
+  color: #4a5663;
+}
+
+.report-day.empty {
+  visibility: hidden;
+}
+
+.report-day.active {
+  background: rgba(15, 95, 174, 0.1);
+  color: #0f5fae;
+}
+
+.report-day.latest {
+  background: #0f5fae;
+  color: #fff;
+}
+
+.report-plan-chip {
+  display: grid;
+  gap: 4px;
+  margin-top: auto;
+  border-radius: 13px;
+  padding: 10px 11px;
+  background: rgba(15, 95, 174, 0.07);
+}
+
+.report-plan-chip.warning {
+  background: rgba(217, 45, 32, 0.08);
+}
+
+.report-plan-chip span {
+  color: #8a9aad;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.report-plan-chip b {
+  color: #17202b;
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1.3;
 }
 
 .metric-list {
@@ -1205,6 +1961,27 @@ onMounted(async () => {
   height: 100%;
   border-radius: inherit;
   background: #0f5fae;
+}
+
+@media (max-width: 480px) {
+  .report-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-planner-card {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 360px) {
+  .report-donut-panel {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .report-donut-legend {
+    width: 100%;
+  }
 }
 
 .mark-read-button {
@@ -1271,6 +2048,92 @@ onMounted(async () => {
   line-height: 1.45;
 }
 
+.notification-setting-row {
+  display: grid;
+  grid-template-columns: 38px 1fr 52px;
+  gap: 12px;
+  align-items: center;
+  padding: 15px;
+}
+
+.notification-setting-icon {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #e8f1ff;
+  color: #0f5fae;
+}
+
+.notification-setting-row strong {
+  display: block;
+  color: #17202b;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.notification-setting-description {
+  display: block;
+  margin-top: 4px;
+  color: #6e6e73;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.switch-control {
+  position: relative;
+  display: inline-flex;
+  width: 48px;
+  height: 28px;
+  flex-shrink: 0;
+  justify-self: end;
+  cursor: pointer;
+}
+
+.switch-control input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch-control span {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: #dbe4ee;
+  transition: background 0.18s ease;
+}
+
+.switch-control span::after {
+  display: block;
+  width: 22px;
+  height: 22px;
+  margin: 3px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(23, 32, 43, 0.16);
+  transition: transform 0.18s ease;
+  content: '';
+}
+
+.switch-control input:checked + span {
+  background: #0f5fae;
+}
+
+.switch-control input:checked + span::after {
+  transform: translateX(20px);
+}
+
+.switch-control input:focus-visible + span {
+  outline: 3px solid rgba(15, 95, 174, 0.18);
+  outline-offset: 3px;
+}
+
 .profile-summary {
   padding: 15px;
 }
@@ -1287,6 +2150,20 @@ onMounted(async () => {
   color: #fff;
   font-size: 16px;
   font-weight: 900;
+  overflow: hidden;
+}
+
+.profile-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar b {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 .profile-avatar.large {
@@ -1294,6 +2171,71 @@ onMounted(async () => {
   height: 56px;
   border-radius: 18px;
   font-size: 20px;
+}
+
+.profile-photo-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid #e8eef6;
+  border-radius: 14px;
+  padding: 14px;
+  background: #f7f9fc;
+}
+
+.profile-photo-panel strong {
+  display: block;
+  color: #17202b;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.profile-photo-panel p {
+  margin: 4px 0 0;
+  color: #6e6e73;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-photo-upload,
+.profile-photo-remove {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.profile-photo-upload {
+  border: 1px solid rgba(15, 95, 174, 0.22);
+  background: #fff;
+  color: #0f5fae;
+}
+
+.profile-photo-upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.profile-photo-remove {
+  color: #d92d20;
+}
+
+.field-error {
+  color: #d92d20 !important;
 }
 
 .profile-summary > div:nth-child(2) {
@@ -1380,6 +2322,25 @@ onMounted(async () => {
   color: #8a9aad;
 }
 
+.logout-row {
+  width: 100%;
+  border: 0;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.logout-row > svg:first-child,
+.logout-row strong,
+.logout-row > svg:last-child {
+  color: #d92d20;
+}
+
+.logout-row:disabled {
+  opacity: 0.66;
+  cursor: wait;
+}
+
 .search-box {
   display: flex;
   align-items: center;
@@ -1426,16 +2387,53 @@ onMounted(async () => {
 
 .search-result {
   display: grid;
-  grid-template-columns: 22px 1fr 18px;
-  gap: 10px;
+  grid-template-columns: 88px 1fr 18px;
+  gap: 12px;
   align-items: center;
   padding: 14px;
   color: inherit;
   text-decoration: none;
 }
 
-.search-result > svg:first-child {
+.search-result-media {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  border-radius: 12px;
+  background: #e8f1ff;
   color: #0f5fae;
+  overflow: hidden;
+}
+
+.search-result-media.has-card-image {
+  width: 76px;
+  height: 56px;
+  justify-self: center;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.search-result-media.has-card-image.is-landscape {
+  width: 70px;
+  height: 44px;
+}
+
+.search-result-media.has-card-image.is-portrait {
+  width: 58px;
+  height: 66px;
+}
+
+.search-result-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px rgba(23, 32, 43, 0.12));
 }
 
 .search-result strong {
@@ -1467,6 +2465,31 @@ onMounted(async () => {
 
 .search-status {
   min-height: 150px;
+}
+
+.search-idle {
+  border: 1px solid rgba(36, 54, 79, 0.08) !important;
+  border-radius: 18px !important;
+  background: rgba(255, 255, 255, 0.86) !important;
+  box-shadow: 0 12px 24px rgba(36, 54, 79, 0.055) !important;
+}
+
+.search-suggestion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.search-suggestion-chips button {
+  min-height: 34px;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: rgba(15, 95, 174, 0.08);
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 900;
 }
 
 .empty-card {

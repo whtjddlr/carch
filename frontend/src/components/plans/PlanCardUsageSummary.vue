@@ -6,12 +6,12 @@
         <div class="usage-head">
           <strong>{{ card.cardName }}</strong>
           <span class="badge-soft" :class="card.achieved ? 'success' : 'warning'">
-            {{ card.achieved ? '실적 달성' : '실적 미달' }}
+            {{ card.achieved ? '다음 달 조건 충족' : '다음 달 조건 부족' }}
           </span>
         </div>
         <div class="usage-grid">
           <div class="metric-tile">
-            <p class="metric-label">기간 총사용액</p>
+            <p class="metric-label">배정 사용액</p>
             <p class="metric-value">{{ krw(card.totalAmount) }}</p>
           </div>
           <div class="metric-tile">

@@ -52,21 +52,27 @@ Rules:
 - If date or time is omitted, infer a reasonable value from today and add the field to reviewFields.
 - cardId must be one of the known card IDs. If uncertain, choose the most likely card and add cardId to reviewFields.
 - category must be one of the allowed categories.
+- paymentType must be "lump_sum" or "installment". Use installment only when the text clearly says 할부, 무이자, or a month count.
+- installmentMonths must be 0 for lump_sum, otherwise the installment month count if known.
+- isInterestFreeInstallment must be true only when 무이자/interest-free installment is stated.
 - confidence must be a number from 0 to 1.
 - displayTitle and displaySubtitle should be short Korean strings suitable for a confirmation screen.
 
 Return this exact JSON shape:
 {{
   "schemaVersion": "transaction-parse-v2",
-  "cardId": "10029",
+  "cardId": "10106",
   "merchantName": "컴포즈커피 역삼센터필드점",
   "category": "카페",
   "amount": -3800,
   "approvedAt": "{today}T09:30:00+09:00",
+  "paymentType": "lump_sum",
+  "installmentMonths": 0,
+  "isInterestFreeInstallment": false,
   "icon": "☕",
   "address": "직접 입력",
   "displayTitle": "컴포즈커피 결제",
-  "displaySubtitle": "카페 · 3,800원 · LOCA 100",
+  "displaySubtitle": "카페 · 3,800원 · LOCA LIKIT Eat",
   "corrections": [
     {{"field": "amount", "label": "금액", "before": "3800원", "after": "-3800", "reason": "결제 문맥이라 지출로 처리"}}
   ],
@@ -104,6 +110,9 @@ Rules:
 - items must be realistic purchase items mentioned or clearly implied by the note.
 - amount must be a positive integer in KRW.
 - targetMonth must be between startMonth and endMonth when possible.
+- paymentType must be "lump_sum" or "installment" for each item.
+- installmentMonths must be 0 for lump_sum, otherwise the installment month count if the user says 할부/무이자/month count.
+- isInterestFreeInstallment must be true only when 무이자/interest-free installment is stated for that item.
 - required and flexible are booleans.
 - priority must be high, medium, or low.
 - expenseModeRecommendation must be one of monthly-budget, planned-extra, or mixed.
@@ -126,6 +135,9 @@ Return this exact JSON shape:
       "category": "쇼핑",
       "amount": 210000,
       "targetMonth": "2026-07",
+      "paymentType": "lump_sum",
+      "installmentMonths": 0,
+      "isInterestFreeInstallment": false,
       "required": true,
       "flexible": false,
       "priority": "high",
@@ -152,6 +164,9 @@ def build_spending_analysis_prompt(summary, transactions, cards):
             'category': item.get('category') or item.get('cat'),
             'amount': item.get('amount') or item.get('amt'),
             'approvedAt': item.get('approvedAt') or item.get('approved_at'),
+            'paymentType': item.get('paymentType') or item.get('payment_type'),
+            'installmentMonths': item.get('installmentMonths') or item.get('installment_months'),
+            'isInterestFreeInstallment': item.get('isInterestFreeInstallment') or item.get('is_interest_free_installment'),
         }
         for item in transactions[:20]
     ]
@@ -232,16 +247,16 @@ Return this exact JSON shape:
   ],
   "cardInsights": [
     {{
-      "cardId": "10029",
-      "cardName": "LOCA 100",
+      "cardId": "10106",
+      "cardName": "LOCA LIKIT Eat",
       "amount": 150000,
       "fit": "보통",
-      "insight": "생활 소비에 넓게 쓰이고 있어 전월 실적 충족률 확인이 필요합니다.",
-      "action": "실적 달성률 확인"
+      "insight": "카페와 식비 지출에 넓게 쓰이고 있어 다음 달 혜택 조건 확인이 필요합니다.",
+      "action": "조건 확인"
     }}
   ],
   "warnings": ["카드 혜택과 전월 실적 조건은 카드사 안내를 최종 확인해야 합니다."],
-  "nextActions": ["상위 지출 확인", "실적 확인", "카드 혜택 비교"],
+  "nextActions": ["상위 지출 확인", "혜택 조건 확인", "카드 혜택 비교"],
   "actionButtons": [
     {{"label": "카드 추천 보기", "route": "/recommendations/new", "intent": "recommendation"}},
     {{"label": "결제내역 추가", "route": "/transactions/new", "intent": "data-entry"}}

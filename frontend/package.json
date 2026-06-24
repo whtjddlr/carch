@@ -10,8 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vuepic/vue-datepicker": "^14.0.0",
     "axios": "1.7.9",
     "bootstrap": "5.3.3",
+    "date-fns": "^4.4.0",
     "lucide-vue-next": "0.468.0",
     "tw-animate-css": "1.3.8",
     "vue": "3.5.13",
