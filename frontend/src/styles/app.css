@@ -456,11 +456,24 @@ a {
 }
 
 .app-backdrop .phone-shell .budget-list-header .current-summary {
-  border: 1px solid rgba(36, 54, 79, 0.08) !important;
+  border: 0 !important;
   border-radius: 20px !important;
-  background: rgba(255, 255, 255, 0.82) !important;
+  background: rgba(255, 255, 255, 0.92) !important;
   box-shadow: 0 14px 28px rgba(36, 54, 79, 0.07) !important;
   backdrop-filter: blur(12px) saturate(1.04);
+}
+
+/* 헤더 내부 콘텐츠 링크는 버튼 테두리 규칙에서 제외 (이번 달 사용 박스) */
+.app-backdrop .phone-shell .budget-list-header .cs-main {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.app-backdrop .phone-shell .budget-list-header .cs-goal-btn {
+  border: 0 !important;
+  background: rgba(15, 95, 174, 0.1) !important;
 }
 
 .app-backdrop .phone-shell :is(

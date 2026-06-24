@@ -8,57 +8,149 @@
         </div>
       </div>
 
-      <RouterLink class="current-summary" to="/budget/current" aria-label="6월 예산 상세 보기">
-        <div class="cs-label">
-          <span>이번 달 사용</span>
-          <em
-            class="cs-status"
-            :style="{ color: riskColor, background: `${riskColor}1f` }"
-          >{{ budgetRiskLabel(currentBudget.percent) }}</em>
+      <div class="current-summary">
+        <RouterLink class="cs-main" to="/budget/current" aria-label="6월 예산 상세 보기">
+          <div class="cs-label">
+            <span>이번 달 사용</span>
+            <em
+              class="cs-status"
+              :style="{ color: riskColor, background: `${riskColor}1f` }"
+            >{{ budgetRiskLabel(currentBudget.percent) }}</em>
+          </div>
+          <strong class="cs-amount">{{ krw(currentBudget.spent) }}</strong>
+          <div class="cs-track">
+            <i :style="{ width: `${budgetProgressWidth(currentBudget.percent)}%`, background: riskColor }" />
+          </div>
+          <div class="cs-meta">
+            <em class="cs-pct" :style="{ color: riskColor }">{{ currentBudget.percent }}%</em>
+            <em class="cs-remain" :style="{ color: riskColor }">
+              {{ currentBudget.remaining < 0 ? `${krw(Math.abs(currentBudget.remaining))} 초과` : `${krw(currentBudget.remaining)} 남음` }}
+            </em>
+          </div>
+        </RouterLink>
+
+        <div class="cs-goal" :class="{ collapsed: headerCollapsed && !isEditingGoal }">
+          <span>목표 금액</span>
+          <div v-if="isEditingGoal" class="cs-goal-edit">
+            <input
+              class="cs-goal-input"
+              type="number"
+              inputmode="numeric"
+              v-model.number="editGoal"
+              @keyup.enter="saveGoal"
+              ref="goalInput"
+            />
+            <button class="cs-goal-btn" type="button" aria-label="목표 금액 저장" @click="saveGoal">
+              <Check :size="15" />
+            </button>
+          </div>
+          <div v-else class="cs-goal-view">
+            <strong>{{ krw(currentBudget.budget) }}</strong>
+            <button class="cs-goal-btn" type="button" aria-label="목표 금액 수정" @click="startEditGoal">
+              <Pencil :size="14" />
+            </button>
+          </div>
         </div>
-        <strong class="cs-amount">{{ krw(currentBudget.spent) }}</strong>
-        <div class="cs-track">
-          <i :style="{ width: `${budgetProgressWidth(currentBudget.percent)}%`, background: riskColor }" />
-        </div>
-        <div class="cs-meta">
-          <em class="cs-pct" :style="{ color: riskColor }">{{ currentBudget.percent }}%</em>
-          <em class="cs-remain" :style="{ color: riskColor }">
-            {{ currentBudget.remaining < 0 ? `${krw(Math.abs(currentBudget.remaining))} 초과` : `${krw(currentBudget.remaining)} 남음` }}
-          </em>
-        </div>
-      </RouterLink>
+      </div>
     </header>
 
-    <div class="screen-scroll scrollbar-hide budget-list-body">
-      <section v-if="cardGuideItems.length" class="card-guide-section">
+    <div class="screen-scroll scrollbar-hide budget-list-body" @scroll="onScroll">
+      <section v-if="cardUsageList.length" class="card-guide-section">
         <div class="section-head split">
-          <h2>카드 사용 가이드</h2>
-          <RouterLink to="/recommendations/usage">상세 추천</RouterLink>
+          <h2>카드 현황</h2>
         </div>
-        <div class="guide-list">
-          <RouterLink
-            v-for="item in cardGuideItems"
-            :key="item.category.id"
-            class="guide-row"
-            :to="{ path: '/plans/new', query: { category: item.category.name, cardId: item.card.id, budget: item.remaining } }"
+        <div class="usecard-list">
+          <article
+            v-for="c in cardUsageList"
+            :key="c.id"
+            class="usecard"
+            :class="{ 'not-eligible': !c.thisMonthOk }"
           >
-            <span class="guide-thumb">
-              <img
-                v-if="item.card.imageUrl"
-                :src="item.card.imageUrl"
-                :alt="item.card.name"
-                :class="thumbOrientation[item.card.id]"
-                @load="onThumbLoad(item.card.id, $event)"
-              />
-              <CreditCard v-else :size="16" />
-            </span>
-            <div class="guide-info">
-              <span class="guide-cat">{{ item.category.name }} · {{ item.rateLabel }}</span>
-              <strong>{{ item.card.name }}</strong>
-              <small>남은 {{ krw(item.remaining) }} · 한도 {{ krw(item.category.budget) }}</small>
+            <div class="usecard-top">
+              <span class="usecard-thumb">
+                <img
+                  v-if="c.imageUrl"
+                  :src="c.imageUrl"
+                  :alt="c.name"
+                  :class="thumbOrientation[c.id]"
+                  @load="onThumbLoad(c.id, $event)"
+                />
+                <CreditCard v-else :size="16" />
+              </span>
+              <div class="usecard-name">
+                <strong>{{ c.name }}</strong>
+                <small>{{ c.benefitTag }}</small>
+              </div>
+              <div class="usecard-flags">
+                <span class="flag" :class="c.thisMonthOk ? 'on' : 'off'">
+                  이번달 할인 {{ c.thisMonthOk ? '✓' : '✗' }}
+                </span>
+                <span class="flag" :class="c.nextMonthOk ? 'on' : 'wait'">
+                  {{ c.nextMonthOk ? '실적 충족 ✓' : `실적 ${c.nextPct}%` }}
+                </span>
+              </div>
             </div>
-            <b class="guide-status" :class="item.performanceTone">{{ item.performanceShort }}</b>
+
+            <div class="usecard-bars">
+              <div class="ubar">
+                <div class="ubar-head">
+                  <span>사용 한도</span>
+                  <b>{{ krw(c.spent) }} <i>/ {{ krw(c.limit) }}</i></b>
+                </div>
+                <div class="ubar-track"><i :style="{ width: `${c.usagePct}%`, background: budgetRiskColor(c.usagePct) }" /></div>
+              </div>
+              <div class="ubar">
+                <div class="ubar-head">
+                  <span>할인 한도</span>
+                  <b>{{ krw(c.discountUsed) }} <i>/ {{ krw(c.discountLimit) }}</i></b>
+                </div>
+                <div class="ubar-track"><i :style="{ width: `${c.discountPct}%`, background: '#008c95' }" /></div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section v-if="aiRecommendations.length" class="ai-reco-section">
+        <div class="section-head split">
+          <h2>AI 카드 추천</h2>
+          <RouterLink class="detail-link" to="/recommendations/usage">
+            <Search :size="14" />
+            <span>자세히 보기</span>
           </RouterLink>
+        </div>
+
+        <div class="ai-reco-card">
+          <div class="ai-speech">
+            <img class="ai-magpie" src="/card-images/magpie-face2.png" alt="카치AI" />
+            <div class="ai-bubble">{{ aiBubble }}</div>
+          </div>
+
+          <ul class="ai-reco-list">
+            <li v-for="rec in aiRecommendations" :key="rec.category.id" class="ai-reco-item">
+              <span class="ai-reco-thumb">
+                <img
+                  v-if="rec.card.imageUrl"
+                  :src="rec.card.imageUrl"
+                  :alt="rec.card.name"
+                  :class="thumbOrientation['ai-' + rec.card.id]"
+                  @load="onThumbLoad('ai-' + rec.card.id, $event)"
+                />
+                <CreditCard v-else :size="14" />
+              </span>
+              <div class="ai-reco-body">
+                <div class="ai-reco-line">
+                  <span class="ai-reco-cat">{{ rec.category.icon }} {{ rec.category.name }}</span>
+                  <em class="ai-reco-status" :class="rec.performanceTone">{{ rec.performanceShort }}</em>
+                </div>
+                <strong>{{ rec.card.name }}</strong>
+                <small>{{ rec.benefitText }}</small>
+              </div>
+              <b class="ai-reco-benefit" :class="{ muted: rec.benefit <= 0 }">
+                {{ rec.benefit > 0 ? `+${krw(rec.benefit)}` : `최대 +${krw(rec.grossBenefit)}` }}
+              </b>
+            </li>
+          </ul>
         </div>
       </section>
 
@@ -89,40 +181,58 @@
           <RouterLink to="/budget/new">예산 추가</RouterLink>
         </div>
 
-        <RouterLink
-          v-for="item in budgetHistory"
-          :key="item.id"
-          class="app-card budget-history-card"
-          :to="item.to"
-        >
-          <div class="history-content">
-            <div class="history-title-row">
-              <div>
-                <strong :class="['history-headline', item.tone]">{{ item.relativeLabel }}</strong>
-                <span>{{ item.month }}월 · {{ item.period }}</span>
-              </div>
-              <ChevronRight :size="17" />
-            </div>
+        <div class="app-card trend-card">
+          <div class="bar-legend">
+            <span><i class="dot budget"></i>예산</span>
+            <span><i class="dot spent"></i>사용</span>
+          </div>
+          <svg class="bar-svg" :viewBox="`0 0 ${barChart.w} ${barChart.h}`">
+            <g
+              v-for="b in barChart.bars"
+              :key="b.label"
+              class="bar-col"
+              @click="goMonth(b)"
+            >
+              <rect class="bar-hit" :x="b.hx" y="0" :width="b.hw" :height="barChart.h" fill="transparent" />
+              <rect :x="b.cx - b.barW / 2" :y="b.budgetY" :width="b.barW" :height="b.budgetH" rx="5" fill="#e3e9f1" />
+              <rect :x="b.cx - b.barW / 2" :y="b.spentY" :width="b.barW" :height="b.spentH" rx="5" :fill="b.color" />
+              <text
+                :x="b.cx"
+                :y="b.tagY"
+                text-anchor="middle"
+                class="bar-tag"
+                :class="b.remaining < 0 ? 'over' : 'left'"
+              >{{ b.remaining < 0 ? `-${shortKrw(-b.remaining)}` : `+${shortKrw(b.remaining)}` }}</text>
+              <text :x="b.cx" :y="barChart.h - 9" text-anchor="middle" class="bar-month" :class="{ cur: b.current }">{{ b.label }}</text>
+            </g>
+          </svg>
 
-            <div class="history-metrics">
-              <div>
-                <span>사용</span>
-                <b>{{ krw(item.spent) }}</b>
-              </div>
-              <div>
-                <span>예산</span>
-                <b>{{ krw(item.budget) }}</b>
-              </div>
-              <div class="remaining-cell">
-                <b :class="item.remaining < 0 ? 'neg' : 'pos'">{{ item.remaining < 0 ? '-' : '+' }}{{ krw(item.remaining) }}</b>
-              </div>
+          <div class="trend-months">
+            <div class="tm-row tm-head">
+              <span>월</span>
+              <span>사용</span>
+              <span>예산</span>
+              <span>잔액</span>
             </div>
-
-            <div class="history-track">
-              <i :style="{ width: `${budgetProgressWidth(item.percent)}%`, background: budgetRiskColor(item.percent) }" />
+            <div
+              v-for="m in barChart.bars"
+              :key="m.label"
+              class="tm-row tm-clickable"
+              :class="{ cur: m.current }"
+              role="button"
+              tabindex="0"
+              @click="goMonth(m)"
+              @keyup.enter="goMonth(m)"
+            >
+              <span class="tm-month">{{ m.label }}</span>
+              <span>{{ shortKrw(m.spent) }}</span>
+              <span class="tm-budget">{{ shortKrw(m.budget) }}</span>
+              <span :class="m.remaining < 0 ? 'neg' : 'pos'">
+                {{ m.remaining < 0 ? '-' : '+' }}{{ shortKrw(Math.abs(m.remaining)) }}
+              </span>
             </div>
           </div>
-        </RouterLink>
+        </div>
       </section>
 
     </div>
@@ -130,13 +240,16 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { CalendarClock, ChevronRight, CreditCard, PiggyBank, Zap } from 'lucide-vue-next'
+import { computed, nextTick, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { CalendarClock, Check, ChevronRight, CreditCard, Pencil, PiggyBank, Search, Zap } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, cards as mockCards, expenseModes, krw } from '@/data/mockData'
-import { readBudgetOverride, readCustomBudgetCategories } from '@/services/budgetStorage'
+import { readBudgetOverride, readCustomBudgetCategories, writeBudgetOverride } from '@/services/budgetStorage'
 import { budgetProgressWidth, budgetRiskColor, budgetRiskLabel, budgetUsagePercent } from '@/utils/budgetRisk'
 import { compareCardBenefitCandidates, scoreCardBenefit, summarizeWalletPerformance } from '@/utils/cardPerformance'
+
+const router = useRouter()
 
 // 카드 썸네일: 세로 이미지면 가로 썸네일에 맞춰 회전 (로드 시 자동 감지)
 const thumbOrientation = ref({})
@@ -156,8 +269,30 @@ function modeIcon(id) {
 
 const customBudgetCategories = readCustomBudgetCategories()
 const displayBudgetCategories = [...budgetCategories, ...customBudgetCategories]
-const budgetOverride = readBudgetOverride()
-const totalBudget = computed(() => budgetOverride ?? displayBudgetCategories.reduce((sum, category) => sum + category.budget, 0))
+const budgetOverride = ref(readBudgetOverride())
+const totalBudget = computed(() => budgetOverride.value ?? displayBudgetCategories.reduce((sum, category) => sum + category.budget, 0))
+
+// 스크롤 내리면 헤더의 '목표 금액' 줄만 접고 '이번 달 사용'은 상단 고정 유지
+const headerCollapsed = ref(false)
+function onScroll(event) {
+  headerCollapsed.value = event.target.scrollTop > 16
+}
+
+// 목표(이번 달 예산) 금액: 연필로 수정 가능
+const isEditingGoal = ref(false)
+const editGoal = ref(0)
+const goalInput = ref(null)
+function startEditGoal() {
+  editGoal.value = totalBudget.value
+  isEditingGoal.value = true
+  nextTick(() => goalInput.value?.focus())
+}
+function saveGoal() {
+  const next = Number(editGoal.value)
+  budgetOverride.value = next > 0 ? next : null
+  writeBudgetOverride(budgetOverride.value)
+  isEditingGoal.value = false
+}
 const totalSpent = computed(() => displayBudgetCategories.reduce((sum, category) => sum + category.spent, 0))
 const cards = mockCards
 const walletPerformance = computed(() => summarizeWalletPerformance(cards))
@@ -177,6 +312,7 @@ const cardGuideItems = computed(() => (
         card,
         remaining,
         rateLabel: benefitRateLabel(category.name, card),
+        benefitText: categoryBenefitText(category.name, card, recommendation.rate),
         benefit: recommendation.benefit,
         potentialBenefit: recommendation.grossBenefit,
         grossBenefit: recommendation.grossBenefit,
@@ -215,6 +351,113 @@ const currentBudget = computed(() => {
 })
 
 const riskColor = computed(() => budgetRiskColor(currentBudget.value.percent))
+
+// 카드 이름 아래에 표시할 짧은 혜택 태그 (예: 쇼핑 10%)
+function shortBenefit(card) {
+  const item = card.benefitItems?.[0]
+  if (item?.scope && item?.ratePercent) return `${item.scope} ${item.ratePercent}%`
+  return card.benefitSummary || ''
+}
+
+// 보유 카드별: 사용 한도 / 할인 한도 / 실적 기반 이번달·다음달 할인 가능 여부
+const cardUsageList = computed(() => cards.map((card) => {
+  const limit = Number(card.limit || 0)
+  const spent = Number(card.spent || 0)
+  const minSpend = Number(card.previousMonthMinSpend || 0)
+  const prevSpend = Number(card.previousMonthSpend || 0)
+  const curSpend = Number(card.currentMonthSpend ?? spent)
+  const noPerf = minSpend <= 0
+  // 이번달 할인 = 지난달(전월) 실적을 채웠는가 / 다음달 할인 = 이번달 실적을 채웠는가
+  const thisMonthOk = noPerf || prevSpend >= minSpend
+  const nextMonthOk = noPerf || curSpend >= minSpend
+  // 이번달 할인이 안 되는 카드는 할인 한도 자체가 0원 (0원 / 0원)
+  const discountLimit = thisMonthOk ? Number(card.discountLimit || 0) : 0
+  const discountUsed = thisMonthOk ? Number(card.discountUsed || 0) : 0
+  return {
+    id: card.id,
+    name: card.name,
+    imageUrl: card.imageUrl,
+    brand: card.brand,
+    benefitTag: shortBenefit(card),
+    spent,
+    limit,
+    usagePct: limit ? Math.min(Math.round((spent / limit) * 100), 100) : 0,
+    discountUsed,
+    discountLimit,
+    discountPct: discountLimit ? Math.min(Math.round((discountUsed / discountLimit) * 100), 100) : 0,
+    noPerf,
+    thisMonthOk,
+    nextMonthOk,
+    nextPct: minSpend ? Math.min(Math.round((curSpend / minSpend) * 100), 100) : 100,
+  }
+}))
+
+// AI 카드 추천: 남은 예산 + 카드 실적 기준으로 카테고리별 최적 카드 제안
+const aiRecommendations = computed(() => cardGuideItems.value.slice(0, 3))
+const aiPotentialSaving = computed(() =>
+  aiRecommendations.value.reduce((sum, item) => sum + (Number(item.benefit) || 0), 0))
+// 까치(카치AI)가 말풍선에서 건네는 짧은 추천 한마디
+const aiBubble = computed(() => {
+  const top = aiRecommendations.value[0]
+  if (!top) return '카드별 혜택을 비교해서 알뜰하게 써봐요!'
+  return `${top.category.name}엔 ${top.card.name}가 딱이에요!`
+})
+
+// 월별 사용액 추이 선그래프 (지난달·이번달·다음달 계획)
+function shortKrw(value) {
+  if (value >= 10000) return `${Math.round(value / 10000).toLocaleString()}만`
+  return krw(value)
+}
+// 최근 5개월 예산(연한 트랙) + 사용(색상) 겹침 막대그래프
+const barChart = computed(() => {
+  const months = [
+    { label: '2월', ym: '2026-02', budget: 1100000, spent: 980000 },
+    { label: '3월', ym: '2026-03', budget: 1100000, spent: 1162000 },
+    { label: '4월', ym: '2026-04', budget: 1200000, spent: 1043000 },
+    { label: '5월', ym: '2026-05', budget: 910000, spent: 620000 },
+    { label: '6월', ym: '2026-06', budget: currentBudget.value.budget, spent: currentBudget.value.spent, current: true },
+  ]
+  const w = 320
+  const h = 168
+  const padTop = 28
+  const padBottom = 28
+  const padX = 10
+  const baseY = h - padBottom
+  const usableH = baseY - padTop
+  const max = Math.max(...months.flatMap((m) => [m.budget, m.spent])) * 1.16 || 1
+  const slot = (w - padX * 2) / months.length
+  const barW = Math.min(30, slot * 0.5)
+  const bars = months.map((m, i) => {
+    const cx = padX + slot * i + slot / 2
+    const hx = padX + slot * i
+    const budgetH = (m.budget / max) * usableH
+    const spentH = (m.spent / max) * usableH
+    const budgetY = baseY - budgetH
+    const spentY = baseY - spentH
+    const pct = m.budget ? Math.round((m.spent / m.budget) * 100) : 0
+    const remaining = m.budget - m.spent
+    return {
+      ...m,
+      cx,
+      hx,
+      hw: slot,
+      barW,
+      budgetY,
+      budgetH,
+      spentY,
+      spentH,
+      color: budgetRiskColor(pct),
+      remaining,
+      tagY: Math.min(budgetY, spentY) - 6,
+    }
+  })
+  return { w, h, baseY, bars }
+})
+
+// 차트/표에서 달을 누르면 그 달 소비 분석으로 이동
+function goMonth(month) {
+  router.push({ path: '/analytics', query: { month: month.ym } })
+}
 
 const budgetHistory = computed(() => {
   const current = currentBudget.value
@@ -323,6 +566,15 @@ function benefitRateLabel(categoryName, card) {
   if (String(card.id) === '10029' && /(교통|택시|전철|대중교통|버스|지하철)/.test(text)) return '기본 할인'
   if (String(card.id) === '10029') return '기본 1.5%'
   return '혜택 확인'
+}
+
+// 추천 카드의 해당 카테고리 혜택을 정확하고 짧게 (예: 쇼핑 10% 할인)
+function categoryBenefitText(categoryName, card, rate) {
+  if (rate > 0) {
+    const pct = Number((rate * 100).toFixed(rate * 100 % 1 ? 1 : 0))
+    return `${categoryName} ${pct}% 할인`
+  }
+  return card.benefitSummary || shortBenefit(card)
 }
 
 function sortCardRecommendations(a, b) {
@@ -434,15 +686,91 @@ h1 {
 }
 
 .current-summary {
-  display: block;
-  border: 1px solid rgba(36, 54, 79, 0.08);
+  border: 0;
   border-radius: 20px;
-  padding: 15px 18px 16px;
-  background: rgba(255, 255, 255, 0.88);
+  padding: 15px 18px 14px;
+  background: rgba(255, 255, 255, 0.92);
   color: #17202b;
-  text-decoration: none;
   box-shadow: 0 14px 28px rgba(36, 54, 79, 0.07);
   backdrop-filter: blur(12px) saturate(1.04);
+}
+
+.cs-main {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.cs-goal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  max-height: 44px;
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(36, 54, 79, 0.09);
+  overflow: hidden;
+  opacity: 1;
+  transition: max-height 0.28s ease, opacity 0.22s ease, margin-top 0.28s ease, padding-top 0.28s ease, border-top-color 0.28s ease;
+}
+
+.cs-goal.collapsed {
+  max-height: 0;
+  margin-top: 0;
+  padding-top: 0;
+  border-top-color: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cs-goal > span {
+  color: #6f7d8c;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.cs-goal-view,
+.cs-goal-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cs-goal-view strong {
+  color: #17202b;
+  font-size: 15px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+.cs-goal-input {
+  width: 120px;
+  border: 0;
+  border-bottom: 2px solid rgba(15, 95, 174, 0.32);
+  border-radius: 0;
+  padding: 0 0 2px;
+  background: transparent;
+  color: #17202b;
+  font-size: 15px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  outline: none;
+}
+
+.cs-goal-btn {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(15, 95, 174, 0.1);
+  color: #0f5fae;
+  cursor: pointer;
 }
 
 .cs-label {
@@ -521,24 +849,33 @@ h1 {
   margin-bottom: 24px;
 }
 
-.guide-list {
+.usecard-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
-.guide-row {
+.usecard {
+  border: 0;
+  border-radius: 16px;
+  padding: 13px 14px;
+  /* 이번달 할인 되는 카드: 연한 파란색 */
+  background: rgba(37, 99, 235, 0.09);
+}
+
+.usecard.not-eligible {
+  /* 이번달 할인 안 되는 카드: 연한 빨강 */
+  background: rgba(229, 72, 77, 0.09);
+  box-shadow: none;
+}
+
+.usecard-top {
   display: flex;
   align-items: center;
   gap: 11px;
-  border-radius: 15px;
-  padding: 11px 13px;
-  background: rgba(44, 78, 114, 0.05);
-  color: inherit;
-  text-decoration: none;
 }
 
-.guide-thumb {
+.usecard-thumb {
   position: relative;
   display: grid;
   flex: 0 0 auto;
@@ -552,7 +889,7 @@ h1 {
   box-shadow: 0 1px 4px rgba(36, 54, 79, 0.2);
 }
 
-.guide-thumb img {
+.usecard-thumb img {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -560,7 +897,7 @@ h1 {
   object-fit: cover;
 }
 
-.guide-thumb img.is-portrait {
+.usecard-thumb img.is-portrait {
   inset: auto;
   top: 50%;
   left: 50%;
@@ -570,22 +907,14 @@ h1 {
   transform: translate(-50%, -50%) rotate(-90deg);
 }
 
-.guide-info {
+.usecard-name {
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.guide-info .guide-cat {
-  display: block;
-  color: #2c4e72;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.guide-info strong {
+.usecard-name strong {
   display: block;
   overflow: hidden;
-  margin-top: 1px;
   color: #17202b;
   font-size: 14px;
   font-weight: 900;
@@ -593,35 +922,279 @@ h1 {
   white-space: nowrap;
 }
 
-.guide-info small {
+.usecard-name small {
+  display: block;
+  margin-top: 1px;
+  color: #8a96a5;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.usecard-flags {
+  display: flex;
+  flex-shrink: 0;
+  gap: 5px;
+}
+
+.flag {
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.flag.on {
+  background: rgba(22, 163, 74, 0.13);
+  color: #15803d;
+}
+
+.flag.off {
+  background: rgba(229, 72, 77, 0.14);
+  color: #c2333a;
+}
+
+.flag.wait {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+.usecard-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.ubar-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.ubar-head span {
+  color: #6e7885;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.ubar-head b {
+  color: #17202b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ubar-head b i {
+  color: #9aa6b3;
+  font-size: 11px;
+  font-weight: 800;
+  font-style: normal;
+}
+
+.ubar-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e7edf4;
+}
+
+.ubar-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.ai-reco-section {
+  margin-bottom: 24px;
+}
+
+.detail-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.detail-link svg {
+  margin-top: -1px;
+}
+
+.ai-reco-card {
+  border-radius: 18px;
+  padding: 14px;
+  /* AI 느낌: 은은한 하늘색 → 연보라 그라데이션 */
+  background:
+    radial-gradient(circle at 10% -4%, rgba(99, 102, 241, 0.12), transparent 42%),
+    radial-gradient(circle at 102% 6%, rgba(56, 189, 248, 0.14), transparent 46%),
+    linear-gradient(158deg, #f2f8ff 0%, #eef3ff 52%, #f4f0ff 100%);
+  box-shadow: 0 12px 26px rgba(60, 80, 160, 0.09);
+}
+
+.ai-speech {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+
+.ai-magpie {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #fff;
+  box-shadow: 0 3px 9px rgba(36, 54, 79, 0.16);
+}
+
+.ai-bubble {
+  position: relative;
+  align-self: center;
+  border-radius: 14px;
+  padding: 9px 13px;
+  background: #ffffff;
+  color: #2a3441;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.4;
+  letter-spacing: -0.3px;
+  box-shadow: 0 5px 14px rgba(60, 80, 160, 0.1);
+}
+
+.ai-bubble::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -5px;
+  width: 11px;
+  height: 11px;
+  background: #ffffff;
+  border-radius: 2px;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.ai-reco-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-reco-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border-radius: 13px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 6px 16px rgba(36, 54, 79, 0.045);
+}
+
+.ai-reco-thumb {
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 40px;
+  height: 26px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #e8edf2;
+  color: #8a9aad;
+  box-shadow: 0 1px 4px rgba(36, 54, 79, 0.2);
+}
+
+.ai-reco-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ai-reco-thumb img.is-portrait {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 26px;
+  height: 40px;
+  max-width: none;
+  transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.ai-reco-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ai-reco-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 2px;
+}
+
+.ai-reco-cat {
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.ai-reco-status {
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 9.5px;
+  font-weight: 700;
+  font-style: normal;
+}
+
+.ai-reco-status.is-ready {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.ai-reco-status.is-waiting {
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+}
+
+.ai-reco-body strong {
+  display: block;
+  overflow: hidden;
+  color: #1c2530;
+  font-size: 13.5px;
+  font-weight: 750;
+  letter-spacing: -0.3px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-reco-body small {
   display: block;
   margin-top: 2px;
   color: #6e7885;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 500;
+  letter-spacing: -0.2px;
 }
 
-.guide-status {
+.ai-reco-benefit {
   flex-shrink: 0;
-  align-self: center;
-  border-radius: 999px;
-  padding: 5px 9px;
-  background: rgba(15, 95, 174, 0.08);
-  color: #0f5fae;
-  font-size: 10.5px;
-  font-weight: 900;
-  line-height: 1;
-  white-space: nowrap;
+  color: #16a34a;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -0.3px;
+  font-variant-numeric: tabular-nums;
 }
 
-.guide-status.is-waiting {
-  background: rgba(245, 158, 11, 0.14);
-  color: #b45309;
-}
-
-.guide-status.is-ready {
-  background: rgba(22, 163, 74, 0.12);
-  color: #15803d;
+.ai-reco-benefit.muted {
+  color: #9aa6b3;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .plan-section {
@@ -796,6 +1369,170 @@ h1 {
   height: 100%;
   border-radius: inherit;
   transition: width 0.2s ease, background-color 0.2s ease;
+}
+
+.trend-card {
+  display: block;
+  padding: 14px 14px 13px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.bar-legend {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+
+.bar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #6e7885;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.bar-legend .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+.bar-legend .dot.budget {
+  background: #e3e9f1;
+}
+
+.bar-legend .dot.spent {
+  background: #f59e0b;
+}
+
+.bar-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.bar-col {
+  cursor: pointer;
+}
+
+.bar-hit {
+  pointer-events: all;
+}
+
+.bar-col rect:not(.bar-hit) {
+  transition: opacity 0.15s ease;
+}
+
+.bar-col:hover rect:not(.bar-hit) {
+  opacity: 0.82;
+}
+
+.bar-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.bar-tag.left {
+  fill: #16a34a;
+}
+
+.bar-tag.over {
+  fill: #e5484d;
+}
+
+.bar-month {
+  fill: #9aa6b3;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.bar-month.cur {
+  fill: #20242a;
+  font-weight: 800;
+}
+
+.trend-months {
+  margin-top: 8px;
+  border-top: 1px solid rgba(32, 36, 42, 0.075);
+  padding-top: 8px;
+}
+
+.tm-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  align-items: center;
+  padding: 5px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+}
+
+.tm-row span:not(:first-child) {
+  text-align: right;
+  color: #3a4452;
+}
+
+.tm-row .tm-budget {
+  color: #9aa6b3;
+}
+
+.tm-clickable {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.tm-clickable:hover {
+  background: rgba(15, 95, 174, 0.06);
+}
+
+.tm-head {
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(32, 36, 42, 0.06);
+}
+
+.tm-head span {
+  color: #9aa6b3 !important;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.tm-row .tm-month {
+  color: #6e7885;
+  font-weight: 700;
+}
+
+.tm-row.cur {
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.tm-row.cur span,
+.tm-row.cur .tm-month {
+  color: #20242a;
+  font-weight: 800;
+}
+
+.tm-row.cur .tm-budget {
+  color: #6e7885;
+}
+
+/* 잔액: + 초록 / − 빨강 (현재월 강조 행에서도 색 유지) */
+.trend-months .tm-row .pos {
+  color: #16a34a;
+  font-weight: 800;
+}
+
+.trend-months .tm-row .neg {
+  color: #e5484d;
+  font-weight: 800;
 }
 
 .plan-entry {
