@@ -106,8 +106,13 @@ const plan = ref(null)
 const { loadPlans, loadPlan, removePlan } = usePurchasePlan()
 
 onMounted(async () => {
-  await loadPlans()
-  plan.value = await loadPlan(route.params.id)
+  // 인증 준비 전 일시적 실패 등으로 라우트가 흰 화면 되지 않도록 보호
+  try {
+    await loadPlans()
+    plan.value = await loadPlan(route.params.id)
+  } catch (requestError) {
+    console.warn('계획 상세를 불러오지 못했습니다.', requestError)
+  }
 })
 
 const selectedScenario = computed(() => plan.value?.scenarios.find((scenario) => scenario.id === plan.value.selectedScenarioId) || plan.value?.scenarios[0])
@@ -214,7 +219,7 @@ const deletePlan = async () => {
   margin-top: 3px;
   color: #fff;
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 500;
 }
 
 .summary-grid .success {
