@@ -26,7 +26,6 @@
         <div class="hero-copy">
           <span>{{ trendPeriodLabel }}</span>
           <strong>{{ heroAmountLabel }}</strong>
-          <p>{{ heroMessage }}</p>
         </div>
         <div v-if="topCategory" class="hero-focus">
           <small>최대 지출</small>
@@ -64,7 +63,7 @@
       </div>
 
       <section v-if="hasUsableAnalysis" class="metric-row" aria-label="분석 핵심 지표">
-        <article v-for="metric in metricCards" :key="metric.label" class="metric-tile app-card-sm" :class="metric.tone">
+        <article v-for="metric in metricCards" :key="metric.label" class="metric-tile" :class="metric.tone">
           <small>{{ metric.label }}</small>
           <strong>{{ metric.value }}</strong>
           <span>{{ metric.caption }}</span>
@@ -72,26 +71,22 @@
       </section>
 
       <article v-if="hasCategoryData" class="analysis-card app-card category-card">
-        <div class="section-title-row">
-          <div>
-            <span>카테고리 순위</span>
-            <strong>어디에 많이 썼는지</strong>
-          </div>
-          <small>{{ categoryCountLabel }}</small>
-        </div>
         <ul class="category-rank-list">
-          <li v-for="category in visibleCategoryRows" :key="category.category">
+          <li v-for="(category, index) in visibleCategoryRows" :key="category.category" :class="{ 'is-top': index === 0 }">
             <div class="category-row-head">
               <span>
-                <i :style="{ background: category.color }"></i>
+                <em class="rank-emoji">{{ categoryIcon(category.category) }}</em>
                 <b>{{ category.category }}</b>
+                <i v-if="index === 0" class="rank-crown">👑</i>
               </span>
-              <strong>{{ krw(category.amount) }}</strong>
+              <div class="category-amount">
+                <strong>{{ krw(category.amount) }}</strong>
+                <em class="rank-pct">{{ category.percent }}%</em>
+              </div>
             </div>
             <div class="category-track">
               <i :style="{ width: `${category.percent}%`, background: category.color }"></i>
             </div>
-            <small>{{ category.percent }}% · {{ category.description }}</small>
           </li>
         </ul>
       </article>
@@ -106,18 +101,21 @@
       </article>
 
       <article v-if="hasUsableAnalysis && cardRows.length" class="analysis-card app-card card-usage-card">
-        <div class="section-title-row">
-          <div>
-            <span>카드별 사용</span>
-            <strong>어떤 카드에 몰렸는지</strong>
-          </div>
-          <CreditCard :size="19" :stroke-width="2.2" />
-        </div>
         <ul class="card-usage-list">
-          <li v-for="card in cardRows" :key="card.id">
+          <li v-for="(card, index) in cardRows" :key="card.id" :class="{ 'is-top': index === 0 }">
+            <span class="card-usage-thumb">
+              <img
+                v-if="card.imageUrl"
+                :src="card.imageUrl"
+                :alt="card.name"
+                :class="thumbOrientation[card.id]"
+                @load="onThumbLoad(card.id, $event)"
+              />
+              <CreditCard v-else :size="16" />
+            </span>
             <div class="card-usage-copy">
               <strong>{{ card.name }}</strong>
-              <small>{{ card.caption }}</small>
+              <i v-if="index === 0" class="rank-crown">👑</i>
             </div>
             <div class="card-usage-value">
               <b>{{ krw(card.amount) }}</b>
@@ -128,56 +126,61 @@
       </article>
 
       <article v-if="pendingReviewCandidates.length" class="analysis-card app-card review-card">
-        <div class="section-title-row">
-          <div>
-            <span>반복 지출 확인</span>
-            <strong>추천 기준을 더 정확하게</strong>
-          </div>
-          <small>{{ pendingReviewCandidates.length }}개</small>
+        <div class="review-head">
+          <strong>이 지출, 매달 반복되나요?</strong>
+          <small>반복 여부를 알려주면 추천이 더 정확해져요</small>
         </div>
         <div class="review-list">
           <article v-for="item in pendingReviewCandidates" :key="item.category" class="review-item">
-            <div>
+            <span class="review-emoji">{{ categoryIcon(item.category) }}</span>
+            <div class="review-info">
               <strong>{{ item.category }}</strong>
-              <small>평소 {{ krw(item.baselineReference) }} · 이번 달 {{ krw(item.currentAmount) }}</small>
+              <span>{{ krw(item.currentAmount) }}</span>
             </div>
             <div class="review-toggle" role="group" :aria-label="`${item.category} 지출 반영 방식`">
               <button type="button" @click="setRecurringOverride(item.category, false)">이번 달만</button>
-              <button type="button" @click="setRecurringOverride(item.category, true)">반복</button>
+              <button type="button" class="is-recurring" @click="setRecurringOverride(item.category, true)">매달</button>
             </div>
           </article>
         </div>
       </article>
 
       <article v-if="hasUsableAnalysis && topRecommendation" class="analysis-card app-card recommendation-card">
-        <div class="section-title-row">
-          <div>
-            <span>새 카드 추천</span>
-            <strong>{{ recommendationTitle }}</strong>
-          </div>
-          <small>{{ topRecommendation.match || 0 }}%</small>
-        </div>
-        <div class="recommendation-body">
-          <div class="recommendation-image">
-            <img v-if="topRecommendation.imageUrl" :src="topRecommendation.imageUrl" :alt="topRecommendation.name" />
-            <Sparkles v-else :size="22" :stroke-width="2.2" />
-          </div>
-          <div>
+        <div class="rec-head">
+          <span class="rec-thumb">
+            <img
+              v-if="topRecommendation.imageUrl"
+              :src="topRecommendation.imageUrl"
+              :alt="topRecommendation.name"
+              :class="thumbOrientation['rec']"
+              @load="onThumbLoad('rec', $event)"
+            />
+            <Sparkles v-else :size="20" :stroke-width="2.2" />
+          </span>
+          <div class="rec-head-copy">
+            <small>새 카드 추천</small>
             <strong>{{ topRecommendation.name }}</strong>
-            <p>{{ topRecommendation.reason || topRecommendation.benefit || '현재 소비 기준으로 비교해볼 만한 카드입니다.' }}</p>
+          </div>
+          <b v-if="recommendationMonthlyGain" class="rec-gain"><i>예상 약</i> {{ recommendationMonthlyGain }}<i>/월</i></b>
+        </div>
+
+        <div v-if="recommendationBenefitRows.length" class="rec-benefits">
+          <div v-for="b in recommendationBenefitRows" :key="b.id" class="rec-benefit-row">
+            <span class="rec-benefit-emoji">{{ b.icon }}</span>
+            <div class="rec-benefit-main">
+              <div class="rec-benefit-top">
+                <strong>{{ b.field }}</strong>
+                <b>{{ b.value }}</b>
+              </div>
+              <span v-if="b.cap">{{ b.cap }}</span>
+            </div>
           </div>
         </div>
-        <div class="recommendation-metrics">
-          <span>
-            <small>월 개선</small>
-            <b>{{ signedKrw(topRecommendationEconomics.monthlyDelta) }}</b>
-          </span>
-          <span>
-            <small>연 개선</small>
-            <b>{{ signedKrw(topRecommendationEconomics.annualDelta) }}</b>
-          </span>
+
+        <div class="rec-foot">
+          <span><i>실적</i> 전월 {{ recommendationRequiredSpendLabel }}</span>
+          <RouterLink to="/recommendations/new">자세히 →</RouterLink>
         </div>
-        <RouterLink class="secondary-inline-link" to="/recommendations/new">새 카드 자세히 보기</RouterLink>
       </article>
     </div>
   </section>
@@ -187,7 +190,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { BarChart3, ChevronRight, CreditCard, FileText, RefreshCw, Sparkles } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
-import { krw, transactions as mockTransactions } from '@/data/mockData'
+import { cards as mockCards, krw, transactions as mockTransactions } from '@/data/mockData'
 import { fetchCardRecommendationBundle, fetchSpendingSummary } from '@/services/api'
 
 const colors = ['#0f5fae', '#008c95', '#24364f', '#c49a49', '#8a9aad', '#5f6b77']
@@ -229,6 +232,74 @@ const expectedSaving = computed(() =>
 )
 const topRecommendation = computed(() => recommendationBundle.value?.results?.[0] || null)
 const topRecommendationEconomics = computed(() => topRecommendation.value?.economics || {})
+
+const RECO_FIELD_RULES = [
+  [/배달/, '배달앱', '🛵'],
+  [/카페|커피|베이커리|디저트|스타벅스/, '카페', '☕'],
+  [/음식|외식|식당|맛집|푸드|레스토랑|식비/, '음식점', '🍽️'],
+  [/편의점/, '편의점', '🏪'],
+  [/교육|학원|학습|어학|등록금/, '교육', '✏️'],
+  [/해외|국내외|글로벌/, '국내외', '🌐'],
+  [/항공|여행|면세|숙박|호텔/, '여행', '✈️'],
+  [/통신|휴대폰|모바일|요금제|유플러스|lg\s?u\+|skt|\bkt\b|\bu\+/i, '통신', '📡'],
+  [/간편결제|간편|네이버페이|카카오페이|페이코|\bpay\b/i, '간편결제', '💳'],
+  [/주유|충전소/, '주유', '⛽'],
+  [/교통|대중교통|지하철|버스|택시|주차/, '교통', '🚇'],
+  [/병원|의료|약국|건강|치과/, '의료', '🏥'],
+  [/마트|마켓|백화점|쿠팡|이마트/, '쇼핑', '🛒'],
+  [/쇼핑|아울렛/, '쇼핑', '🛍️'],
+  [/뷰티|화장품|미용/, '뷰티', '💄'],
+  [/영화|공연|도서|서점|문화|cgv/i, '문화', '🎬'],
+  [/구독|스트리밍|넷플릭스|ott/i, '구독', '📺'],
+  [/관리비|공과금|아파트|생활/, '생활', '🏠'],
+]
+
+function classifyRecoField(raw) {
+  const text = String(raw || '')
+  for (const [re, label, icon] of RECO_FIELD_RULES) {
+    if (re.test(text)) return { label, icon }
+  }
+  const clean = text.replace(/\s*(업종|가맹점|에서|최대|이용|결제|할인|적립).*$/, '').trim()
+  return { label: clean || '기본', icon: '💳' }
+}
+
+function categoryIcon(name) {
+  return classifyRecoField(name).icon
+}
+
+const recommendationBenefitRows = computed(() => {
+  const items = topRecommendation.value?.benefitItems || []
+  const rows = []
+  const seen = new Set()
+  items.forEach((item, index) => {
+    const rate = Number(item.ratePercent ?? item.rate_percent ?? 0)
+    const amount = Number(item.amountKrw ?? item.amount_krw ?? 0)
+    const raw = String(item.scope || item.label || (item.categories || [])[0] || '')
+    const { label, icon } = classifyRecoField(raw)
+    if (seen.has(label)) return
+    seen.add(label)
+    const cap = Number(item.monthlyBenefitLimitKrw ?? item.monthly_benefit_limit_krw ?? 0)
+    rows.push({
+      id: item.id || item.benefitId || `${label}-${index}`,
+      field: label,
+      icon,
+      value: rate > 0 ? `최대 ${Number(rate.toFixed(1))}% 할인` : (amount > 0 ? `${krw(amount)} 할인` : '혜택 확인'),
+      cap: cap > 0 ? `월 최대 ${krw(cap)}` : '',
+    })
+  })
+  return rows.slice(0, 3)
+})
+
+const recommendationMonthlyGain = computed(() => {
+  const delta = Number(topRecommendationEconomics.value.monthlyDelta || 0)
+  return delta > 0 ? `+${krw(delta)}` : ''
+})
+
+const recommendationRequiredSpendLabel = computed(() => {
+  const reco = topRecommendation.value
+  const required = Number(reco?.previousMonthMinSpend ?? reco?.previous_month_min_spend ?? 0)
+  return required > 0 ? krw(required) : '실적 없음'
+})
 
 const trendPeriodLabel = computed(() => {
   const currentMonth = spendingTrend.value?.currentMonth || safeSummary.value.period?.currentMonth
@@ -287,25 +358,48 @@ const metricCards = computed(() => {
       label: '예상 개선',
       value: signedKrw(topRecommendationEconomics.value.monthlyDelta || expectedSaving.value),
       caption: '월 기준 혜택',
-      tone: 'good',
+      tone: 'improve',
     },
   ]
 })
+
+const cardLookup = computed(() => {
+  const map = new Map()
+  mockCards.forEach((card) => {
+    map.set(String(card.id), card)
+    if (card.cardAdId != null) map.set(String(card.cardAdId), card)
+  })
+  return map
+})
+
+function resolveCardMeta(cardId, fallbackName) {
+  const card = cardLookup.value.get(String(cardId))
+  return {
+    name: card?.name || fallbackName || `카드 ${cardId}`,
+    imageUrl: card?.imageUrl || '',
+  }
+}
+
+// 세로 카드 이미지를 가로 썸네일에 맞춰 회전(메인 분야별추천 썸네일과 동일 방식)
+const thumbOrientation = ref({})
+function onThumbLoad(key, event) {
+  const img = event.target
+  const orientation = img.naturalWidth > img.naturalHeight ? 'is-landscape' : 'is-portrait'
+  thumbOrientation.value = { ...thumbOrientation.value, [key]: orientation }
+}
 
 const cardRows = computed(() => {
   const insightRows = aiAnalysis.value?.cardInsights || []
   const sourceRows = insightRows.length
     ? insightRows.map((item) => ({
       id: item.cardId || item.cardName,
-      name: item.cardName || `카드 ${item.cardId}`,
+      ...resolveCardMeta(item.cardId, item.cardName),
       amount: Number(item.amount || 0),
-      caption: item.fit ? `적합도 ${item.fit}` : (item.insight || '사용 흐름 확인'),
     }))
     : (safeSummary.value.byCard || []).map((item) => ({
       id: item.cardId,
-      name: `카드 ${item.cardId}`,
+      ...resolveCardMeta(item.cardId),
       amount: Number(item.amount || 0),
-      caption: '사용 흐름 확인',
     }))
   const total = sourceRows.reduce((sum, item) => sum + Number(item.amount || 0), 0)
   return sourceRows
@@ -546,7 +640,7 @@ onMounted(loadSummary)
 }
 
 .analytics-body {
-  padding: 16px clamp(14px, 4.6vw, 20px) 120px;
+  padding: 10px clamp(14px, 4.6vw, 20px) 120px;
   background: #f3f6f8;
 }
 
@@ -571,11 +665,11 @@ onMounted(loadSummary)
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
-  align-items: end;
+  align-items: start;
   overflow: hidden;
   border: 1px solid rgba(36, 54, 79, 0.08) !important;
   border-radius: 22px !important;
-  padding: 20px 18px !important;
+  padding: 14px 18px 16px !important;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(238, 247, 250, 0.9)),
     radial-gradient(circle at 100% 0%, rgba(0, 140, 149, 0.16), transparent 40%) !important;
@@ -724,11 +818,11 @@ onMounted(loadSummary)
 
 .metric-tile {
   min-width: 0;
-  border: 1px solid rgba(36, 54, 79, 0.08) !important;
-  border-radius: 16px !important;
-  padding: 12px 10px !important;
-  background: rgba(255, 255, 255, 0.78) !important;
-  box-shadow: 0 10px 22px rgba(36, 54, 79, 0.05) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 2px 2px !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .metric-tile small,
@@ -753,11 +847,15 @@ onMounted(loadSummary)
 }
 
 .metric-tile.good strong {
-  color: #008c95;
+  color: #15a34a;
 }
 
 .metric-tile.warning strong {
-  color: #b45309;
+  color: #e5484d;
+}
+
+.metric-tile.improve strong {
+  color: #0f5fae;
 }
 
 .analysis-card {
@@ -818,11 +916,33 @@ onMounted(loadSummary)
   gap: 7px;
 }
 
-.category-row-head i {
-  width: 9px;
-  height: 9px;
-  flex: 0 0 9px;
-  border-radius: 50%;
+.rank-emoji {
+  flex: 0 0 auto;
+  font-size: 16px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.rank-crown {
+  flex: 0 0 auto;
+  margin-left: 2px;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.category-rank-list {
+  gap: 6px;
+}
+
+.category-rank-list li {
+  padding: 7px 10px;
+  border-radius: 12px;
+}
+
+.category-rank-list li.is-top {
+  background: linear-gradient(90deg, rgba(196, 154, 73, 0.16), rgba(196, 154, 73, 0.03));
+  box-shadow: inset 0 0 0 1px rgba(196, 154, 73, 0.22);
 }
 
 .category-row-head b {
@@ -837,8 +957,22 @@ onMounted(loadSummary)
 .category-row-head strong {
   color: #17202b;
   font-size: 14px;
-  font-weight: 950;
+  font-weight: 800;
   white-space: nowrap;
+}
+
+.category-amount {
+  display: flex;
+  flex-shrink: 0;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.category-amount em {
+  color: #8a9aad;
+  font-size: 11px;
+  font-weight: 900;
+  font-style: normal;
 }
 
 .category-track {
@@ -920,34 +1054,62 @@ onMounted(loadSummary)
 .card-usage-list li {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 11px;
   border-radius: 14px;
-  padding: 12px;
+  padding: 10px 12px;
   background: #f5f8fb;
 }
 
+.card-usage-list li.is-top {
+  background: linear-gradient(90deg, rgba(196, 154, 73, 0.18), rgba(196, 154, 73, 0.05));
+  box-shadow: inset 0 0 0 1px rgba(196, 154, 73, 0.22);
+}
+
+.card-usage-thumb {
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 40px;
+  height: 26px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #e8edf2;
+  color: #8a9aad;
+  box-shadow: 0 1px 4px rgba(36, 54, 79, 0.2);
+}
+
+.card-usage-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card-usage-thumb img.is-portrait {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 26px;
+  height: 40px;
+  max-width: none;
+  transform: translate(-50%, -50%) rotate(-90deg);
+}
+
 .card-usage-copy {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
-.card-usage-copy strong,
-.recommendation-body strong {
-  display: block;
+.card-usage-copy strong {
   overflow: hidden;
+  min-width: 0;
   color: #17202b;
   font-size: 14px;
-  font-weight: 950;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.card-usage-copy small {
-  display: block;
-  overflow: hidden;
-  margin-top: 4px;
-  color: #7a8592;
-  font-size: 11px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -962,7 +1124,7 @@ onMounted(loadSummary)
   display: block;
   color: #17202b;
   font-size: 14px;
-  font-weight: 950;
+  font-weight: 800;
 }
 
 .card-usage-value span {
@@ -973,6 +1135,44 @@ onMounted(loadSummary)
   font-weight: 950;
 }
 
+.review-head {
+  margin-bottom: 12px;
+}
+
+.review-head strong {
+  display: block;
+  color: #17202b;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.review-head small {
+  display: block;
+  margin-top: 3px;
+  color: #7a8592;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.review-info {
+  min-width: 0;
+}
+
+.review-info strong {
+  display: block;
+  color: #17202b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.review-info span {
+  display: block;
+  margin-top: 2px;
+  color: #5f6b77;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .review-list {
   display: flex;
   flex-direction: column;
@@ -981,12 +1181,18 @@ onMounted(loadSummary)
 
 .review-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 11px;
   align-items: center;
   border-radius: 14px;
-  padding: 11px;
+  padding: 11px 12px;
   background: #f5f8fb;
+}
+
+.review-emoji {
+  flex: 0 0 auto;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .review-item strong {
@@ -1007,28 +1213,36 @@ onMounted(loadSummary)
 
 .review-toggle {
   display: inline-grid;
-  grid-template-columns: 1fr 1fr;
-  overflow: hidden;
-  border: 1px solid rgba(36, 54, 79, 0.08);
-  border-radius: 999px;
-  background: #edf2f7;
+  grid-template-columns: auto auto;
+  gap: 6px;
 }
 
 .review-toggle button {
-  min-height: 34px;
-  border: 0;
-  padding: 0 10px;
-  background: transparent;
-  color: #5f6b77;
-  font-size: 11px;
-  font-weight: 950;
+  min-height: 33px;
+  border-radius: 9px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 900;
   white-space: nowrap;
   touch-action: manipulation;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.review-toggle button:first-child {
+  border: 1px solid rgba(36, 54, 79, 0.16);
+  background: #fff;
+  color: #5f6b77;
+}
+
+.review-toggle button.is-recurring {
+  border: 0;
+  background: #24364f;
+  color: #fff;
 }
 
 .review-toggle button:active {
-  background: #24364f;
-  color: #fff;
+  transform: scale(0.95);
+  filter: brightness(0.95);
 }
 
 .recommendation-card {
@@ -1036,69 +1250,172 @@ onMounted(loadSummary)
     linear-gradient(180deg, rgba(240, 253, 250, 0.88), rgba(255, 255, 255, 0.86)) !important;
 }
 
-.recommendation-body {
-  display: grid;
-  grid-template-columns: 66px minmax(0, 1fr);
-  gap: 13px;
-  align-items: center;
-}
-
-.recommendation-image {
+.rec-head {
   display: flex;
-  min-height: 88px;
   align-items: center;
-  justify-content: center;
-  border-radius: 15px;
-  background: rgba(255, 255, 255, 0.7);
-  color: #008c95;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
-.recommendation-image img {
-  display: block;
-  width: 52px;
-  max-height: 82px;
-  object-fit: contain;
-  filter: drop-shadow(0 10px 14px rgba(36, 54, 79, 0.16));
-}
-
-.recommendation-body p {
-  display: -webkit-box;
-  overflow: hidden;
-  margin: 6px 0 0;
-  color: #5f6b77;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.48;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.recommendation-metrics {
+.rec-thumb {
+  position: relative;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 12px;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 46px;
+  height: 30px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #008c95;
+  box-shadow: 0 2px 8px rgba(36, 54, 79, 0.16);
 }
 
-.recommendation-metrics span {
-  border-radius: 13px;
-  padding: 10px 11px;
-  background: rgba(255, 255, 255, 0.74);
+.rec-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-.recommendation-metrics small {
+.rec-thumb img.is-portrait {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 30px;
+  height: 46px;
+  max-width: none;
+  transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.rec-head-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rec-head-copy small {
   display: block;
-  color: #7a8592;
-  font-size: 10px;
+  color: #0f5fae;
+  font-size: 11px;
   font-weight: 900;
 }
 
-.recommendation-metrics b {
+.rec-head-copy strong {
   display: block;
-  margin-top: 3px;
-  color: #008c95;
+  overflow: hidden;
+  margin-top: 2px;
+  color: #17202b;
   font-size: 15px;
-  font-weight: 950;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rec-gain {
+  flex: 0 0 auto;
+  color: #15a34a;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.rec-gain i {
+  margin-left: 1px;
+  color: #7a8592;
+  font-size: 11px;
+  font-weight: 800;
+  font-style: normal;
+}
+
+.rec-benefits {
+  display: flex;
+  flex-direction: column;
+}
+
+.rec-benefit-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 2px;
+  border-bottom: 1px solid rgba(36, 54, 79, 0.07);
+}
+
+.rec-benefit-row:last-child {
+  border-bottom: 0;
+}
+
+.rec-benefit-emoji {
+  flex: 0 0 auto;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.rec-benefit-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rec-benefit-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rec-benefit-top strong {
+  color: #17202b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.rec-benefit-top b {
+  flex: 0 0 auto;
+  color: #008c95;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.rec-benefit-main span {
+  display: block;
+  margin-top: 2px;
+  color: #8a95a3;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.rec-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(36, 54, 79, 0.08);
+}
+
+.rec-foot > span {
+  color: #5f6b77;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.rec-foot > span i {
+  margin-right: 6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(15, 95, 174, 0.1);
+  color: #0f5fae;
+  font-size: 10px;
+  font-weight: 900;
+  font-style: normal;
+}
+
+.rec-foot a {
+  flex: 0 0 auto;
+  color: #0f5fae;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
 }
 
 @media (max-width: 380px) {

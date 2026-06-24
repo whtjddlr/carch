@@ -459,7 +459,6 @@ a {
 }
 
 .app-backdrop .phone-shell :is(
-  .metric-tile,
   .metric-panel,
   .category-tab,
   .filter-chip,
