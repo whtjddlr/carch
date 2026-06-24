@@ -389,9 +389,8 @@ function prioritizeCardGuideItems(items) {
 
 <style scoped>
 .budget-list-header {
-  padding: 24px 20px 22px;
-  border: 1px solid rgba(138, 154, 173, 0.12);
-  border-top: 0;
+  padding: 22px 20px 22px;
+  border: 0;
   border-radius: 0 0 28px 28px;
   color: #17202b;
   text-align: left;
@@ -405,7 +404,7 @@ function prioritizeCardGuideItems(items) {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 14px;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
@@ -418,9 +417,9 @@ function prioritizeCardGuideItems(items) {
 
 h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 1.2;
 }
 
 .current-summary {

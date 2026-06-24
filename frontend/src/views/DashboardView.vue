@@ -41,6 +41,7 @@
       <div class="card-carousel" :class="[{ 'is-gliding': isCarouselGliding }, `glide-${carouselDirection}`]">
         <div
           class="card-stage"
+          :class="{ 'anim-ready': cardSwipeAnimReady }"
           @pointerdown="onDragStart"
           @pointermove="onDragMove"
           @pointerup="onDragEnd"
@@ -322,9 +323,30 @@ const greetingMessage = greetingMessages[Math.floor(Math.random() * greetingMess
 
 const cards = ref(mockCards)
 const transactions = ref(mockTransactions)
-const activeCardIndex = ref(0)
+
+const ACTIVE_CARD_KEY = 'carch:activeCardId'
+// 상세에서 돌아올 때 보던 카드를 복원한다. setup 시점에 한 번만 읽고 즉시 소거해서,
+// 첫 페인트부터 선택했던 카드가 메인에 뜨도록 한다(1번 카드 → 번쩍 점프 방지).
+const restoreCardId = (() => {
+  try {
+    const id = sessionStorage.getItem(ACTIVE_CARD_KEY)
+    sessionStorage.removeItem(ACTIVE_CARD_KEY)
+    return id
+  } catch {
+    return null
+  }
+})()
+function cardIndexById(id, list) {
+  if (!id) return -1
+  return list.findIndex((card) => String(card.id) === String(id))
+}
+
+const activeCardIndex = ref(Math.max(0, cardIndexById(restoreCardId, mockCards)))
 const isCarouselGliding = ref(false)
 const carouselDirection = ref('next')
+// 초기 렌더(특히 상세에서 돌아와 복원될 때)는 애니메이션 없이 즉시 해당 카드로 배치하고,
+// 마운트 이후 사용자 스와이프부터 슬라이드 애니메이션을 켠다.
+const cardSwipeAnimReady = ref(false)
 const imageOrientations = ref({})
 const isCardPickerOpen = ref(false)
 const isCardManageMenuOpen = ref(false)
@@ -362,6 +384,17 @@ const categoryIconMap = {
   구독: '📱',
   문화: '🎬',
   교육: '📚',
+  헬스: '🏋️',
+  운동: '🏋️',
+  피트니스: '🏋️',
+  스포츠: '🏋️',
+  건강: '🏋️',
+  국내외: '🌐',
+  해외: '✈️',
+  여행: '✈️',
+  통신: '📱',
+  의료: '🏥',
+  주유: '⛽',
 }
 
 function bestCardForKeywords(keywords) {
@@ -590,6 +623,7 @@ function onSlideClick(index) {
     return
   }
   if (index === activeCardIndex.value) {
+    rememberActiveCard(cards.value[index])
     router.push(`/cards/${cards.value[index].id}`)
     return
   }
@@ -734,8 +768,20 @@ async function loadWalletData() {
 
   transactions.value = apiTransactions
   cards.value = apiCards.map((card, index) => normalizeCard(card, index, apiTransactions))
-  activeCardIndex.value = Math.min(activeCardIndex.value, Math.max(cards.value.length - 1, 0))
+  const restoredIndex = cardIndexById(restoreCardId, cards.value)
+  activeCardIndex.value = restoredIndex >= 0
+    ? restoredIndex
+    : Math.min(activeCardIndex.value, Math.max(cards.value.length - 1, 0))
   await nextTick()
+}
+
+function rememberActiveCard(card) {
+  if (!card) return
+  try {
+    sessionStorage.setItem(ACTIVE_CARD_KEY, String(card.id))
+  } catch {
+    // ignore storage write failures
+  }
 }
 
 async function loadRecommendationBundle() {
@@ -843,6 +889,11 @@ onMounted(async () => {
   } catch (error) {
     console.warn('대시보드 API를 불러오지 못해 기본 데이터를 사용합니다.', error)
   }
+  // 복원된 카드가 화면에 그려진 다음에야 스와이프 애니메이션을 켠다 (초기 슬라이드 방지)
+  await nextTick()
+  requestAnimationFrame(() => {
+    cardSwipeAnimReady.value = true
+  })
 })
 </script>
 
@@ -1027,19 +1078,12 @@ onMounted(async () => {
 }
 
 .greet::before {
-  position: absolute;
-  top: 3px;
-  left: 0;
-  width: 3px;
-  height: 34px;
-  border-radius: 50%;
-  background: linear-gradient(180deg, #0f5fae, #008c95);
-  box-shadow: none;
+  display: none;
   content: '';
 }
 
 .greet-copy {
-  padding-left: 11px;
+  padding-left: 0;
 }
 
 .greet-copy span {
@@ -1106,7 +1150,7 @@ onMounted(async () => {
 }
 
 .dashboard-body {
-  padding: 14px clamp(14px, 4.7vw, 20px) 120px;
+  padding: 9px clamp(14px, 4.7vw, 20px) 120px;
   background: #f3f6f8;
 }
 
@@ -1114,7 +1158,7 @@ onMounted(async () => {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   isolation: isolate;
 }
 
@@ -1147,15 +1191,15 @@ onMounted(async () => {
 }
 
 .card-stage {
-  --card-w: clamp(154px, 43.5vw, 174px);
-  --card-h: clamp(244px, 69vw, 276px);
+  --card-w: clamp(128px, 36.5vw, 146px);
+  --card-h: clamp(202px, 58vw, 232px);
   position: relative;
   display: flex;
   width: 100%;
   height: var(--card-h);
   align-items: center;
   justify-content: center;
-  margin-top: 8px;
+  margin-top: 4px;
   touch-action: pan-y;
   user-select: none;
 }
@@ -1171,8 +1215,12 @@ onMounted(async () => {
   background: transparent;
   cursor: pointer;
   transform-origin: center center;
-  transition: transform 480ms cubic-bezier(0.2, 0.85, 0.25, 1), opacity 400ms ease;
+  transition: none;
   will-change: transform, opacity;
+}
+
+.card-stage.anim-ready .slide-card {
+  transition: transform 480ms cubic-bezier(0.2, 0.85, 0.25, 1), opacity 400ms ease;
 }
 
 .slide-card::before {
@@ -1263,6 +1311,7 @@ onMounted(async () => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transform: scale(1.1);
 }
 
 .fan-card-image.is-ready {
@@ -1867,9 +1916,9 @@ onMounted(async () => {
   position: relative;
   display: flex;
   width: 100%;
-  min-height: 182px;
+  min-height: 152px;
   justify-content: center;
-  margin-top: -4px;
+  margin-top: -6px;
   perspective: 1100px;
 }
 
@@ -1878,7 +1927,7 @@ onMounted(async () => {
   display: flex;
   width: 100%;
   max-width: 320px;
-  min-height: 182px;
+  min-height: 152px;
   flex-direction: column;
   align-items: center;
   gap: 12px;
@@ -1932,8 +1981,8 @@ onMounted(async () => {
   max-width: 316px;
   min-width: 0;
   flex-direction: column;
-  gap: 12px;
-  margin-top: 8px;
+  gap: 10px;
+  margin-top: 6px;
 }
 
 .issuer-row {
@@ -1964,9 +2013,9 @@ onMounted(async () => {
 
 .card-info strong {
   display: block;
-  margin: 3px 0 2px;
+  margin: 2px 0 2px;
   color: #20242a;
-  font-size: clamp(18px, 5.2vw, 21px);
+  font-size: clamp(16px, 4.6vw, 19px);
   font-weight: 900;
   line-height: 1.12;
   word-break: keep-all;
@@ -2126,7 +2175,7 @@ onMounted(async () => {
   grid-template-columns: repeat(3, 1fr);
   gap: 0;
   margin-top: 10px;
-  padding: 11px 0;
+  padding: 15px 0;
   border-block: 1px solid rgba(32, 36, 42, 0.085);
 }
 
@@ -2136,7 +2185,7 @@ onMounted(async () => {
 
 .quick-action {
   display: flex;
-  min-height: 52px;
+  min-height: 46px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -2172,7 +2221,7 @@ onMounted(async () => {
 }
 
 .section-block.category-guide-section {
-  margin-top: 14px;
+  margin-top: 13px;
 }
 
 .category-guide-section .section-head {
@@ -2298,7 +2347,7 @@ onMounted(async () => {
 }
 
 .section-block {
-  margin-top: 20px;
+  margin-top: 34px;
 }
 
 .section-head {

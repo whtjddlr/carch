@@ -6,15 +6,15 @@
         v-if="isCardDetail && selectedCard"
         type="button"
         class="card-delete-button"
-        style="background: #e5484d !important; color: #fff !important; border: 0 !important; box-shadow: 0 6px 16px rgba(217, 45, 32, 0.36) !important;"
+        style="background: transparent !important; color: #e5484d !important; border: 0 !important; box-shadow: none !important;"
         :disabled="isDeletingCard"
         aria-label="카드 삭제"
         @click="deleteCard"
       >
         <Trash2 :size="18" />
       </button>
-      <h1>{{ pageTitle }}</h1>
-      <p>{{ pageDescription }}</p>
+      <h1 v-if="!isCardDetail">{{ pageTitle }}</h1>
+      <p v-if="!isCardDetail">{{ pageDescription }}</p>
     </header>
 
     <div class="screen-scroll scrollbar-hide utility-body">
@@ -35,67 +35,55 @@
           <p>{{ selectedCard.titleDescription }}</p>
         </div>
         <div class="detail-grid">
-          <div>
-            <span>연회비</span>
-            <strong>{{ krw(selectedCard.annualFee) }}</strong>
+          <div class="metric">
+            <span class="metric-ic"><WalletCards :size="16" /></span>
+            <div class="metric-text">
+              <span>연회비</span>
+              <strong>{{ krw(selectedCard.annualFee) }}</strong>
+            </div>
           </div>
-          <div>
-            <span>혜택 조건</span>
-            <strong>{{ selectedCard.previousMonthMinSpend ? `전월 ${krw(selectedCard.previousMonthMinSpend)}` : '전월실적 없음' }}</strong>
+          <div class="metric">
+            <span class="metric-ic"><Target :size="16" /></span>
+            <div class="metric-text">
+              <span>혜택 조건</span>
+              <strong>{{ selectedCard.previousMonthMinSpend ? `전월 ${krw(selectedCard.previousMonthMinSpend)}` : '전월실적 없음' }}</strong>
+            </div>
           </div>
-          <div>
-            <span>이번 달 사용</span>
-            <strong>{{ krw(selectedCard.spent) }}</strong>
+          <div class="metric">
+            <span class="metric-ic"><Receipt :size="16" /></span>
+            <div class="metric-text">
+              <span>이번 달 사용</span>
+              <strong>{{ krw(selectedCard.spent) }}</strong>
+            </div>
           </div>
-          <div>
-            <span>한도</span>
-            <strong>{{ krw(selectedCard.limit) }}</strong>
+          <div class="metric">
+            <span class="metric-ic"><PieChart :size="16" /></span>
+            <div class="metric-text">
+              <span>한도</span>
+              <strong>{{ krw(selectedCard.limit) }}</strong>
+            </div>
           </div>
         </div>
         <section class="benefit-list">
           <div class="benefit-list-head">
-            <h3>대표 혜택</h3>
-            <span v-if="selectedCardBenefitDetails.length">상세 조건</span>
+            <h3><CheckCircle2 :size="15" /> 대표 혜택</h3>
           </div>
-          <div v-if="selectedCardBenefitDetails.length" class="benefit-summary-stack">
-            <article class="benefit-summary-card">
-              <div class="benefit-detail-top">
-                <span>{{ selectedCardBenefitSummary.title }}</span>
-                <strong>{{ selectedCardBenefitSummary.valueLabel }}</strong>
-              </div>
-              <div v-if="selectedCardBenefitSummary.commonConditions.length" class="benefit-condition-grid">
-                <div v-for="condition in selectedCardBenefitSummary.commonConditions" :key="condition.label">
-                  <span>{{ condition.label }}</span>
-                  <b>{{ condition.value }}</b>
+          <div v-if="selectedCardBenefitRows.length" class="benefit-rows">
+            <div v-for="row in selectedCardBenefitRows" :key="row.id" class="benefit-row">
+              <span class="benefit-emoji">{{ row.icon }}</span>
+              <div class="benefit-row-main">
+                <div class="benefit-row-top">
+                  <strong>{{ row.field }}</strong>
+                  <b>{{ row.value }}</b>
                 </div>
+                <span v-if="row.cap" class="benefit-row-cap">{{ row.cap }}</span>
               </div>
-              <div v-if="selectedCardBenefitSummary.badges.length" class="benefit-badge-row">
-                <span v-for="badge in selectedCardBenefitSummary.badges" :key="badge">{{ badge }}</span>
-              </div>
-            </article>
-            <article class="benefit-fields-card">
-              <span>혜택 분야</span>
-              <div class="benefit-field-row">
-                <b v-for="field in selectedCardBenefitSummary.fields" :key="field">{{ field }}</b>
-              </div>
-            </article>
+            </div>
           </div>
           <ul v-else>
             <li v-for="benefit in selectedCard.benefits" :key="benefit">{{ benefit }}</li>
           </ul>
         </section>
-        <a
-          v-if="selectedCardOfficialUrl"
-          class="primary-button w-100"
-          :href="selectedCardOfficialUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          카드사 상세페이지 보기
-        </a>
-        <button v-else class="primary-button w-100" type="button" disabled>
-          카드사 상세페이지 준비 중
-        </button>
       </article>
 
       <article v-else-if="props.type === 'cardApply' && selectedCard" class="app-card apply-card">
@@ -525,6 +513,21 @@
         </div>
       </article>
     </div>
+
+    <footer v-if="isCardDetail && selectedCard" class="detail-cta-bar">
+      <a
+        v-if="selectedCardOfficialUrl"
+        class="primary-button w-100"
+        :href="selectedCardOfficialUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        카드사 상세페이지 보기
+      </a>
+      <button v-else class="primary-button w-100" type="button" disabled>
+        카드사 상세페이지 준비 중
+      </button>
+    </footer>
   </section>
 </template>
 
@@ -625,6 +628,56 @@ const selectedCard = computed(() => {
 const selectedCardOfficialUrl = computed(() => cardOfficialUrl(selectedCard.value))
 const selectedCardBenefitDetails = computed(() => cardBenefitDetails(selectedCard.value))
 const selectedCardBenefitSummary = computed(() => summarizeCardBenefits(selectedCardBenefitDetails.value))
+const selectedCardBenefitRows = computed(() => {
+  const rows = []
+  const seen = new Set()
+  selectedCardBenefitDetails.value.forEach((detail) => {
+    const raw = compactText(detail.field || detail.scope)
+    if (!raw) return
+    const { label, icon } = classifyBenefitField(raw)
+    if (seen.has(label)) return
+    seen.add(label)
+    const monthly = detail.conditions.find((condition) => condition.label === '월 한도')
+    rows.push({
+      id: detail.id,
+      field: label,
+      icon,
+      value: detail.valueLabel,
+      cap: monthly ? `월 최대 ${monthly.value}` : '',
+    })
+  })
+  return rows.slice(0, 5)
+})
+
+// 혜택 분야 원문을 깔끔한 카테고리 라벨 + 어울리는 아이콘으로 분류
+function classifyBenefitField(raw) {
+  const text = String(raw || '')
+  const rules = [
+    [/배달/, '배달앱', '🛵'],
+    [/카페|커피|베이커리|디저트|스타벅스/, '카페', '☕'],
+    [/음식|외식|식당|맛집|푸드|레스토랑/, '음식점', '🍽️'],
+    [/편의점/, '편의점', '🏪'],
+    [/교육|학원|학습|어학|등록금|학교|유치원/, '교육', '✏️'],
+    [/해외|국내외|글로벌/, '국내외', '🌐'],
+    [/항공|여행|면세|숙박|호텔/, '여행', '✈️'],
+    [/통신|휴대폰|모바일|요금제/, '통신', '📱'],
+    [/주유|충전소/, '주유', '⛽'],
+    [/교통|대중교통|지하철|버스|택시|주차/, '교통', '🚇'],
+    [/병원|의료|약국|건강|치과/, '의료', '🏥'],
+    [/마트|마켓|백화점|쿠팡|이마트|온라인쇼핑/, '쇼핑', '🛒'],
+    [/쇼핑|아울렛/, '쇼핑', '🛍️'],
+    [/뷰티|화장품|미용/, '뷰티', '💄'],
+    [/영화|공연|도서|서점|문화/, '문화', '🎬'],
+    [/구독|스트리밍|넷플릭스|ott/i, '구독', '📺'],
+    [/관리비|공과금|아파트|관리/, '생활', '🏠'],
+    [/주말|평일|상시|언제나|전월|기본/, '기본 적립', '💰'],
+  ]
+  for (const [re, label, icon] of rules) {
+    if (re.test(text)) return { label, icon }
+  }
+  const clean = text.replace(/\s*(업종|가맹점|에서|최대|이용|결제|할인|적립).*$/, '').trim()
+  return { label: clean || '기타', icon: '💳' }
+}
 
 function cardOfficialUrl(card) {
   const rawUrl = String(card?.officialUrl || card?.official_url || card?.naverUrl || card?.naver_url || '').trim()
@@ -1398,9 +1451,9 @@ onMounted(async () => {
   justify-content: center;
   border: 0 !important;
   border-radius: 12px !important;
-  background: #e5484d !important;
-  color: #fff !important;
-  box-shadow: 0 6px 16px rgba(217, 45, 32, 0.34) !important;
+  background: transparent !important;
+  color: #e5484d !important;
+  box-shadow: none !important;
   cursor: pointer;
   transition: transform 150ms ease, background-color 150ms ease;
 }
@@ -1535,7 +1588,7 @@ onMounted(async () => {
   border-radius: 12px;
   transform: translate(-50%, -50%);
   filter: drop-shadow(0 16px 24px rgba(16, 24, 40, 0.22));
-  animation: detail-card-fade-in 0.4s ease both;
+  animation: detail-card-rotate-in-landscape 0.6s cubic-bezier(0.34, 1.08, 0.4, 1) both;
 }
 
 .card-detail-card .detail-card-art img.is-portrait {
@@ -1543,6 +1596,17 @@ onMounted(async () => {
   height: 280px;
   transform: translate(-50%, -50%) rotate(-90deg);
   animation: detail-card-rotate-in 0.6s cubic-bezier(0.34, 1.08, 0.4, 1) both;
+}
+
+@keyframes detail-card-rotate-in-landscape {
+  from {
+    transform: translate(-50%, -50%) rotate(90deg);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(0deg);
+    opacity: 1;
+  }
 }
 
 @keyframes detail-card-fade-in {
@@ -1621,6 +1685,66 @@ onMounted(async () => {
   font-weight: 900;
 }
 
+/* Card detail — readable metric panel with icons */
+.card-detail-card .detail-grid {
+  gap: 14px 10px;
+  margin-top: 18px;
+  padding: 15px 14px;
+  border-radius: 16px;
+  background: #f6faff;
+}
+
+.card-detail-card .detail-grid .metric {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0;
+}
+
+.card-detail-card .detail-grid .metric-ic {
+  display: grid;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(15, 95, 174, 0.1);
+  color: #0f5fae;
+}
+
+.card-detail-card .detail-grid .metric-text {
+  min-width: 0;
+  padding: 0;
+}
+
+.card-detail-card .detail-grid .metric-text span {
+  color: #7c8794;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.card-detail-card .detail-grid .metric-text strong {
+  margin-top: 1px;
+  color: #17202b;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Sticky bottom CTA bar (does not scroll with content) */
+.detail-cta-bar {
+  flex-shrink: 0;
+  padding: 12px 20px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  background: var(--carch-page);
+  border-top: 1px solid rgba(36, 54, 79, 0.08);
+  box-shadow: 0 -8px 22px rgba(16, 24, 40, 0.06);
+}
+
+.utility-body:has(+ .detail-cta-bar) {
+  padding-bottom: 18px;
+}
+
 .benefit-list {
   margin: 16px 0;
 }
@@ -1639,6 +1763,72 @@ onMounted(async () => {
   color: #17202b;
   font-size: 15px;
   font-weight: 900;
+}
+
+.benefit-list h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.benefit-list h3 svg {
+  color: #0f5fae;
+}
+
+.benefit-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.benefit-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 2px;
+  border-bottom: 1px solid rgba(36, 54, 79, 0.07);
+}
+
+.benefit-row:last-child {
+  border-bottom: 0;
+}
+
+.benefit-emoji {
+  flex-shrink: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.benefit-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.benefit-row-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.benefit-row-top strong {
+  color: #17202b;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.benefit-row-top b {
+  flex-shrink: 0;
+  color: #0f5fae;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.benefit-row-cap {
+  display: block;
+  margin-top: 2px;
+  color: #8a95a3;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .benefit-list-head > span {
@@ -1711,10 +1901,11 @@ onMounted(async () => {
 
 .benefit-condition-grid div {
   min-width: 0;
-  border-radius: 11px;
-  padding: 8px;
-  background: #fff;
-  box-shadow: inset 0 0 0 1px rgba(36, 54, 79, 0.06);
+  border-radius: 0;
+  padding: 8px 0 0;
+  background: transparent;
+  box-shadow: none;
+  border-top: 1px solid rgba(36, 54, 79, 0.08);
 }
 
 .benefit-condition-grid span {

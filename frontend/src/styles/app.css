@@ -313,6 +313,16 @@ a {
   backdrop-filter: blur(10px) saturate(1.05);
 }
 
+/* 뒤로가기 버튼: 동그라미 테두리/배경 없이 화살표만 (전 화면 동일) */
+.app-backdrop .phone-shell .icon-button.app-back-button {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  color: var(--carch-ink) !important;
+}
+
 .header-spacer {
   display: block;
   width: 38px;
@@ -324,6 +334,7 @@ a {
 /* 헤더(뒤로가기/제목/우측요소) 위치 전 화면 통일 */
 .app-backdrop .phone-shell :is(
   .simple-header,
+  .chat-header,
   .plans-header,
   .utility-header,
   .recommend-header,
@@ -339,6 +350,7 @@ a {
 
 .app-backdrop .phone-shell :is(
   .simple-header,
+  .chat-header,
   .plans-header,
   .utility-header,
   .recommend-header,
@@ -1172,13 +1184,15 @@ a:active,
   }
 }
 
+/*
+ * NOTE: A blanket `prefers-reduced-motion` reset used to live here and forced
+ * every animation/transition to 1ms. Embedded webviews (and OSes with system
+ * animations disabled) report `reduce`, which silently killed the carousel
+ * slide and other intentional UI motion. We keep only the scroll-behavior
+ * softening and leave intentional UI animations intact.
+ */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
+  html {
     scroll-behavior: auto !important;
-    transition-duration: 1ms !important;
   }
 }

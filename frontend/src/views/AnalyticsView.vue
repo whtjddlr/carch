@@ -486,8 +486,7 @@ onMounted(loadSummary)
 }
 
 .analytics-header {
-  border: 1px solid rgba(138, 154, 173, 0.12);
-  border-top: 0;
+  border: 0;
   border-radius: 0 0 28px 28px;
   background:
     radial-gradient(circle at 12% -10%, rgba(15, 95, 174, 0.13), transparent 42%),
@@ -500,11 +499,11 @@ onMounted(loadSummary)
 }
 
 .simple-header h1 {
-  margin: 0 0 4px;
+  margin: 0;
   color: #17202b;
   font-size: 22px;
-  font-weight: 950;
-  line-height: 1.18;
+  font-weight: 900;
+  line-height: 1.2;
 }
 
 .simple-header p {

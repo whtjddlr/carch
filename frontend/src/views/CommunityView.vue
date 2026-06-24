@@ -132,17 +132,18 @@ onMounted(loadPosts)
 <style scoped>
 .simple-header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 24px 20px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 22px 20px;
   color: #fff;
 }
 
 .simple-header h1 {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 22px;
   font-weight: 900;
+  line-height: 1.2;
 }
 
 .simple-header p {

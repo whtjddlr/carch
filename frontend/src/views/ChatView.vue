@@ -173,10 +173,10 @@ async function sendMessage(text = draft.value) {
 .chat-header {
   display: flex;
   flex-shrink: 0;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 24px 20px 26px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 22px 20px 26px;
   color: #fff;
 }
 
@@ -194,6 +194,7 @@ async function sendMessage(text = draft.value) {
   margin: 0;
   font-size: 22px;
   font-weight: 900;
+  line-height: 1.2;
 }
 
 .chat-body {

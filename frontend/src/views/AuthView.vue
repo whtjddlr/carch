@@ -59,8 +59,15 @@
           :disabled="!provider.enabled || loading"
           @click="startSocial(provider)"
         >
-          <span class="social-symbol">{{ provider.id === 'kakao' ? 'K' : 'N' }}</span>
-          <b>{{ provider.label }}</b>
+          <span class="social-symbol">
+            <svg v-if="provider.id === 'kakao'" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 3.6c-4.97 0-9 3.18-9 7.1 0 2.53 1.66 4.75 4.16 6.04-.18.65-.66 2.4-.76 2.77-.12.46.17.45.35.33.15-.1 2.33-1.58 3.28-2.23.63.09 1.27.14 1.97.14 4.97 0 9-3.18 9-7.1S16.97 3.6 12 3.6z"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M14.45 12.42 9.36 5.1H5.2v13.8h4.39v-7.32l5.09 7.32h4.16V5.1h-4.39z"/>
+            </svg>
+          </span>
+          <b>{{ provider.label }} 로그인</b>
         </button>
       </div>
 
@@ -296,17 +303,18 @@ const startSocial = async (provider) => {
   min-height: 48px;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   border: 1px solid var(--carch-control-border);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.48);
   color: var(--carch-ink);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 900;
+  white-space: nowrap;
 }
 
 .social-button:disabled {
-  opacity: 0.42;
+  cursor: not-allowed;
 }
 
 .dev-login-button {
@@ -325,22 +333,34 @@ const startSocial = async (provider) => {
 
 .social-symbol {
   display: grid;
-  width: 24px;
-  height: 24px;
+  width: 19px;
+  height: 19px;
   place-items: center;
-  border-radius: 50%;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 900;
+}
+
+.social-symbol svg {
+  width: 100%;
+  height: 100%;
+}
+
+.social-button.kakao {
+  border-color: #fdd835;
+  background: #fee500;
+  color: #3c1e1e;
 }
 
 .social-button.kakao .social-symbol {
-  background: #20242a;
-  color: #fee500;
+  color: #3c1e1e;
+}
+
+.social-button.naver {
+  border-color: #02b350;
+  background: #03c75a;
+  color: #ffffff;
 }
 
 .social-button.naver .social-symbol {
-  background: #03c75a;
+  color: #ffffff;
 }
 
 .auth-link {
