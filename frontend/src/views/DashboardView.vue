@@ -194,7 +194,7 @@
                     :src="guide.card.imageUrl"
                     :alt="guide.card.name"
                     :class="cardImageClass(guide.card)"
-                    @load="setImageOrientation(guide.card.id, $event)"
+                    @load="setImageOrientation(guide.card?.id, $event)"
                   />
                 </span>
               </RouterLink>
@@ -232,7 +232,7 @@
                 :src="txCard(tx).imageUrl"
                 :alt="txCard(tx).name"
                 :class="cardImageClass(txCard(tx))"
-                @load="setImageOrientation(txCard(tx).id, $event)"
+                @load="setImageOrientation(txCard(tx)?.id, $event)"
               />
             </span>
             <b :class="{ plus: tx.amt > 0 }">{{ tx.amt > 0 ? '+' : '-' }}{{ krw(tx.amt) }}</b>
@@ -661,12 +661,14 @@ function hasNoPerformanceRequirement(card) {
 }
 
 function setImageOrientation(cardId, event) {
+  if (cardId == null) return // 카드가 없는 경우(신규 유저 등) 안전하게 무시
   const image = event.target
   const orientation = image.naturalWidth > image.naturalHeight ? 'landscape' : 'portrait'
   imageOrientations.value = { ...imageOrientations.value, [cardId]: orientation }
 }
 
 function cardImageClass(card) {
+  if (!card) return {}
   const orientation = imageOrientations.value[card.id] || card.imageOrientation
   return {
     'is-ready': Boolean(orientation),
