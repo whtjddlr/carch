@@ -20,7 +20,13 @@
     <div class="screen-scroll scrollbar-hide utility-body">
       <article v-if="isCardDetail && selectedCard" class="app-card card-detail-card">
         <div class="detail-card-art">
-          <img v-if="selectedCard.imageUrl" :src="selectedCard.imageUrl" :alt="selectedCard.name" />
+          <img
+            v-if="selectedCard.imageUrl"
+            :src="selectedCard.imageUrl"
+            :alt="selectedCard.name"
+            :class="detailCardOrientation ? `is-${detailCardOrientation}` : ''"
+            @load="onDetailImageLoad"
+          />
           <CreditCard v-else :size="42" />
         </div>
         <div class="detail-head">
@@ -599,6 +605,12 @@ const searchLoading = ref(false)
 const searchError = ref('')
 const searchLoaded = ref(false)
 const searchImageOrientations = ref({})
+const detailCardOrientation = ref('')
+
+function onDetailImageLoad(event) {
+  const image = event.target
+  detailCardOrientation.value = image.naturalWidth >= image.naturalHeight ? 'landscape' : 'portrait'
+}
 let searchRequestId = 0
 const normalizedSearchTerm = computed(() => searchTerm.value.trim())
 const hasSearchTerm = computed(() => normalizedSearchTerm.value.length > 0)
@@ -1510,12 +1522,19 @@ onMounted(async () => {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 174px;
-  height: 276px;
+  width: 280px;
+  height: 176px;
+  max-width: none;
   object-fit: cover;
   border-radius: 12px;
-  transform: translate(-50%, -50%) rotate(90deg);
+  transform: translate(-50%, -50%);
   filter: drop-shadow(0 16px 24px rgba(16, 24, 40, 0.22));
+}
+
+.card-detail-card .detail-card-art img.is-portrait {
+  width: 176px;
+  height: 280px;
+  transform: translate(-50%, -50%) rotate(-90deg);
 }
 
 .detail-head {

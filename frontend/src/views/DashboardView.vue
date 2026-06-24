@@ -383,14 +383,11 @@ function buildCategoryGuideFromOwnedGuide(item, index) {
   if (!card?.id) return null
 
   const label = String(item.category || '추천 분야').replace(/\s+/g, ' ').trim()
-  const estimatedBenefit = Number(item.estimatedBenefit || 0)
-  const potentialBenefit = Number(item.potentialBenefit || 0)
-  const remaining = Number(item.remainingCurrentSpend || 0)
-  const benefitText = estimatedBenefit > 0
-    ? `${item.benefitLabel || '예상 혜택'} · 월 ${krw(estimatedBenefit)}`
-    : potentialBenefit > 0 && remaining > 0
-      ? `조건까지 ${krw(remaining)} · 월 ${krw(potentialBenefit)} 가능`
-      : item.benefitLabel || item.body || card.benefitSummary || ''
+  const monthlyCap = Number(item.limit || item.monthlyCap || 0)
+  const discountLabel = item.benefitLabel || item.body || card.benefitSummary || ''
+  const benefitText = monthlyCap > 0
+    ? `${discountLabel} · 월 최대 ${krw(monthlyCap)}`
+    : discountLabel
 
   return {
     id: item.id || `owned-category-${label}-${card.id || index}`,
