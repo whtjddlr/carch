@@ -240,12 +240,13 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { CalendarClock, Check, ChevronRight, CreditCard, Pencil, PiggyBank, Search, Zap } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, cards as mockCards, expenseModes, krw } from '@/data/mockData'
 import { demoMonthSummary } from '@/data/monthlyAnalytics'
+import { fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
 import { readBudgetOverride, readCustomBudgetCategories, writeBudgetOverride } from '@/services/budgetStorage'
 import { budgetProgressWidth, budgetRiskColor, budgetRiskLabel, budgetUsagePercent } from '@/utils/budgetRisk'
 import { compareCardBenefitCandidates, scoreCardBenefit, summarizeWalletPerformance } from '@/utils/cardPerformance'
@@ -360,8 +361,48 @@ function shortBenefit(card) {
   return card.benefitSummary || ''
 }
 
+// 카드 현황 데이터: 백엔드(보유 카드 + 거래 집계 사용액) 우선, 실패하면 목 데이터 그대로 유지.
+// 할인 한도/실적 등 데모 전용 필드는 백엔드에 없으므로 목 값으로 보강 → 화면은 기존과 동일.
+const mockCardById = new Map(mockCards.map((card) => [String(card.id), card]))
+const walletCards = ref(mockCards.map((card) => ({ ...card })))
+
+function mergeWalletCard(apiCard, index, transactions) {
+  const normalized = normalizeCard(apiCard, index, transactions || [])
+  const demo = mockCardById.get(String(normalized.id)) || {}
+  const hasTx = Array.isArray(transactions) && transactions.length > 0
+  return {
+    ...demo,
+    ...normalized,
+    // 백엔드에 없는 데모 전용 필드는 목 값 유지(현 화면 보존)
+    limit: Number(demo.limit) || Number(normalized.limit) || 0,
+    discountLimit: demo.discountLimit ?? 0,
+    discountUsed: demo.discountUsed ?? 0,
+    previousMonthMinSpend: demo.previousMonthMinSpend ?? normalized.previousMonthMinSpend ?? 0,
+    previousMonthSpend: demo.previousMonthSpend ?? 0,
+    // 이번 달 사용액·당월 실적은 실제 거래가 있으면 거래 집계, 없으면 목 값
+    spent: hasTx ? normalized.spent : (demo.spent ?? normalized.spent ?? 0),
+    currentMonthSpend: hasTx ? normalized.spent : (demo.currentMonthSpend ?? demo.spent),
+    // 혜택 표기는 큐레이션된 데모 값을 유지(카드 현황 표기 보존)
+    benefitItems: demo.benefitItems?.length ? demo.benefitItems : normalized.benefitItems,
+    benefitSummary: demo.benefitSummary || normalized.benefitSummary,
+  }
+}
+
+async function loadWallet() {
+  try {
+    const [txResult, cardResult] = await Promise.allSettled([fetchTransactions(), fetchOwnedCards()])
+    const transactions = txResult.status === 'fulfilled' && Array.isArray(txResult.value) ? txResult.value : null
+    const owned = cardResult.status === 'fulfilled' && Array.isArray(cardResult.value) ? cardResult.value : null
+    if (!owned || !owned.length) return // 백엔드 응답 없으면 초기 목 데이터 유지 → 화면 동일
+    walletCards.value = owned.map((card, index) => mergeWalletCard(card, index, transactions))
+  } catch {
+    // 어떤 단계든 실패하면 초기 목 데이터 유지
+  }
+}
+onMounted(loadWallet)
+
 // 보유 카드별: 사용 한도 / 할인 한도 / 실적 기반 이번달·다음달 할인 가능 여부
-const cardUsageList = computed(() => cards.map((card) => {
+const cardUsageList = computed(() => walletCards.value.map((card) => {
   const limit = Number(card.limit || 0)
   const spent = Number(card.spent || 0)
   const minSpend = Number(card.previousMonthMinSpend || 0)
