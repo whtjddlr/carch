@@ -273,7 +273,19 @@ const CURRENT_MONTH = '2026-06'
 const customBudgetCategories = readCustomBudgetCategories()
 const displayBudgetCategories = [...budgetCategories, ...customBudgetCategories]
 const budgetOverride = ref(readBudgetOverride())
-const totalBudget = computed(() => budgetOverride.value ?? displayBudgetCategories.reduce((sum, category) => sum + category.budget, 0))
+// 신규 유저(백엔드에 월 예산 없음) 기본 제안값
+const DEFAULT_NEW_USER_GOAL = 300000
+const totalBudget = computed(() => {
+  if (budgetOverride.value != null) return budgetOverride.value
+  const series = monthlySeries.value
+  if (series && series.length) {
+    const june = series.find((m) => String(m.month) === CURRENT_MONTH)
+    // 백엔드에 이번 달 예산이 있으면(데모 등) 그 값, 없으면(신규 유저) 30만 기본 제안값
+    return june && june.budget != null ? Number(june.budget) : DEFAULT_NEW_USER_GOAL
+  }
+  // 월별 데이터 로딩 전: 데모 깜빡임 방지용 기존 기본값
+  return displayBudgetCategories.reduce((sum, category) => sum + category.budget, 0)
+})
 
 // 목표 금액: 백엔드(사용자별·월별 Budget) 우선, 실패 시 localStorage 캐시 유지
 async function loadBudgetGoal() {
