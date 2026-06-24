@@ -483,13 +483,13 @@ function categoryEmoji(name) {
 }
 
 const aiBundle = ref(null)
+const aiBundleLoaded = ref(false)
 async function loadAiRecommendations() {
   try {
-    const bundle = await fetchCardRecommendationBundle()
-    const guides = bundle?.ownedCategoryGuides
-    if (Array.isArray(guides) && guides.length) aiBundle.value = bundle
+    aiBundle.value = await fetchCardRecommendationBundle()
+    aiBundleLoaded.value = true // 응답 성공(빈 결과 포함) → 백엔드 결과를 신뢰
   } catch {
-    // 실패 시 aiBundle은 null 유지 → 로컬 추천으로 폴백
+    aiBundleLoaded.value = false // 호출 실패 시에만 로컬 추천으로 폴백
   }
 }
 onMounted(loadAiRecommendations)
@@ -512,10 +512,12 @@ function mapGuideToReco(item, index) {
 }
 
 const aiRecommendations = computed(() => {
-  const guides = aiBundle.value?.ownedCategoryGuides
-  if (Array.isArray(guides) && guides.length) {
-    return guides.map(mapGuideToReco).slice(0, 3)
+  if (aiBundleLoaded.value) {
+    // 백엔드가 응답했으면 그 결과만 사용 — 보유 카드 없는 신규 유저는 빈 추천(섹션 자동 숨김)
+    const guides = aiBundle.value?.ownedCategoryGuides
+    return Array.isArray(guides) && guides.length ? guides.map(mapGuideToReco).slice(0, 3) : []
   }
+  // 호출 실패(오프라인) 시에만 로컬 추천으로 폴백
   return cardGuideItems.value.slice(0, 3)
 })
 // 까치(카치AI)가 말풍선에서 건네는 짧은 추천 한마디
