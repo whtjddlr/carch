@@ -47,12 +47,49 @@
           </div>
         </div>
         <section class="benefit-list">
-          <h3>대표 혜택</h3>
-          <ul>
+          <div class="benefit-list-head">
+            <h3>대표 혜택</h3>
+            <span v-if="selectedCardBenefitDetails.length">상세 조건</span>
+          </div>
+          <div v-if="selectedCardBenefitDetails.length" class="benefit-summary-stack">
+            <article class="benefit-summary-card">
+              <div class="benefit-detail-top">
+                <span>{{ selectedCardBenefitSummary.title }}</span>
+                <strong>{{ selectedCardBenefitSummary.valueLabel }}</strong>
+              </div>
+              <div v-if="selectedCardBenefitSummary.commonConditions.length" class="benefit-condition-grid">
+                <div v-for="condition in selectedCardBenefitSummary.commonConditions" :key="condition.label">
+                  <span>{{ condition.label }}</span>
+                  <b>{{ condition.value }}</b>
+                </div>
+              </div>
+              <div v-if="selectedCardBenefitSummary.badges.length" class="benefit-badge-row">
+                <span v-for="badge in selectedCardBenefitSummary.badges" :key="badge">{{ badge }}</span>
+              </div>
+            </article>
+            <article class="benefit-fields-card">
+              <span>혜택 분야</span>
+              <div class="benefit-field-row">
+                <b v-for="field in selectedCardBenefitSummary.fields" :key="field">{{ field }}</b>
+              </div>
+            </article>
+          </div>
+          <ul v-else>
             <li v-for="benefit in selectedCard.benefits" :key="benefit">{{ benefit }}</li>
           </ul>
         </section>
-        <RouterLink class="primary-button w-100" :to="`/cards/apply/${selectedCard.id}`">신청 화면 보기</RouterLink>
+        <a
+          v-if="selectedCardOfficialUrl"
+          class="primary-button w-100"
+          :href="selectedCardOfficialUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          카드사 상세페이지 보기
+        </a>
+        <button v-else class="primary-button w-100" type="button" disabled>
+          카드사 상세페이지 준비 중
+        </button>
       </article>
 
       <article v-else-if="props.type === 'cardApply' && selectedCard" class="app-card apply-card">
@@ -76,10 +113,19 @@
             </div>
           </div>
         </div>
-        <button class="primary-button w-100" type="button" @click="applySubmitted = true">
-          {{ applySubmitted ? '신청 초안 저장 완료' : '신청 초안 저장' }}
+        <a
+          v-if="selectedCardOfficialUrl"
+          class="primary-button w-100"
+          :href="selectedCardOfficialUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          카드사 상세페이지로 이동
+        </a>
+        <button v-else class="primary-button w-100" type="button" disabled>
+          카드사 상세페이지 준비 중
         </button>
-        <p class="helper-text">실제 카드 발급 전에는 약관 동의, 본인 인증, 심사 단계가 추가됩니다.</p>
+        <p class="helper-text">카드사 공식 페이지에서 신청 조건, 약관, 발급 가능 여부를 확인하세요.</p>
       </article>
 
       <article v-else-if="props.type === 'transaction' && selectedTransaction" class="app-card transaction-detail-card">
@@ -542,7 +588,6 @@ const apiCard = ref(null)
 const transactionRows = ref(mockTransactions)
 const cardRows = ref(mockCards)
 const communityRows = ref(mockCommunityPosts)
-const applySubmitted = ref(false)
 const budgetSaved = ref(false)
 const profileSaved = ref(false)
 const profileImageError = ref('')
@@ -565,6 +610,164 @@ const selectedCard = computed(() => {
   if (!needsCard.value) return null
   return apiCard.value || cardRows.value.find((card) => String(card.id) === String(route.params.id))
 })
+const selectedCardOfficialUrl = computed(() => cardOfficialUrl(selectedCard.value))
+const selectedCardBenefitDetails = computed(() => cardBenefitDetails(selectedCard.value))
+const selectedCardBenefitSummary = computed(() => summarizeCardBenefits(selectedCardBenefitDetails.value))
+
+function cardOfficialUrl(card) {
+  const rawUrl = String(card?.officialUrl || card?.official_url || card?.naverUrl || card?.naver_url || '').trim()
+  if (!rawUrl) return ''
+  if (/^https?:\/\//i.test(rawUrl)) return rawUrl
+  return `https://${rawUrl}`
+}
+
+function numberValue(value) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function compactText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim()
+}
+
+function benefitScopeLabel(item = {}) {
+  const scope = compactText(item.scope || item.category || item.name)
+  if (scope) return scope
+  const category = Array.isArray(item.categories) ? compactText(item.categories[0]) : ''
+  return category || '공통 혜택'
+}
+
+function benefitFieldLabel(item = {}) {
+  const scope = benefitScopeLabel(item)
+  const text = scope.toLowerCase()
+  if (/배달/.test(scope)) return '배달앱'
+  if (/음식|외식|식당/.test(scope)) return '음식점'
+  if (/커피|카페|스타벅스/.test(scope)) return '카페'
+  if (/쇼핑|쿠팡|마켓|멤버십/.test(scope)) return '쇼핑'
+  if (/편의점|gs25|cu|세븐/.test(text)) return '편의점'
+  return scope.replace(/\s*가맹점$/, '')
+}
+
+function benefitValueLabel(item = {}) {
+  const type = String(item.type || item.benefitType || item.benefit_type || '')
+  const rate = numberValue(item.ratePercent ?? item.rate_percent)
+  const amount = numberValue(item.amountKrw ?? item.amount_krw)
+  if (rate > 0) {
+    const verb = type.includes('point') ? '적립' : '할인'
+    return `최대 ${Number(rate.toFixed(1)).toString()}% ${verb}`
+  }
+  if (amount > 0) return `${krw(amount)} 할인`
+  return compactText(item.label) || '혜택 조건 확인'
+}
+
+function benefitCaption(item = {}) {
+  const merchants = Array.isArray(item.targetMerchants) ? item.targetMerchants.map(compactText).filter(Boolean) : []
+  if (merchants.length) return `적용처: ${merchants.slice(0, 3).join(', ')}`
+  const categories = Array.isArray(item.categories) ? item.categories.map(compactText).filter(Boolean) : []
+  if (categories.length) return `적용 분야: ${categories.slice(0, 3).join(', ')}`
+  const line = Array.isArray(item.conditionLines) ? compactText(item.conditionLines[0]) : ''
+  return line
+}
+
+function benefitPaymentCondition(item = {}) {
+  const excluded = new Set(item.excludedPaymentMethods || item.excluded_payment_methods || [])
+  const rules = item.paymentMethodRules || item.payment_method_rules || {}
+  if (excluded.has('installment') || rules.installmentBenefitEligible === false) return '할부 제외'
+  if (excluded.has('interest_free_installment') || rules.interestFreeInstallmentEligible === false) return '무이자 제외'
+  if (rules.source && rules.source !== 'not_detected') return '결제방식 확인됨'
+  return ''
+}
+
+function benefitConditions(item = {}, card = {}) {
+  const previousMonth = numberValue(item.requiredPreviousMonthSpendKrw ?? item.required_previous_month_spend_krw ?? card.previousMonthMinSpend ?? card.previous_month_min_spend)
+  const monthlyLimit = numberValue(item.monthlyBenefitLimitKrw ?? item.monthly_benefit_limit_krw)
+  const yearlyLimit = numberValue(item.yearlyBenefitLimitKrw ?? item.yearly_benefit_limit_krw)
+  const perTransactionLimit = numberValue(
+    item.perTransactionLimitKrw
+      ?? item.per_transaction_limit_krw
+      ?? item.perTransactionBenefitLimitKrw
+      ?? item.per_transaction_benefit_limit_krw,
+  )
+  const minPayment = numberValue(item.minPaymentAmountKrw ?? item.min_payment_amount_krw)
+  const paymentCondition = benefitPaymentCondition(item)
+  const conditions = []
+
+  if (monthlyLimit > 0) conditions.push({ label: '월 한도', value: krw(monthlyLimit) })
+  if (perTransactionLimit > 0) conditions.push({ label: '1회 한도', value: krw(perTransactionLimit) })
+  if (yearlyLimit > 0) conditions.push({ label: '연 한도', value: krw(yearlyLimit) })
+  if (minPayment > 0) conditions.push({ label: '최소 결제', value: `${krw(minPayment)} 이상` })
+  conditions.push({ label: '전월 실적', value: previousMonth > 0 ? krw(previousMonth) : '없음' })
+  if (paymentCondition) conditions.push({ label: '결제 조건', value: paymentCondition })
+
+  return conditions
+}
+
+function benefitBadges(item = {}) {
+  const badges = []
+  if (item.hasSharedMonthlyLimit || item.has_shared_monthly_limit) badges.push('통합한도 포함')
+  if (item.verified) badges.push('검증됨')
+  if (item.needsManualReview || item.needs_manual_review || item.manualInputAllowed) badges.push('확인 필요')
+  return badges
+}
+
+function cardBenefitDetails(card = {}) {
+  const items = Array.isArray(card?.benefitItems) ? card.benefitItems : (card?.benefit_items || [])
+  return items
+    .map((item, index) => ({
+      id: item.id || item.benefitId || item.benefit_id || `${card.id || 'card'}-${index}`,
+      scope: benefitScopeLabel(item),
+      field: benefitFieldLabel(item),
+      valueLabel: benefitValueLabel(item),
+      caption: benefitCaption(item),
+      conditions: benefitConditions(item, card),
+      badges: benefitBadges(item),
+    }))
+    .slice(0, 5)
+}
+
+function conditionKey(condition = {}) {
+  return `${condition.label}:${condition.value}`
+}
+
+function commonBenefitConditions(details = []) {
+  if (!details.length) return []
+  const [first, ...rest] = details
+  return first.conditions.filter((condition) => (
+    rest.every((detail) => detail.conditions.some((item) => conditionKey(item) === conditionKey(condition)))
+  ))
+}
+
+function uniqueBenefitFields(details = []) {
+  const fields = []
+  const seen = new Set()
+  details.forEach((detail) => {
+    const field = compactText(detail.field || detail.scope)
+    if (!field || seen.has(field)) return
+    seen.add(field)
+    fields.push(field)
+  })
+  return fields.slice(0, 6)
+}
+
+function summarizeCardBenefits(details = []) {
+  const first = details[0] || {}
+  const badgeSet = new Set()
+  const hasManualReview = details.some((detail) => detail.badges.includes('확인 필요'))
+  const allVerified = details.length > 0 && details.every((detail) => detail.badges.includes('검증됨'))
+  const hasSharedLimit = details.some((detail) => detail.badges.includes('통합한도 포함'))
+
+  if (allVerified) badgeSet.add('검증됨')
+  if (hasManualReview) badgeSet.add('일부 확인 필요')
+  if (hasSharedLimit) badgeSet.add('통합한도 포함')
+
+  return {
+    title: '공통 조건',
+    valueLabel: first.valueLabel || '혜택 조건 확인',
+    commonConditions: commonBenefitConditions(details),
+    fields: uniqueBenefitFields(details),
+    badges: [...badgeSet],
+  }
+}
 
 const isDeletingCard = ref(false)
 async function deleteCard() {
@@ -1138,11 +1341,16 @@ watch([searchTerm, searchType], () => {
 onMounted(async () => {
   try {
     if (needsCard.value) {
-      const [card, transactions] = await Promise.all([
+      const [cardResult, transactionResult] = await Promise.allSettled([
         fetchCard(route.params.id),
         fetchTransactions({ cardId: route.params.id }),
       ])
-      apiCard.value = normalizeCard(card, 0, transactions)
+      if (cardResult.status === 'fulfilled') {
+        const transactions = transactionResult.status === 'fulfilled' ? transactionResult.value : mockTransactions
+        apiCard.value = normalizeCard(cardResult.value, 0, transactions)
+      } else {
+        throw cardResult.reason
+      }
     }
 
     if (props.type === 'transaction' || props.type === 'report' || props.type === 'notifications') {
@@ -1374,11 +1582,25 @@ onMounted(async () => {
   margin: 16px 0;
 }
 
+.benefit-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
 .benefit-list h3,
 .report-section h2 {
-  margin: 0 0 8px;
+  margin: 0;
   color: #17202b;
   font-size: 15px;
+  font-weight: 900;
+}
+
+.benefit-list-head > span {
+  color: #0f5fae;
+  font-size: 11px;
   font-weight: 900;
 }
 
@@ -1389,6 +1611,123 @@ onMounted(async () => {
   font-size: 13px;
   font-weight: 700;
   line-height: 1.8;
+}
+
+.benefit-summary-stack {
+  display: grid;
+  gap: 9px;
+}
+
+.benefit-summary-card,
+.benefit-fields-card {
+  border: 1px solid rgba(15, 95, 174, 0.1);
+  border-radius: 16px;
+  padding: 12px;
+  background: #f8fbff;
+}
+
+.benefit-detail-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.benefit-detail-top span {
+  min-width: 0;
+  color: #526071;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.35;
+  word-break: keep-all;
+}
+
+.benefit-detail-top strong {
+  flex: 0 0 auto;
+  color: #0f5fae;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.benefit-summary-card p {
+  margin: 7px 0 0;
+  color: #6e7885;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+.benefit-condition-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.benefit-condition-grid div {
+  min-width: 0;
+  border-radius: 11px;
+  padding: 8px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(36, 54, 79, 0.06);
+}
+
+.benefit-condition-grid span {
+  display: block;
+  color: #8a95a3;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.benefit-condition-grid b {
+  display: block;
+  margin-top: 2px;
+  color: #17202b;
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.benefit-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.benefit-badge-row span {
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: rgba(0, 140, 149, 0.1);
+  color: #007780;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.benefit-fields-card > span {
+  display: block;
+  color: #6e7885;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.benefit-field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.benefit-field-row b {
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: #fff;
+  color: #24445f;
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: inset 0 0 0 1px rgba(36, 54, 79, 0.07);
 }
 
 .apply-card-head {

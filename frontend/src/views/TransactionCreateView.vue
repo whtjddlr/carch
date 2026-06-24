@@ -96,24 +96,32 @@
           </option>
         </select>
 
-        <div class="payment-mode-grid">
-          <label>
-            <span class="field-label">결제 방식</span>
-            <select v-model="form.paymentType" class="form-field" aria-label="결제 방식">
-              <option value="lump_sum">일시불</option>
-              <option value="installment">할부</option>
-            </select>
-          </label>
-          <label v-if="form.paymentType === 'installment'">
+        <div class="payment-mode-block">
+          <span class="field-label">결제 방식</span>
+          <div class="payment-segment-grid" role="radiogroup" aria-label="결제 방식">
+            <button
+              v-for="option in paymentModeOptions"
+              :key="option.id"
+              type="button"
+              :class="{ active: selectedPaymentMode === option.id }"
+              :aria-pressed="selectedPaymentMode === option.id"
+              @click="setPaymentMode(option.id)"
+            >
+              <strong>{{ option.label }}</strong>
+              <small>{{ option.description }}</small>
+            </button>
+          </div>
+
+          <label v-if="form.paymentType === 'installment'" class="installment-month-field">
             <span class="field-label">개월 수</span>
             <select v-model.number="form.installmentMonths" class="form-field" aria-label="할부 개월 수">
               <option v-for="month in installmentMonthOptions" :key="month" :value="month">{{ month }}개월</option>
             </select>
           </label>
-          <label v-if="form.paymentType === 'installment'" class="installment-toggle">
-            <input v-model="form.isInterestFreeInstallment" type="checkbox" />
-            <span>무이자 할부</span>
-          </label>
+
+          <p class="payment-helper" :class="{ warning: selectedPaymentMode === 'interest_free' }">
+            {{ paymentHelperText }}
+          </p>
         </div>
 
         <div class="two-col">
@@ -160,6 +168,11 @@ const parsedSourceText = ref('')
 
 const categories = ['카페', '식비', '쇼핑', '교통', '헬스', '교육', '편의점', '뷰티', '문화', '구독', '기타']
 const installmentMonthOptions = [2, 3, 4, 5, 6, 9, 10, 12]
+const paymentModeOptions = [
+  { id: 'lump_sum', label: '일시불', description: '기본 혜택' },
+  { id: 'installment', label: '할부', description: '개월 확인' },
+  { id: 'interest_free', label: '무이자', description: '조건 확인' },
+]
 const examples = [
   '오늘 컴포즈커피 역삼센터필드점에서 3800원 LOCA LIKIT Eat로 결제했어',
   '우리카드 06/20 23:41 무신사 스토어 86,400원 승인',
@@ -188,6 +201,32 @@ const placeholder = computed(() => (
 ))
 
 const canSave = computed(() => form.merchantName.trim() && Number(form.amount) !== 0 && form.cardId && form.date && form.time)
+const selectedPaymentMode = computed(() => (
+  form.paymentType === 'installment'
+    ? form.isInterestFreeInstallment ? 'interest_free' : 'installment'
+    : 'lump_sum'
+))
+const paymentHelperText = computed(() => {
+  if (selectedPaymentMode.value === 'interest_free') {
+    return '무이자 할부는 카드에 따라 혜택에서 제외될 수 있어요. 확인된 규칙만 확정 혜택으로 계산합니다.'
+  }
+  if (selectedPaymentMode.value === 'installment') {
+    return '할부 결제는 일부 카드 혜택에서 제외될 수 있어요. 카드 규칙이 없으면 확인 필요로 표시합니다.'
+  }
+  return '일시불은 카드 혜택 계산의 기본 기준입니다.'
+})
+
+function setPaymentMode(mode) {
+  if (mode === 'lump_sum') {
+    form.paymentType = 'lump_sum'
+    form.installmentMonths = 0
+    form.isInterestFreeInstallment = false
+    return
+  }
+  form.paymentType = 'installment'
+  form.installmentMonths = form.installmentMonths >= 2 ? form.installmentMonths : 2
+  form.isInterestFreeInstallment = mode === 'interest_free'
+}
 
 const applyParsed = (parsed) => {
   form.merchantName = parsed.merchantName || parsed.merchant || form.merchantName
@@ -197,6 +236,9 @@ const applyParsed = (parsed) => {
   form.paymentType = parsed.paymentType || parsed.payment_type || form.paymentType
   form.installmentMonths = Number(parsed.installmentMonths ?? parsed.installment_months ?? form.installmentMonths) || 0
   form.isInterestFreeInstallment = Boolean(parsed.isInterestFreeInstallment ?? parsed.is_interest_free_installment ?? form.isInterestFreeInstallment)
+  if (form.isInterestFreeInstallment) {
+    form.paymentType = 'installment'
+  }
   if (form.paymentType === 'installment' && form.installmentMonths < 2) {
     form.installmentMonths = 2
   }
@@ -464,32 +506,68 @@ onMounted(async () => {
   gap: 10px;
 }
 
-.payment-mode-grid {
+.payment-mode-block {
+  margin-top: 12px;
+}
+
+.payment-segment-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  align-items: end;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
-.installment-toggle {
-  grid-column: 1 / -1;
+.payment-segment-grid button {
   display: flex;
-  min-height: 44px;
+  min-width: 0;
+  min-height: 56px;
+  flex-direction: column;
   align-items: center;
-  gap: 9px;
-  border: 1px solid rgba(15, 95, 174, 0.14);
+  justify-content: center;
+  gap: 3px;
+  border: 1px solid rgba(15, 95, 174, 0.12);
   border-radius: 13px;
-  padding: 0 12px;
+  padding: 8px 6px;
   background: #f8fbff;
-  color: #17202b;
-  font-size: 13px;
-  font-weight: 850;
+  color: #526071;
 }
 
-.installment-toggle input {
-  width: 17px;
-  height: 17px;
-  accent-color: #0f5fae;
+.payment-segment-grid button.active {
+  border-color: rgba(15, 95, 174, 0.38);
+  background: #e8f1ff;
+  color: #0f5fae;
+  box-shadow: inset 0 0 0 1px rgba(15, 95, 174, 0.08);
+}
+
+.payment-segment-grid strong {
+  font-size: 13px;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.payment-segment-grid small {
+  color: currentColor;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.15;
+  opacity: 0.78;
+}
+
+.installment-month-field {
+  display: block;
+  margin-top: 10px;
+}
+
+.payment-helper {
+  margin: 9px 0 0;
+  color: #687584;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+.payment-helper.warning {
+  color: #b45309;
 }
 
 .field-label {

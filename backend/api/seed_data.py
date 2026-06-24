@@ -68,6 +68,9 @@ TRANSACTIONS = [
         'approvedAt': '2026-06-20T23:41:00+09:00',
         'icon': '🛍️',
         'address': '온라인 결제',
+        'paymentType': 'installment',
+        'installmentMonths': 3,
+        'isInterestFreeInstallment': True,
     },
     {
         'id': 't8',
