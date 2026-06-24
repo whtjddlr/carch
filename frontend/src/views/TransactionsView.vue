@@ -7,24 +7,36 @@
       </div>
     </header>
     <div class="screen-scroll scrollbar-hide page-padding">
-      <article class="app-card tx-list">
-        <button v-for="tx in transactions" :key="tx.id" type="button" @click="router.push(`/transactions/${tx.id}`)">
-          <span class="tx-emoji">{{ tx.icon }}</span>
-          <div>
-            <strong>{{ tx.merchant }}</strong>
-            <small>{{ tx.date }} {{ tx.time }} · {{ tx.cat }}</small>
-          </div>
-          <span class="tx-mini-card">
-            <img
-              v-if="txCard(tx)"
-              :src="txCard(tx).imageUrl"
-              :alt="txCard(tx).name"
-              :class="cardImageClass(txCard(tx))"
-              @load="setImageOrientation(txCard(tx).id, $event)"
-            />
-          </span>
-          <b :class="{ plus: tx.amt > 0 }">{{ tx.amt > 0 ? '+' : '-' }}{{ krw(tx.amt) }}</b>
-        </button>
+      <template v-if="transactions.length">
+        <section v-for="group in groupedByDate" :key="group.date" class="tx-group">
+          <p class="tx-date">{{ dateLabel(group.date) }}</p>
+          <article class="app-card tx-list">
+            <button v-for="tx in group.items" :key="tx.id" type="button" @click="router.push(`/transactions/${tx.id}`)">
+              <span class="tx-emoji">{{ tx.icon }}</span>
+              <div class="tx-info">
+                <strong>{{ tx.merchant }}</strong>
+                <small>{{ tx.time }} · {{ tx.cat }}</small>
+              </div>
+              <span class="tx-mini-card">
+                <img
+                  v-if="txCard(tx)"
+                  :src="txCard(tx).imageUrl"
+                  :alt="txCard(tx).name"
+                  :class="cardImageClass(txCard(tx))"
+                  @load="setImageOrientation(txCard(tx)?.id, $event)"
+                />
+              </span>
+              <b :class="{ plus: tx.amt > 0 }">{{ tx.amt > 0 ? '+' : '-' }}{{ krw(tx.amt) }}</b>
+            </button>
+          </article>
+        </section>
+      </template>
+
+      <article v-else class="app-card tx-empty">
+        <span class="tx-empty-icon">🧾</span>
+        <strong>아직 거래내역이 없어요</strong>
+        <p>결제 내역을 추가하면 날짜별로 모아서 보여드려요.</p>
+        <RouterLink class="tx-empty-add" to="/transactions/new">결제 추가하기</RouterLink>
       </article>
     </div>
 
@@ -35,7 +47,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
@@ -47,17 +59,39 @@ const transactions = ref(mockTransactions)
 const cards = ref(mockCards)
 const imageOrientations = ref({})
 
+// 날짜별로 묶어서 보여준다(원래 순서 유지)
+const groupedByDate = computed(() => {
+  const groups = []
+  const byDate = new Map()
+  for (const tx of transactions.value) {
+    const key = tx.date || ''
+    if (!byDate.has(key)) {
+      byDate.set(key, { date: key, items: [] })
+      groups.push(byDate.get(key))
+    }
+    byDate.get(key).items.push(tx)
+  }
+  return groups
+})
+
+function dateLabel(value) {
+  const m = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return m ? `${Number(m[2])}월 ${Number(m[3])}일` : (value || '날짜 미상')
+}
+
 function txCard(tx) {
   return cards.value.find((card) => String(card.id) === String(tx.cardId)) || null
 }
 
 function setImageOrientation(cardId, event) {
+  if (cardId == null) return
   const image = event.target
   const orientation = image.naturalWidth > image.naturalHeight ? 'landscape' : 'portrait'
   imageOrientations.value = { ...imageOrientations.value, [cardId]: orientation }
 }
 
 function cardImageClass(card) {
+  if (!card) return {}
   const orientation = imageOrientations.value[card.id] || card.imageOrientation
   return {
     'is-ready': Boolean(orientation),
@@ -101,7 +135,22 @@ onMounted(async () => {
 }
 
 .page-padding {
-  padding: 18px 20px 116px;
+  padding: 14px 20px 116px;
+}
+
+.tx-group {
+  margin-bottom: 16px;
+}
+
+.tx-date {
+  margin: 0 4px 8px;
+  color: #8a96a5;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tx-info {
+  min-width: 0;
 }
 
 .tx-list {
@@ -180,12 +229,55 @@ onMounted(async () => {
 .tx-list b {
   color: #17202b;
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
 .tx-list b.plus {
   color: #008c95;
+}
+
+.tx-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.tx-empty-icon {
+  font-size: 38px;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.tx-empty strong {
+  color: #17202b;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.tx-empty p {
+  margin: 0;
+  color: #6e7885;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.tx-empty-add {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  margin-top: 12px;
+  padding: 0 20px;
+  border-radius: 999px;
+  background: #0f5fae;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
 }
 </style>
