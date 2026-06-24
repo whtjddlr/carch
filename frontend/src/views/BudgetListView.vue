@@ -35,41 +35,31 @@
           <h2>카드 사용 가이드</h2>
           <RouterLink to="/recommendations/usage">상세 추천</RouterLink>
         </div>
-        <article class="card-guide-card">
-          <div class="guide-focus">
-            <div>
-              <span>다음 달 혜택 준비</span>
-              <strong>{{ primaryCardGuide.card.name }}</strong>
-              <p>{{ primaryCardGuide.reason }}</p>
-            </div>
-            <span class="guide-card-image">
+        <div class="guide-list">
+          <RouterLink
+            v-for="item in cardGuideItems"
+            :key="item.category.id"
+            class="guide-row"
+            :to="{ path: '/plans/new', query: { category: item.category.name, cardId: item.card.id, budget: item.remaining } }"
+          >
+            <span class="guide-thumb">
               <img
-                v-if="primaryCardGuide.card.imageUrl"
-                :src="primaryCardGuide.card.imageUrl"
-                :alt="primaryCardGuide.card.name"
-                :class="primaryCardGuide.card.imageOrientation === 'landscape' ? 'is-landscape' : 'is-portrait'"
+                v-if="item.card.imageUrl"
+                :src="item.card.imageUrl"
+                :alt="item.card.name"
+                :class="thumbOrientation[item.card.id]"
+                @load="onThumbLoad(item.card.id, $event)"
               />
+              <CreditCard v-else :size="16" />
             </span>
-          </div>
-
-          <div class="guide-list">
-            <RouterLink
-              v-for="item in cardGuideItems"
-              :key="item.category.id"
-              class="guide-row"
-              :to="{ path: '/plans/new', query: { category: item.category.name, cardId: item.card.id, budget: item.remaining } }"
-            >
-              <div>
-                <span>{{ item.category.name }} · {{ item.rateLabel }}</span>
-                <strong>{{ item.card.name }}</strong>
-              </div>
-              <p>
-                <span class="guide-budget">{{ item.remainingLabel }}</span>
-                <b class="guide-status" :class="item.performanceTone">{{ item.performanceLabel }}</b>
-              </p>
-            </RouterLink>
-          </div>
-        </article>
+            <div class="guide-info">
+              <span class="guide-cat">{{ item.category.name }} · {{ item.rateLabel }}</span>
+              <strong>{{ item.card.name }}</strong>
+              <small>남은 {{ krw(item.remaining) }} · 한도 {{ krw(item.category.budget) }}</small>
+            </div>
+            <b class="guide-status" :class="item.performanceTone">{{ item.performanceShort }}</b>
+          </RouterLink>
+        </div>
       </section>
 
       <section class="plan-section">
@@ -140,13 +130,23 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { CalendarClock, ChevronRight, PiggyBank, Zap } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { CalendarClock, ChevronRight, CreditCard, PiggyBank, Zap } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, cards as mockCards, expenseModes, krw } from '@/data/mockData'
 import { readBudgetOverride, readCustomBudgetCategories } from '@/services/budgetStorage'
 import { budgetProgressWidth, budgetRiskColor, budgetRiskLabel, budgetUsagePercent } from '@/utils/budgetRisk'
 import { compareCardBenefitCandidates, scoreCardBenefit, summarizeWalletPerformance } from '@/utils/cardPerformance'
+
+// 카드 썸네일: 세로 이미지면 가로 썸네일에 맞춰 회전 (로드 시 자동 감지)
+const thumbOrientation = ref({})
+function onThumbLoad(key, event) {
+  const img = event.target
+  thumbOrientation.value = {
+    ...thumbOrientation.value,
+    [key]: img.naturalWidth > img.naturalHeight ? 'is-landscape' : 'is-portrait',
+  }
+}
 
 function modeIcon(id) {
   if (id === 'within-budget') return PiggyBank
@@ -184,6 +184,7 @@ const cardGuideItems = computed(() => (
         needsPreparationOnly,
         fillsPerformanceOverNoPerformance,
         performanceLabel: performanceStatusLabel(recommendation.performance, needsPreparationOnly, fillsPerformanceOverNoPerformance),
+        performanceShort: performanceShortLabel(recommendation.performance, needsPreparationOnly, fillsPerformanceOverNoPerformance),
         performanceTone: performanceStatusTone(recommendation.performance),
         remainingLabel: remaining > 0 ? `${krw(remaining)} 남음` : '예산 초과',
       }
@@ -341,6 +342,16 @@ function performanceStatusLabel(performance, needsPreparationOnly = false, fills
   if (performance.nextMonthWillQualify) return '다음 달 조건 충족'
   if (needsPreparationOnly) return '실적 준비 우선'
   return `다음 달 조건 ${krw(performance.remainingAfter)} 부족`
+}
+
+function performanceShortLabel(performance, needsPreparationOnly = false, fillsPerformanceOverNoPerformance = false) {
+  if (!performance) return '확인 필요'
+  if (performance.noPerformanceRequired) return '무실적 혜택'
+  if (performance.currentBenefitEligible) return '이번 달 가능'
+  if (fillsPerformanceOverNoPerformance) return '실적 완성'
+  if (performance.nextMonthWillQualify) return '다음 달 충족'
+  if (needsPreparationOnly) return '준비 우선'
+  return '준비 필요'
 }
 
 function performanceStatusTone(performance) {
@@ -510,63 +521,38 @@ h1 {
   margin-bottom: 24px;
 }
 
-.card-guide-card {
-  overflow: hidden;
-  border: 1px solid rgba(15, 95, 174, 0.1);
-  border-radius: 18px;
-  padding: 15px;
-  background:
-    radial-gradient(circle at 95% 0%, rgba(0, 140, 149, 0.1), transparent 35%),
-    linear-gradient(145deg, #ffffff 0%, #f8fbfe 100%);
-  box-shadow: 0 10px 24px rgba(36, 54, 79, 0.07);
+.guide-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.guide-focus {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 48px;
+.guide-row {
+  display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 11px;
+  border-radius: 15px;
+  padding: 11px 13px;
+  background: rgba(44, 78, 114, 0.05);
+  color: inherit;
+  text-decoration: none;
 }
 
-.guide-focus span:first-child {
-  display: block;
-  color: #0f5fae;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.guide-focus strong {
-  display: block;
-  margin-top: 5px;
-  color: #17202b;
-  font-size: 17px;
-  font-weight: 950;
-  line-height: 1.22;
-  word-break: keep-all;
-}
-
-.guide-focus p {
-  margin: 6px 0 0;
-  color: #536170;
-  font-size: 12px;
-  font-weight: 750;
-  line-height: 1.45;
-  word-break: keep-all;
-}
-
-.guide-card-image {
+.guide-thumb {
   position: relative;
-  display: block;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
   width: 42px;
-  height: 58px;
-  justify-self: end;
+  height: 27px;
   overflow: hidden;
-  border-radius: 7px;
+  border-radius: 5px;
   background: #e8edf2;
-  box-shadow: 0 8px 18px rgba(36, 54, 79, 0.16);
+  color: #8a9aad;
+  box-shadow: 0 1px 4px rgba(36, 54, 79, 0.2);
 }
 
-.guide-card-image img {
+.guide-thumb img {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -574,91 +560,68 @@ h1 {
   object-fit: cover;
 }
 
-.guide-card-image img.is-landscape {
+.guide-thumb img.is-portrait {
   inset: auto;
   top: 50%;
   left: 50%;
-  width: 58px;
+  width: 27px;
   height: 42px;
-  transform: translate(-50%, -50%) rotate(90deg);
+  max-width: none;
+  transform: translate(-50%, -50%) rotate(-90deg);
 }
 
-.guide-list {
-  display: grid;
-  gap: 0;
-  margin-top: 13px;
-  border-top: 1px solid rgba(32, 36, 42, 0.08);
+.guide-info {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.guide-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  border-bottom: 1px solid rgba(32, 36, 42, 0.075);
-  padding: 11px 0;
-  color: inherit;
-  text-decoration: none;
-}
-
-.guide-row:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-
-.guide-row span {
+.guide-info .guide-cat {
   display: block;
-  color: #7a8795;
-  font-size: 10.5px;
-  font-weight: 800;
-}
-
-.guide-row strong {
-  display: block;
-  margin-top: 3px;
-  color: #20242a;
-  font-size: 13px;
+  color: #2c4e72;
+  font-size: 11px;
   font-weight: 900;
+}
+
+.guide-info strong {
+  display: block;
   overflow: hidden;
+  margin-top: 1px;
+  color: #17202b;
+  font-size: 14px;
+  font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.guide-row p {
-  display: flex;
-  min-width: 96px;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  margin: 0;
-  color: #0f5fae;
-  white-space: nowrap;
-}
-
-.guide-row .guide-budget {
-  color: #8a96a5;
-  font-size: 10.5px;
+.guide-info small {
+  display: block;
+  margin-top: 2px;
+  color: #6e7885;
+  font-size: 11px;
   font-weight: 800;
 }
 
 .guide-status {
+  flex-shrink: 0;
+  align-self: center;
   border-radius: 999px;
-  padding: 4px 7px;
+  padding: 5px 9px;
   background: rgba(15, 95, 174, 0.08);
   color: #0f5fae;
   font-size: 10.5px;
   font-weight: 900;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .guide-status.is-waiting {
-  background: rgba(249, 115, 22, 0.1);
-  color: #c2410c;
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
 }
 
 .guide-status.is-ready {
-  background: rgba(0, 140, 149, 0.1);
-  color: #007780;
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
 }
 
 .plan-section {
