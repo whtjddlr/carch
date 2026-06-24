@@ -9,18 +9,22 @@
       </div>
 
       <RouterLink class="current-summary" to="/budget/current" aria-label="6월 예산 상세 보기">
-        <div class="summary-top">
+        <div class="cs-label">
           <span>이번 달 사용</span>
-          <strong>{{ krw(currentBudget.spent) }}</strong>
+          <em
+            class="cs-status"
+            :style="{ color: riskColor, background: `${riskColor}1f` }"
+          >{{ budgetRiskLabel(currentBudget.percent) }}</em>
         </div>
-        <div class="summary-meta">
-          <span>{{ currentBudget.percent }}%</span>
-          <b :class="{ danger: currentBudget.remaining < 0 }">
+        <strong class="cs-amount">{{ krw(currentBudget.spent) }}</strong>
+        <div class="cs-track">
+          <i :style="{ width: `${budgetProgressWidth(currentBudget.percent)}%`, background: riskColor }" />
+        </div>
+        <div class="cs-meta">
+          <em class="cs-pct" :style="{ color: riskColor }">{{ currentBudget.percent }}%</em>
+          <em class="cs-remain" :style="{ color: riskColor }">
             {{ currentBudget.remaining < 0 ? `${krw(Math.abs(currentBudget.remaining))} 초과` : `${krw(currentBudget.remaining)} 남음` }}
-          </b>
-        </div>
-        <div class="summary-track">
-          <i :style="{ width: `${budgetProgressWidth(currentBudget.percent)}%`, background: budgetRiskColor(currentBudget.percent) }" />
+          </em>
         </div>
       </RouterLink>
     </header>
@@ -141,7 +145,7 @@ import { CalendarClock, ChevronRight, PiggyBank, Zap } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, cards as mockCards, expenseModes, krw } from '@/data/mockData'
 import { readBudgetOverride, readCustomBudgetCategories } from '@/services/budgetStorage'
-import { budgetProgressWidth, budgetRiskColor, budgetUsagePercent } from '@/utils/budgetRisk'
+import { budgetProgressWidth, budgetRiskColor, budgetRiskLabel, budgetUsagePercent } from '@/utils/budgetRisk'
 import { compareCardBenefitCandidates, scoreCardBenefit, summarizeWalletPerformance } from '@/utils/cardPerformance'
 
 function modeIcon(id) {
@@ -208,6 +212,8 @@ const currentBudget = computed(() => {
     percent: budgetUsagePercent(spent, budget),
   }
 })
+
+const riskColor = computed(() => budgetRiskColor(currentBudget.value.percent))
 
 const budgetHistory = computed(() => {
   const current = currentBudget.value
@@ -344,24 +350,18 @@ function performanceStatusTone(performance) {
 
 function cardGuideReason(item) {
   if (item.performance?.noPerformanceRequired) {
-    return `${item.category.name} 예산은 전월 조건 없이 바로 혜택을 받을 수 있어요.`
+    return `${item.category.name} · 무실적으로 바로 혜택`
   }
   if (item.performance?.currentBenefitEligible) {
-    return `${item.category.name} 예산은 전월 실적이 충족된 카드라 이번 달 혜택을 받을 수 있어요.`
+    return `${item.category.name} · 이번 달 혜택 바로 가능`
   }
   if (item.fillsPerformanceOverNoPerformance) {
-    return `무실적 카드는 당장 혜택을 받을 수 있지만, ${item.category.name} 예산은 ${item.card.name} 실적을 완성해 다음 달 혜택을 여는 쪽이 더 좋아요.`
-  }
-  if (item.needsPreparationOnly && item.performance?.nextMonthWillQualify) {
-    return `전월 실적 충족 카드가 없어 이번 달 혜택은 어렵지만, ${item.category.name} 예산을 ${item.card.name}에 쓰면 다음 달 조건을 열 수 있어요.`
-  }
-  if (item.needsPreparationOnly) {
-    return `전월 실적 충족 카드가 없어 이번 달은 혜택보다 다음 달 조건 준비가 우선이에요. ${item.card.name}은 ${item.category.name} 기대혜택이 가장 큽니다.`
+    return `${item.category.name}을 모아 다음 달 혜택 준비`
   }
   if (item.performance?.nextMonthWillQualify) {
-    return `${item.category.name} 지출을 ${item.card.name}에 모으면 다음 달 혜택 조건을 채워요.`
+    return `${item.category.name}을 모으면 다음 달 조건 충족`
   }
-  return `이번 달 사용 기준 ${item.card.name} 다음 달 조건까지 ${krw(item.performance.remainingAfter)} 부족해요.`
+  return `다음 달 조건까지 ${krw(item.performance.remainingAfter)} 남음`
 }
 
 function prioritizeCardGuideItems(items) {
@@ -426,72 +426,80 @@ h1 {
   display: block;
   border: 1px solid rgba(36, 54, 79, 0.08);
   border-radius: 20px;
-  padding: 16px 16px 15px;
-  background: rgba(255, 255, 255, 0.82);
+  padding: 15px 18px 16px;
+  background: rgba(255, 255, 255, 0.88);
   color: #17202b;
   text-decoration: none;
   box-shadow: 0 14px 28px rgba(36, 54, 79, 0.07);
   backdrop-filter: blur(12px) saturate(1.04);
 }
 
-.summary-top,
-.summary-meta {
+.cs-label {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.summary-top {
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.summary-top span,
-.summary-meta b {
+.cs-label span {
   color: #6f7d8c;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 850;
 }
 
-.summary-meta b.danger {
-  color: var(--carch-danger);
+.cs-status {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 950;
+  font-style: normal;
 }
 
-.summary-top strong {
+.cs-amount {
   display: block;
-  font-size: 38px;
-  font-weight: 900;
-  line-height: 1;
+  margin-top: 5px;
+  color: #17202b;
+  font-size: 34px;
+  font-weight: 950;
+  line-height: 1.05;
+  letter-spacing: 0;
 }
 
-.summary-meta {
-  justify-content: center;
-  margin-top: 10px;
-}
-
-.summary-meta span {
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.summary-track {
-  height: 7px;
+.cs-track {
+  height: 9px;
   overflow: hidden;
-  width: min(100%, 300px);
-  margin: 12px auto 0;
+  margin-top: 13px;
   border-radius: 999px;
   background: #e7edf4;
 }
 
-.summary-track i {
+.cs-track i {
   display: block;
   height: 100%;
   border-radius: inherit;
-  box-shadow: 0 5px 12px rgba(36, 54, 79, 0.12);
-  transition: width 0.2s ease, background-color 0.2s ease;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.cs-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 9px;
+}
+
+.cs-meta em {
+  font-style: normal;
+}
+
+.cs-meta .cs-pct {
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.cs-meta .cs-remain {
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .budget-list-body {

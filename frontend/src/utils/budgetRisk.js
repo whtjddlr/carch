@@ -1,8 +1,17 @@
 const BUDGET_RISK_COLORS = {
-  safe: '#2563eb',
-  caution: '#eab308',
+  safe: '#16a34a',
+  caution: '#f59e0b',
   warning: '#f97316',
-  danger: '#dc2626',
+  danger: '#e5484d',
+}
+
+// 진행률에 따른 상태 라벨 (안정 → 임박)
+export function budgetRiskLabel(percent) {
+  const value = Number(percent || 0)
+  if (value >= 95) return '예산 임박'
+  if (value >= 80) return '주의'
+  if (value >= 60) return '적정'
+  return '안정'
 }
 
 export function budgetUsagePercent(spent, budget) {
