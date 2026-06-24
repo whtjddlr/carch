@@ -172,6 +172,20 @@ def get_demo_user():
     return user
 
 
+def is_demo_seed_user(user):
+    """데모/시연 계정에만 데모 데이터를 자동 시드한다(실제 가입자는 빈 지갑으로 시작)."""
+    if not user:
+        return False
+    email = (getattr(user, 'email', '') or '').strip().lower()
+    if not email:
+        return False
+    demo_emails = {DEMO_USER_EMAIL.strip().lower()}
+    dev_admin_email = str(getattr(settings, 'DEV_ADMIN_EMAIL', '') or '').strip().lower()
+    if dev_admin_email:
+        demo_emails.add(dev_admin_email)
+    return email in demo_emails
+
+
 def get_dev_admin_user():
     User = get_user_model()
     email = settings.DEV_ADMIN_EMAIL
@@ -775,6 +789,9 @@ def cleanup_legacy_seed_transactions(user):
 
 def ensure_transactions_seeded(user=None):
     user = user or get_demo_user()
+    # 실제 신규 가입자는 빈 거래로 시작 — 데모 거래는 데모/시연 계정에만 자동 시드
+    if not is_demo_seed_user(user):
+        return
     cleanup_legacy_seed_transactions(user)
     existing_by_id = {
         item.public_id: item
@@ -840,6 +857,9 @@ def ensure_transactions_seeded(user=None):
 
 def ensure_purchase_plans_seeded(user=None):
     user = user or get_demo_user()
+    # 실제 신규 가입자는 빈 상태로 시작 — 데모 지출 계획은 데모/시연 계정에만 자동 시드
+    if not is_demo_seed_user(user):
+        return
     existing_seed_titles = set(
         PurchasePlan.objects.filter(user=user).values_list('title', flat=True)
     )
@@ -1619,6 +1639,9 @@ def ensure_owned_cards_seeded(user=None):
         else:
             return
     if OwnedCard.objects.filter(user=user).exists():
+        return
+    # 실제 신규 가입자는 빈 지갑으로 시작 — 데모 카드는 데모/시연 계정에만 자동 시드
+    if not is_demo_seed_user(user):
         return
     OwnedCard.objects.bulk_create(
         [

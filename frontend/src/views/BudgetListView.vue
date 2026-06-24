@@ -391,10 +391,10 @@ function mergeWalletCard(apiCard, index, transactions) {
 async function loadWallet() {
   try {
     const [txResult, cardResult] = await Promise.allSettled([fetchTransactions(), fetchOwnedCards()])
+    // 호출 실패 시에만 초기 목 데이터 유지(오프라인 폴백). 성공하면 빈 배열도 그대로 반영 → 빈 지갑.
+    if (cardResult.status !== 'fulfilled' || !Array.isArray(cardResult.value)) return
     const transactions = txResult.status === 'fulfilled' && Array.isArray(txResult.value) ? txResult.value : null
-    const owned = cardResult.status === 'fulfilled' && Array.isArray(cardResult.value) ? cardResult.value : null
-    if (!owned || !owned.length) return // 백엔드 응답 없으면 초기 목 데이터 유지 → 화면 동일
-    walletCards.value = owned.map((card, index) => mergeWalletCard(card, index, transactions))
+    walletCards.value = cardResult.value.map((card, index) => mergeWalletCard(card, index, transactions))
   } catch {
     // 어떤 단계든 실패하면 초기 목 데이터 유지
   }
