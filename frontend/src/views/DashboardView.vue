@@ -131,9 +131,6 @@
                   </div>
                 </template>
               </div>
-              <div class="benefit-chips">
-                <span v-for="benefit in benefitTags(detailCard)" :key="benefit">{{ benefit }}</span>
-              </div>
             </div>
           </div>
           </Transition>
@@ -411,10 +408,9 @@ function buildCategoryGuideFromOwnedGuide(item, index) {
   const potentialBenefit = Number(item.potentialBenefit || 0)
   const remaining = Number(item.remainingCurrentSpend || 0)
   const monthlyCap = Number(item.limit || item.monthlyCap || 0)
-  const monthlyMax = monthlyCap || Math.max(estimatedBenefit, potentialBenefit)
   const discountLabel = item.benefitLabel || item.body || card.benefitSummary || ''
-  const benefitText = monthlyMax > 0
-    ? `${discountLabel} · 월 최대 ${krw(monthlyMax)}`
+  const benefitText = monthlyCap > 0
+    ? `${discountLabel} · 월 최대 ${krw(monthlyCap)} 가능`
     : discountLabel
 
   return {
@@ -1871,7 +1867,7 @@ onMounted(async () => {
   position: relative;
   display: flex;
   width: 100%;
-  min-height: 250px;
+  min-height: 182px;
   justify-content: center;
   margin-top: -4px;
   perspective: 1100px;
@@ -1882,7 +1878,7 @@ onMounted(async () => {
   display: flex;
   width: 100%;
   max-width: 320px;
-  min-height: 250px;
+  min-height: 182px;
   flex-direction: column;
   align-items: center;
   gap: 12px;
@@ -1968,9 +1964,9 @@ onMounted(async () => {
 
 .card-info strong {
   display: block;
-  margin: 6px 0 5px;
+  margin: 3px 0 2px;
   color: #20242a;
-  font-size: clamp(21px, 6vw, 25px);
+  font-size: clamp(18px, 5.2vw, 21px);
   font-weight: 900;
   line-height: 1.12;
   word-break: keep-all;
@@ -1978,20 +1974,20 @@ onMounted(async () => {
 }
 
 .benefit-summary {
-  min-height: 20px;
+  min-height: 16px;
   margin: 0;
   color: #6e6e73;
-  font-size: clamp(13px, 3.8vw, 14px);
+  font-size: clamp(12px, 3.4vw, 13px);
   font-weight: 800;
-  line-height: 1.5;
+  line-height: 1.45;
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
 
 .spend-progress {
-  border-block: 1px solid rgba(32, 36, 42, 0.1);
+  border-top: 1px solid rgba(32, 36, 42, 0.1);
   border-radius: 0;
-  padding: 11px 0 10px;
+  padding: 9px 0 2px;
   background: transparent;
   box-shadow: none;
   backdrop-filter: none;
@@ -2002,7 +1998,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 9px;
+  margin-bottom: 7px;
 }
 
 .progress-head span {
@@ -2013,7 +2009,7 @@ onMounted(async () => {
 
 .progress-head b {
   color: #20242a;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 900;
 }
 
@@ -2129,8 +2125,8 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0;
-  margin-top: 14px;
-  padding: 12px 0;
+  margin-top: 10px;
+  padding: 11px 0;
   border-block: 1px solid rgba(32, 36, 42, 0.085);
 }
 
@@ -2140,11 +2136,11 @@ onMounted(async () => {
 
 .quick-action {
   display: flex;
-  min-height: 64px;
+  min-height: 52px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   color: #3f4b58;
   font-size: 11px;
   font-weight: 850;
@@ -2175,8 +2171,12 @@ onMounted(async () => {
   stroke-width: 2.25;
 }
 
-.category-guide-section {
-  margin-top: 18px;
+.section-block.category-guide-section {
+  margin-top: 14px;
+}
+
+.category-guide-section .section-head {
+  margin-bottom: 7px;
 }
 
 .guide-viewport {
@@ -2660,7 +2660,7 @@ onMounted(async () => {
   }
 
   .pay-card {
-    min-height: 196px;
+    min-height: 182px;
     gap: 8px;
     padding-inline: 4px;
   }

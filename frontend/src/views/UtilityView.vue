@@ -1518,6 +1518,12 @@ onMounted(async () => {
   filter: drop-shadow(0 12px 20px rgba(16, 24, 40, 0.16));
 }
 
+.card-detail-card .detail-card-art {
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+}
+
 .card-detail-card .detail-card-art img {
   position: absolute;
   top: 50%;
@@ -1529,12 +1535,30 @@ onMounted(async () => {
   border-radius: 12px;
   transform: translate(-50%, -50%);
   filter: drop-shadow(0 16px 24px rgba(16, 24, 40, 0.22));
+  animation: detail-card-fade-in 0.4s ease both;
 }
 
 .card-detail-card .detail-card-art img.is-portrait {
   width: 176px;
   height: 280px;
   transform: translate(-50%, -50%) rotate(-90deg);
+  animation: detail-card-rotate-in 0.6s cubic-bezier(0.34, 1.08, 0.4, 1) both;
+}
+
+@keyframes detail-card-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes detail-card-rotate-in {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(-90deg);
+    opacity: 1;
+  }
 }
 
 .detail-head {

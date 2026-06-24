@@ -3301,6 +3301,7 @@ def _estimate_category_benefit(
     return {
         'rate': raw['rate'],
         'benefitLabel': raw['benefitLabel'],
+        'limit': raw.get('limit'),
         'estimatedBenefit': estimated,
         'rawEstimatedBenefit': raw_estimated,
         'potentialBenefit': potential,
@@ -3618,6 +3619,7 @@ def _build_owned_category_guides(profile, owned_values, owned_ids):
                 'potentialBenefit': potential,
                 'monthlyGain': monthly_gain,
                 'benefitLabel': best['estimate']['benefitLabel'],
+                'limit': best['estimate'].get('limit'),
                 'eligibleForBenefit': best['estimate']['eligibleForBenefit'],
                 'nextMonthEligible': best['nextMonthEligible'],
                 'remainingCurrentSpend': best['remainingCurrentSpend'],
