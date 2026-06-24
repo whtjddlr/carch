@@ -75,11 +75,11 @@
     <template v-else>
       <header class="recommend-header blue-gradient">
         <AppBackButton fallback="/cards" />
-        <p>카드 추천</p>
-        <h1>사용할 카드와<br />발급할 카드를 나눠볼게요</h1>
+        <p>{{ isUsageMode ? '소비 추천' : '새 카드 추천' }}</p>
+        <h1 v-if="isUsageMode">보유 카드로<br />어디에 쓸지 정리할게요</h1>
+        <h1 v-else>소비 패턴에 맞는<br />새 카드를 찾아볼게요</h1>
         <div class="recommend-mode-pills">
-          <span>보유 카드 사용 추천</span>
-          <span>새 카드 발급 추천</span>
+          <span>{{ isUsageMode ? '보유 카드 사용 추천' : '새 카드 발급 추천' }}</span>
         </div>
       </header>
 
@@ -95,92 +95,96 @@
           </div>
         </article>
 
-        <div class="recommend-section-title">
-          <div>
-            <span>보유 카드 사용 추천</span>
-            <h2>이미 가진 카드 안에서 어디에 쓸지</h2>
-          </div>
-          <b>결제 배분</b>
-        </div>
-
-        <div v-if="ownedUsageGuides.length" class="usage-guide-list">
-          <article
-            v-for="item in ownedUsageGuides"
-            :key="item.id"
-            class="app-card usage-guide-card"
-          >
-            <div class="usage-guide-main">
-              <div>
-                <span class="usage-label">사용 추천</span>
-                <h3>{{ item.category }}는 {{ item.cardName }}</h3>
-                <p>{{ item.body }}</p>
-              </div>
-              <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.cardName" />
-            </div>
-            <div class="usage-metrics">
-              <span>
-                <small>분야 지출</small>
-                <b>{{ krw(item.amount) }}</b>
-              </span>
-              <span>
-                <small>{{ item.eligibleForBenefit ? '예상 혜택' : '가능 혜택' }}</small>
-                <b>{{ krw(item.eligibleForBenefit ? item.estimatedBenefit : item.potentialBenefit) }}</b>
-              </span>
-              <span>
-                <small>조건</small>
-                <b>{{ usageConditionLabel(item) }}</b>
-              </span>
-            </div>
-          </article>
-        </div>
-
-        <article v-else class="app-card usage-empty-card">
-          <span>보유 카드 사용 추천</span>
-          <strong>아직 비교할 보유 카드 데이터가 부족해요</strong>
-          <p>카드와 결제 내역이 쌓이면 분야별로 어떤 보유 카드를 쓰면 좋은지 따로 보여줄게요.</p>
-        </article>
-
-        <div class="recommend-section-title issue-title">
-          <div>
-            <span>새 카드 발급 추천</span>
-            <h2>새로 발급하면 더 나아질 카드</h2>
-          </div>
-          <b>미보유 카드</b>
-        </div>
-
-        <div class="recommend-list">
-          <article
-            v-for="item in recommendationItems"
-            :key="item.id"
-            class="app-card recommend-card"
-            @click="router.push(`/recommendations/${item.id}`)"
-          >
-            <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.name" />
+        <template v-if="isUsageMode">
+          <div class="recommend-section-title">
             <div>
-              <span>발급 추천 · {{ item.issuer }}</span>
-              <h2>{{ item.name }}</h2>
-              <p>{{ item.reason }}</p>
-              <div v-if="item.performanceFill" class="fill-economics">
-                <span>
-                  <small>다음 달 조건</small>
-                  <b>{{ krw(item.performanceFill.remaining) }}</b>
-                </span>
-                <span>
-                  <small>조건 후</small>
-                  <b>{{ signedKrw(item.performanceFill.monthlyGain) }}/월</b>
-                </span>
-                <span>
-                  <small>추가 효율</small>
-                  <b>{{ item.performanceFill.efficiency }}%</b>
-                </span>
-              </div>
-              <div v-else class="mini-economics">
-                <b>{{ recommendationImpact(item).value }}</b>
-                <small>{{ recommendationImpact(item).label }}</small>
-              </div>
+              <span>보유 카드 사용 추천</span>
+              <h2>이미 가진 카드 안에서 어디에 쓸지</h2>
             </div>
+            <b>결제 배분</b>
+          </div>
+
+          <div v-if="ownedUsageGuides.length" class="usage-guide-list">
+            <article
+              v-for="item in ownedUsageGuides"
+              :key="item.id"
+              class="app-card usage-guide-card"
+            >
+              <div class="usage-guide-main">
+                <div>
+                  <span class="usage-label">사용 추천</span>
+                  <h3>{{ item.category }}는 {{ item.cardName }}</h3>
+                  <p>{{ item.body }}</p>
+                </div>
+                <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.cardName" />
+              </div>
+              <div class="usage-metrics">
+                <span>
+                  <small>분야 지출</small>
+                  <b>{{ krw(item.amount) }}</b>
+                </span>
+                <span>
+                  <small>{{ item.eligibleForBenefit ? '예상 혜택' : '가능 혜택' }}</small>
+                  <b>{{ krw(item.eligibleForBenefit ? item.estimatedBenefit : item.potentialBenefit) }}</b>
+                </span>
+                <span>
+                  <small>조건</small>
+                  <b>{{ usageConditionLabel(item) }}</b>
+                </span>
+              </div>
+            </article>
+          </div>
+
+          <article v-else class="app-card usage-empty-card">
+            <span>보유 카드 사용 추천</span>
+            <strong>아직 비교할 보유 카드 데이터가 부족해요</strong>
+            <p>카드와 결제 내역이 쌓이면 분야별로 어떤 보유 카드를 쓰면 좋은지 따로 보여줄게요.</p>
           </article>
-        </div>
+        </template>
+
+        <template v-else>
+          <div class="recommend-section-title issue-title">
+            <div>
+              <span>새 카드 발급 추천</span>
+              <h2>새로 발급하면 더 나아질 카드</h2>
+            </div>
+            <b>미보유 카드</b>
+          </div>
+
+          <div class="recommend-list">
+            <article
+              v-for="item in recommendationItems"
+              :key="item.id"
+              class="app-card recommend-card"
+              @click="router.push(`/recommendations/${item.id}`)"
+            >
+              <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.name" />
+              <div>
+                <span>발급 추천 · {{ item.issuer }}</span>
+                <h2>{{ item.name }}</h2>
+                <p>{{ item.reason }}</p>
+                <div v-if="item.performanceFill" class="fill-economics">
+                  <span>
+                    <small>다음 달 조건</small>
+                    <b>{{ krw(item.performanceFill.remaining) }}</b>
+                  </span>
+                  <span>
+                    <small>조건 후</small>
+                    <b>{{ signedKrw(item.performanceFill.monthlyGain) }}/월</b>
+                  </span>
+                  <span>
+                    <small>추가 효율</small>
+                    <b>{{ item.performanceFill.efficiency }}%</b>
+                  </span>
+                </div>
+                <div v-else class="mini-economics">
+                  <b>{{ recommendationImpact(item).value }}</b>
+                  <small>{{ recommendationImpact(item).label }}</small>
+                </div>
+              </div>
+            </article>
+          </div>
+        </template>
       </div>
     </template>
   </section>
@@ -196,6 +200,7 @@ import { fetchCardRecommendationBundle } from '@/services/api'
 const route = useRoute()
 const router = useRouter()
 const bundle = ref(null)
+const isUsageMode = computed(() => route.name === 'RecommendationUsage' || route.query.mode === 'usage')
 const defaultEconomics = {
   expectedMonthlyBenefit: 0,
   monthlyAnnualFee: 0,
