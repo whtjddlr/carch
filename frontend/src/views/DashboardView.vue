@@ -26,7 +26,7 @@
         <div class="greet">
           <div class="greet-copy">
             <span>안녕하세요, {{ user.name }}님</span>
-            <strong>오늘도 선명한 하루 보내세요.</strong>
+            <strong>{{ greetingMessage }}</strong>
           </div>
         </div>
         <div class="spend-figure">
@@ -161,43 +161,35 @@
         </RouterLink>
       </div>
 
-      <section v-if="merchantRecommendation" class="section-block payment-advice-section">
+      <section v-if="categoryGuides.length" class="section-block category-guide-section">
         <div class="section-head">
-          <h2>보유 카드 사용 가이드</h2>
-          <RouterLink :to="merchantRecommendationLink">소비계획</RouterLink>
+          <h2>분야별 카드 추천</h2>
+          <RouterLink to="/recommendations/new">더보기</RouterLink>
         </div>
-        <RouterLink class="payment-advice-card" :to="merchantRecommendationLink">
-          <div class="advice-topline">
-            <span><Sparkles :size="14" /> 예정 지출 가이드</span>
-            <b v-if="merchantRecommendation.extraBenefit > 0">+{{ krw(merchantRecommendation.extraBenefit) }}</b>
-            <b v-else-if="merchantRecommendation.isBlocked">다음달 준비</b>
-            <b v-else>적합</b>
-          </div>
-          <div class="advice-main">
-            <div class="advice-copy">
-              <span>{{ merchantRecommendation.category }} · {{ merchantRecommendation.merchant }}</span>
-              <strong>{{ merchantRecommendation.headline }}</strong>
-              <p>{{ merchantRecommendation.message }}</p>
-              <small class="advice-performance" :class="merchantRecommendation.performanceTone">
-                {{ merchantRecommendation.performanceNote }}
-              </small>
+        <div class="category-guide-list">
+          <RouterLink
+            v-for="guide in categoryGuides"
+            :key="guide.label"
+            class="category-guide-row"
+            :to="{ path: '/recommendations/new', query: { category: guide.label } }"
+          >
+            <span class="cg-emoji">{{ guide.icon }}</span>
+            <div class="cg-info">
+              <span class="cg-cat">{{ guide.label }}</span>
+              <strong>{{ guide.card.name }}</strong>
+              <small v-if="guide.benefitText">{{ guide.benefitText }}</small>
             </div>
-            <span class="advice-card-image">
+            <span class="cg-card-img">
               <img
-                v-if="merchantRecommendation.recommendedCard.imageUrl"
-                :src="merchantRecommendation.recommendedCard.imageUrl"
-                :alt="merchantRecommendation.recommendedCard.name"
-                :class="cardImageClass(merchantRecommendation.recommendedCard)"
-                @load="setImageOrientation(merchantRecommendation.recommendedCard.id, $event)"
+                v-if="guide.card.imageUrl"
+                :src="guide.card.imageUrl"
+                :alt="guide.card.name"
+                :class="cardImageClass(guide.card)"
+                @load="setImageOrientation(guide.card.id, $event)"
               />
             </span>
-          </div>
-          <div class="advice-route">
-            <span>{{ merchantRecommendation.currentCard.name }}</span>
-            <i aria-hidden="true" />
-            <strong>{{ merchantRecommendation.routeTargetLabel }}</strong>
-          </div>
-        </RouterLink>
+          </RouterLink>
+        </div>
       </section>
 
       <section class="section-block">
@@ -294,6 +286,20 @@ import { readCustomBudgetCategories } from '@/services/budgetStorage'
 import { cardPerformance, scoreCardBenefit } from '@/utils/cardPerformance'
 
 const router = useRouter()
+
+const greetingMessages = [
+  '오늘도 화이팅이에요!',
+  '좋은 하루 보내세요 ☀️',
+  '오늘도 수고 많아요 💪',
+  '행복한 하루 되세요',
+  '매일매일 응원할게요',
+  '오늘도 알찬 하루 보내요',
+  '잘하고 있어요, 힘내요!',
+  '기분 좋은 하루 되세요 ✨',
+  '오늘도 즐거운 소비 되세요',
+]
+const greetingMessage = greetingMessages[Math.floor(Math.random() * greetingMessages.length)]
+
 const cards = ref(mockCards)
 const transactions = ref(mockTransactions)
 const activeCardIndex = ref(0)
@@ -346,6 +352,33 @@ const merchantRecommendation = computed(() => {
     || futureRows[0]
     || null
 })
+const categoryGuideDefs = [
+  { label: '외식', icon: '🍽️', keywords: ['음식', '외식', '식당', '카페', '음식점', '배달', '맛집', '푸드', '베이커리'] },
+  { label: '쇼핑', icon: '🛍️', keywords: ['쇼핑', '마트', '온라인', '백화점', '이마트', '쿠팡', '편의점', '아울렛', '면세'] },
+]
+
+function bestCardForKeywords(keywords) {
+  const list = cards.value || []
+  for (const card of list) {
+    const benefitList = card.benefits || []
+    const matched = benefitList.find((benefit) => keywords.some((k) => String(benefit).includes(k)))
+    const haystack = [benefitList.join(' '), card.benefitSummary || '', card.titleDescription || '', card.name || ''].join(' ')
+    if (matched || keywords.some((k) => haystack.includes(k))) {
+      return { card, benefitText: matched || card.benefitSummary || '' }
+    }
+  }
+  return list[0] ? { card: list[0], benefitText: list[0].benefitSummary || '' } : null
+}
+
+const categoryGuides = computed(() =>
+  categoryGuideDefs
+    .map((def) => {
+      const result = bestCardForKeywords(def.keywords)
+      return result ? { ...def, card: result.card, benefitText: result.benefitText } : null
+    })
+    .filter(Boolean),
+)
+
 const merchantRecommendationLink = computed(() => {
   const item = merchantRecommendation.value
   if (!item) return '/budget'
@@ -936,7 +969,7 @@ onMounted(async () => {
 .greet-copy span {
   display: block;
   color: #17202b !important;
-  font-size: 12.5px;
+  font-size: 15px;
   font-weight: 900;
   line-height: 1.24;
 }
@@ -2061,6 +2094,96 @@ onMounted(async () => {
   stroke-width: 2.25;
 }
 
+.category-guide-section {
+  margin-top: 18px;
+}
+
+.category-guide-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.category-guide-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 15px;
+  padding: 12px 14px;
+  background: rgba(44, 78, 114, 0.045);
+  color: inherit;
+  text-decoration: none;
+}
+
+.cg-emoji {
+  flex-shrink: 0;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.cg-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.cg-info .cg-cat {
+  display: block;
+  color: #2c4e72;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.cg-info strong {
+  display: block;
+  margin-top: 1px;
+  color: #17202b;
+  font-size: 14px;
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cg-info small {
+  display: block;
+  margin-top: 1px;
+  color: #6e6e73;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cg-card-img {
+  position: relative;
+  flex-shrink: 0;
+  width: 42px;
+  height: 27px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #e8edf2;
+  box-shadow: 0 1px 4px rgba(36, 54, 79, 0.2);
+}
+
+.cg-card-img img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cg-card-img img.is-portrait {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 27px;
+  height: 42px;
+  max-width: none;
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
 .payment-advice-section {
   margin-top: 18px;
 }
@@ -2329,6 +2452,7 @@ onMounted(async () => {
   left: 50%;
   width: 24px;
   height: 15px;
+  max-width: none;
   transform: translate(-50%, -50%) rotate(90deg);
 }
 

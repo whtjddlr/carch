@@ -2,16 +2,14 @@
   <section class="screen auth-screen">
     <div class="auth-hero">
       <div class="brand-mark">
-        <img src="/brand/carch-title-bird.png" alt="Carch" />
+        <img src="/brand/carch-wordmark-transparent.png" alt="Carch" />
       </div>
-      <h1>{{ isSignup ? 'Carch 시작하기' : 'Carch 로그인' }}</h1>
       <p>카드를 읽고 소비를 설계하는 지갑</p>
     </div>
 
     <form class="auth-form" @submit.prevent="submitEmail">
       <div class="auth-title">
-        <strong>{{ isSignup ? '계정 만들기' : '로그인' }}</strong>
-        <span>{{ isSignup ? '나의 카드 흐름을 저장합니다.' : '내 소비 분석으로 이어집니다.' }}</span>
+        <strong>{{ isSignup ? '회원가입' : '로그인' }}</strong>
       </div>
 
       <label v-if="isSignup">
@@ -175,19 +173,20 @@ const startSocial = async (provider) => {
 
 .brand-mark {
   display: grid;
-  width: min(196px, 56vw);
-  height: 72px;
+  width: min(300px, 82vw);
+  height: 124px;
   place-items: center;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.7);
-  box-shadow: 0 18px 36px rgba(36, 54, 79, 0.1);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .brand-mark img {
   display: block;
-  width: 82%;
+  width: 84%;
   height: auto;
   object-fit: contain;
+  transform: translateX(-16px);
 }
 
 .auth-hero h1 {
@@ -198,7 +197,7 @@ const startSocial = async (provider) => {
 }
 
 .auth-hero p {
-  margin: 0;
+  margin: 16px 0 0;
   color: var(--carch-muted);
   font-size: 13px;
   font-weight: 800;

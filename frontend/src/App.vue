@@ -31,7 +31,7 @@
             >
               <span class="bottom-nav-icon">
                 <component v-if="!item.primary" :is="item.icon" :size="19" />
-                <img v-else class="magpie-icon" src="/brand/carch-logo-bird.png" alt="카치" />
+                <img v-else class="magpie-icon" src="/card-images/magpie-face2.png" alt="카치" />
               </span>
               <span>{{ item.label }}</span>
             </RouterLink>
