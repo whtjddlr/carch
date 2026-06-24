@@ -27,6 +27,10 @@ CURATED_CARD_COPY = {
         'benefits': ['카페 할인', '생활 영역 할인', '전월 실적 40만원'],
     },
 }
+CURATED_VERIFIED_CARD_IDS = {10029, 10071, 10106, 10107, 10612}
+CURATED_BENEFIT_EXCLUDED_SCOPES = {
+    10106: {'쇼핑 멤버십'},
+}
 PREFERRED_CARD_IMAGES = {
 }
 
@@ -254,8 +258,28 @@ def list_benefits(card_ad_id, limit=5):
 
 def serialize_card(row, request, include_benefits=False):
     card_ad_id = row['card_ad_id']
-    benefits = list_benefits(card_ad_id, 6 if include_benefits else 3)
-    status_benefits = list_benefits(card_ad_id, None) if include_benefits else benefits
+    excluded_scopes = CURATED_BENEFIT_EXCLUDED_SCOPES.get(card_ad_id, set())
+    benefits = [
+        benefit
+        for benefit in list_benefits(card_ad_id, 6 if include_benefits else 3)
+        if benefit.get('scope') not in excluded_scopes
+    ]
+    status_benefits = [
+        benefit
+        for benefit in (list_benefits(card_ad_id, None) if include_benefits else benefits)
+        if benefit.get('scope') not in excluded_scopes
+    ]
+    status = benefit_data_status(status_benefits)
+    if card_ad_id in CURATED_VERIFIED_CARD_IDS and status_benefits:
+        status = {
+            **status,
+            'status': 'verified',
+            'label': '검증 완료',
+            'manualInputAvailable': False,
+            'verifiedBenefitCount': len(status_benefits),
+            'totalBenefitCount': len(status_benefits),
+            'missingRuleFields': [],
+        }
     benefit_labels = [benefit['label'] for benefit in benefits]
     curated = CURATED_CARD_COPY.get(card_ad_id, {})
     display_benefits = curated.get('benefits') or benefit_labels
@@ -277,7 +301,7 @@ def serialize_card(row, request, include_benefits=False):
         'benefitSummary': curated.get('benefitSummary') or (benefit_labels[0] if benefit_labels else row['title_description']),
         'benefits': display_benefits,
         'benefitItems': benefits if include_benefits else [],
-        'benefitDataStatus': benefit_data_status(status_benefits),
+        'benefitDataStatus': status,
         'annualFee': row['domestic_annual_fee'] or 0,
         'domesticAnnualFee': row['domestic_annual_fee'] or 0,
         'domestic_annual_fee': row['domestic_annual_fee'] or 0,

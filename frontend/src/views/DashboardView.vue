@@ -386,10 +386,13 @@ function buildCategoryGuideFromOwnedGuide(item, index) {
   const estimatedBenefit = Number(item.estimatedBenefit || 0)
   const potentialBenefit = Number(item.potentialBenefit || 0)
   const remaining = Number(item.remainingCurrentSpend || 0)
+  const maxBenefit = Math.max(estimatedBenefit, potentialBenefit)
   const benefitText = estimatedBenefit > 0
-    ? `${item.benefitLabel || '예상 혜택'} · 월 ${krw(estimatedBenefit)}`
+    ? `이번 달 최대 ${krw(maxBenefit)} 혜택`
+    : item.nextMonthEligible && potentialBenefit > 0
+      ? `다음 달엔 최대 ${krw(potentialBenefit)}`
     : potentialBenefit > 0 && remaining > 0
-      ? `조건까지 ${krw(remaining)} · 월 ${krw(potentialBenefit)} 가능`
+      ? `조건 채우면 최대 ${krw(potentialBenefit)}`
       : item.benefitLabel || item.body || card.benefitSummary || ''
 
   return {
@@ -398,8 +401,23 @@ function buildCategoryGuideFromOwnedGuide(item, index) {
     icon: categoryIcon(label),
     card,
     benefitText,
+    estimatedBenefit,
+    potentialBenefit,
+    remainingCurrentSpend: remaining,
+    eligibleForBenefit: Boolean(item.eligibleForBenefit),
+    nextMonthEligible: Boolean(item.nextMonthEligible),
     route: { path: '/recommendations/usage', query: { category: label, cardId: card.id } },
   }
+}
+
+function categoryGuidePriority(item = {}) {
+  const estimatedBenefit = Number(item.estimatedBenefit || 0)
+  const potentialBenefit = Number(item.potentialBenefit || 0)
+  const remaining = Number(item.remainingCurrentSpend || 0)
+  if (item.eligibleForBenefit && estimatedBenefit > 0) return 400000 + estimatedBenefit
+  if (item.nextMonthEligible && potentialBenefit > 0) return 300000 + potentialBenefit
+  if (potentialBenefit > 0 && remaining > 0) return 200000 + potentialBenefit - Math.min(remaining, 1000000) / 100
+  return potentialBenefit
 }
 
 function buildCategoryGuideFromRouting(item, index) {
@@ -445,6 +463,7 @@ const backendCategoryGuides = computed(() => {
   const ownedGuides = (recommendationBundle.value?.ownedCategoryGuides || [])
     .map((item, index) => buildCategoryGuideFromOwnedGuide(item, index))
     .filter(Boolean)
+    .sort((a, b) => categoryGuidePriority(b) - categoryGuidePriority(a))
   if (ownedGuides.length) return ownedGuides.slice(0, 3)
 
   return (recommendationBundle.value?.routingSuggestions || [])
