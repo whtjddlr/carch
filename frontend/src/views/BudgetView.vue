@@ -5,7 +5,6 @@
         <AppBackButton fallback="/budget" />
         <div>
           <h1>6월 예산</h1>
-          <p>카테고리별 지출 현황</p>
         </div>
         <button
           class="icon-button budget-edit-button"

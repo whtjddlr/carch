@@ -4,7 +4,6 @@
       <AppBackButton fallback="/cards" />
       <div>
         <h1>커뮤니티</h1>
-        <p>카드 후기와 혜택 전략을 함께 나눠보세요.</p>
       </div>
     </header>
 

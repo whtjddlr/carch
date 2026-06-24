@@ -4,7 +4,6 @@
       <AppBackButton fallback="/cards" />
       <div class="analytics-title">
         <h1>카드 소비 분석</h1>
-        <p>이번 달 소비 흐름과 카드 개선 포인트</p>
       </div>
       <button
         class="refresh-analysis-button"

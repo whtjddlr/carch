@@ -48,16 +48,16 @@
 <script setup>
 import { computed, nextTick, onErrorCaptured, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { BarChart3, ClipboardList, Code2, CreditCard, Users } from 'lucide-vue-next'
+import { BarChart3, ClipboardList, Code2, Home, Users } from 'lucide-vue-next'
 
 const isDev = import.meta.env.DEV
 const currentRoute = useRoute()
 const routeError = ref(null)
 const routeErrorMessage = computed(() => routeError.value?.message || '잠시 후 다시 시도해 주세요.')
 const navItems = [
-  { path: '/cards', icon: CreditCard, label: '카드', matches: ['/cards', '/recommendations', '/transactions'] },
+  { path: '/cards', icon: Home, label: '홈', matches: ['/cards', '/recommendations', '/transactions'] },
   { path: '/analytics', icon: BarChart3, label: '분석', matches: ['/analytics', '/reports'] },
-  { path: '/chat', icon: null, label: '카치', primary: true, matches: ['/chat'] },
+  { path: '/chat', icon: null, label: '카치AI', primary: true, matches: ['/chat'] },
   { path: '/budget', icon: ClipboardList, label: '소비계획', matches: ['/budget', '/plans'] },
   { path: '/community', icon: Users, label: '커뮤니티', matches: ['/community'] },
 ]

@@ -2294,7 +2294,7 @@ onMounted(async () => {
   width: 27px;
   height: 42px;
   max-width: none;
-  transform: translate(-50%, -50%) rotate(90deg);
+  transform: translate(-50%, -50%) rotate(-90deg);
 }
 
 .section-block {

@@ -234,13 +234,11 @@ a {
   .detail-header,
   .editor-header
 ) {
-  border-radius: 0 0 28px 28px;
-  background:
-    radial-gradient(circle at 18% 0%, rgba(15, 95, 174, 0.08), transparent 38%),
-    linear-gradient(180deg, #ffffff 0%, #fbfdff 62%, #edf4fb 100%) !important;
+  border-radius: 0 !important;
+  background: var(--carch-page) !important;
   color: var(--carch-ink) !important;
-  box-shadow: 0 14px 36px rgba(36, 54, 79, 0.1);
-  padding-bottom: clamp(18px, 5vw, 24px) !important;
+  box-shadow: none !important;
+  padding-bottom: clamp(14px, 4vw, 20px) !important;
 }
 
 .app-backdrop .phone-shell :is(
@@ -258,8 +256,23 @@ a {
   .editor-header
 ) :is(h1, h2, h3, strong, b) {
   color: var(--carch-ink) !important;
-  font-weight: 900;
+  font-weight: 500;
   letter-spacing: 0;
+}
+
+.app-backdrop .phone-shell :is(
+  .simple-header,
+  .budget-header,
+  .budget-list-header,
+  .plans-header,
+  .chat-header,
+  .utility-header,
+  .recommend-header,
+  .detail-header,
+  .editor-header
+) h1 {
+  font-size: 20px !important;
+  line-height: 1.2 !important;
 }
 
 .app-backdrop .phone-shell :is(
@@ -276,7 +289,7 @@ a {
   .detail-header,
   .editor-header
 ) :is(p, span, small) {
-  color: #6f7d8c !important;
+  color: var(--carch-muted) !important;
 }
 
 .app-backdrop .phone-shell :is(
@@ -293,10 +306,10 @@ a {
   .detail-header,
   .editor-header
 ) :is(a, button, .back-link, .back-button) {
-  border: 1px solid rgba(138, 154, 173, 0.18) !important;
-  background: rgba(255, 255, 255, 0.92) !important;
-  color: #213a56 !important;
-  box-shadow: 0 8px 18px rgba(36, 54, 79, 0.09) !important;
+  border: 1px solid var(--carch-control-border) !important;
+  background: transparent !important;
+  color: var(--carch-ink) !important;
+  box-shadow: none !important;
   backdrop-filter: blur(10px) saturate(1.05);
 }
 
@@ -307,33 +320,50 @@ a {
   height: 38px;
 }
 
+
+/* 헤더(뒤로가기/제목/우측요소) 위치 전 화면 통일 */
+.app-backdrop .phone-shell :is(
+  .simple-header,
+  .plans-header,
+  .utility-header,
+  .recommend-header,
+  .editor-header,
+  .detail-header
+) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 14px !important;
+  padding: 22px 20px !important;
+}
+
+.app-backdrop .phone-shell :is(
+  .simple-header,
+  .plans-header,
+  .utility-header,
+  .recommend-header,
+  .editor-header,
+  .detail-header
+) > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-backdrop .phone-shell :is(.budget-list-header, .budget-header) .header-row {
+  align-items: center !important;
+  gap: 14px !important;
+}
+
+.app-backdrop .phone-shell :is(.budget-list-header, .budget-header) .header-row > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .simple-header > div,
 .chat-header > div,
 .plans-header > div {
   flex: 1;
   min-width: 0;
-}
-
-.app-backdrop .phone-shell :is(
-  .simple-header,
-  .budget-header,
-  .budget-list-header,
-  .plans-header,
-  .chat-header,
-  .create-top,
-  .create-header,
-  .utility-header,
-  .recommend-header,
-  .detail-header,
-  .editor-header
-) h1::before {
-  display: inline-block;
-  width: 40px;
-  height: 40px;
-  margin-right: 7px;
-  background: url('/brand/carch-title-bird.png') center / contain no-repeat;
-  content: '';
-  vertical-align: -11px;
 }
 
 .app-card {

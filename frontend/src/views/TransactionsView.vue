@@ -4,7 +4,6 @@
       <AppBackButton fallback="/cards" />
       <div>
         <h1>거래내역</h1>
-        <p>최근 카드 사용 내역을 확인하세요.</p>
       </div>
     </header>
     <div class="screen-scroll scrollbar-hide page-padding">

@@ -3,13 +3,8 @@
     <header class="chat-header blue-gradient">
       <AppBackButton fallback="/cards" />
       <div>
-        <span class="eyebrow">
-          <Sparkles :size="13" />
-          {{ isSending ? '응답 생성 중' : 'CARCH AI' }}
-        </span>
         <h1>AI 카드 상담</h1>
       </div>
-      <Bot :size="28" />
     </header>
 
     <div ref="scrollRef" class="screen-scroll scrollbar-hide chat-body">
@@ -89,7 +84,7 @@
 
 <script setup>
 import { nextTick, ref } from 'vue'
-import { ArrowRight, Bot, SendHorizontal, Sparkles } from 'lucide-vue-next'
+import { ArrowRight, SendHorizontal } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { sendChatMessage } from '@/services/api'
 

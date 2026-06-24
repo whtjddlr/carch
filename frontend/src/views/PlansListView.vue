@@ -4,7 +4,6 @@
       <AppBackButton fallback="/budget" />
       <div>
         <h1>목표 지출 계획</h1>
-        <p>월 예산과 별도로 큰 지출과 카드 사용 계획을 관리하세요.</p>
       </div>
     </header>
 
