@@ -75,13 +75,8 @@
     <template v-else>
       <header class="recommend-header blue-gradient">
         <AppBackButton fallback="/cards" />
-        <div class="recommend-header-main">
-          <p>{{ isUsageMode ? '소비 추천' : '새 카드 추천' }}</p>
-          <h1 v-if="isUsageMode">보유 카드로<br />어디에 쓸지 정리할게요</h1>
-          <h1 v-else>소비 패턴에 맞는<br />새 카드를 찾아볼게요</h1>
-          <div class="recommend-mode-pills">
-            <span>{{ isUsageMode ? '보유 카드 사용 추천' : '새 카드 발급 추천' }}</span>
-          </div>
+        <div>
+          <h1>{{ isUsageMode ? '소비 추천' : '새 카드 추천' }}</h1>
         </div>
       </header>
 

@@ -13,8 +13,9 @@
       >
         <Trash2 :size="18" />
       </button>
-      <h1 v-if="!isCardDetail">{{ pageTitle }}</h1>
-      <p v-if="!isCardDetail">{{ pageDescription }}</p>
+      <div v-if="!isCardDetail">
+        <h1>{{ pageTitle }}</h1>
+      </div>
     </header>
 
     <div class="screen-scroll scrollbar-hide utility-body">

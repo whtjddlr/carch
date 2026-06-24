@@ -1,11 +1,12 @@
 <template>
   <section class="screen">
     <header class="create-top">
-      <button class="muted-icon" type="button" aria-label="닫기" @click="showCancel = true">
-        <ArrowLeft :size="19" />
+      <button class="icon-button app-back-button" type="button" aria-label="뒤로가기" @click="showCancel = true">
+        <ArrowLeft :size="18" />
       </button>
-      <h1>목표 지출 계획 만들기</h1>
-      <span />
+      <div>
+        <h1>목표 지출 계획 만들기</h1>
+      </div>
     </header>
     <PlanStepIndicator :step="currentStep" />
 

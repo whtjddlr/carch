@@ -265,12 +265,15 @@ a {
   .budget-header,
   .budget-list-header,
   .plans-header,
+  .create-header,
+  .create-top,
   .chat-header,
   .utility-header,
   .recommend-header,
   .detail-header,
   .editor-header
 ) h1 {
+  margin: 0 !important;
   font-size: 20px !important;
   line-height: 1.2 !important;
 }
@@ -336,6 +339,8 @@ a {
   .simple-header,
   .chat-header,
   .plans-header,
+  .create-header,
+  .create-top,
   .utility-header,
   .recommend-header,
   .editor-header,

@@ -3,7 +3,6 @@
     <header class="create-header blue-gradient">
       <AppBackButton fallback="/transactions" />
       <div>
-        <p>소비내역 추가</p>
         <h1>AI 입력 보정</h1>
       </div>
     </header>

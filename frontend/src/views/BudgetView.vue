@@ -105,9 +105,8 @@ function categoryUsagePercent(category) {
 
 <style scoped>
 .budget-header {
-  padding: 24px 20px;
-  border: 1px solid rgba(138, 154, 173, 0.12);
-  border-top: 0;
+  padding: 22px 20px;
+  border: 0;
   border-radius: 0 0 28px 28px;
   color: #17202b;
   background:
