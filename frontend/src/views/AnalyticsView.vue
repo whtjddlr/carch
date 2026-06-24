@@ -23,37 +23,44 @@
       </div>
 
       <article class="analysis-hero app-card" :class="{ empty: !hasUsableAnalysis }">
-        <div class="hero-copy">
-          <div class="hero-month">
-            <button type="button" class="month-chip" @click="isMonthMenuOpen = !isMonthMenuOpen">
-              {{ selectedMonthLabel }}
-              <ChevronDown :size="13" :stroke-width="2.6" />
-            </button>
-            <template v-if="isMonthMenuOpen">
-              <div class="month-backdrop" @click="isMonthMenuOpen = false"></div>
-              <div class="month-menu">
-                <button
-                  v-for="m in monthOptions"
-                  :key="m"
-                  type="button"
-                  :class="{ active: monthLabel(m) === selectedMonthLabel }"
-                  @click="selectMonth(m)"
-                >{{ monthLabel(m) }}</button>
+        <div class="hero-month">
+          <button type="button" class="month-chip" @click="isMonthMenuOpen ? (isMonthMenuOpen = false) : openMonthMenu()">
+            {{ periodYear }}년 {{ periodMonthNum }}월
+            <ChevronDown :size="13" :stroke-width="2.6" />
+          </button>
+          <span class="month-suffix">의 소비</span>
+          <template v-if="isMonthMenuOpen">
+            <div class="month-backdrop" @click="isMonthMenuOpen = false"></div>
+            <div class="month-dial">
+              <div class="dial-band"></div>
+              <div class="dial-cols">
+                <div ref="yearColRef" class="dial-col scrollbar-hide" @scroll="onYearScroll">
+                  <button
+                    v-for="y in dialYears"
+                    :key="y"
+                    type="button"
+                    class="dial-item"
+                    :class="{ sel: y === dialYear }"
+                    @click="applyDial(y, dialMonth)"
+                  >{{ y }}년</button>
+                </div>
+                <div ref="monthColRef" class="dial-col scrollbar-hide" @scroll="onMonthScroll">
+                  <button
+                    v-for="mm in dialMonths"
+                    :key="mm"
+                    type="button"
+                    class="dial-item"
+                    :class="{ sel: mm === dialMonth }"
+                    @click="applyDial(dialYear, mm)"
+                  >{{ mm }}월</button>
+                </div>
               </div>
-            </template>
-          </div>
-          <strong>{{ heroAmountLabel }}</strong>
+              <button type="button" class="dial-confirm" @click="isMonthMenuOpen = false">확인</button>
+            </div>
+          </template>
         </div>
-        <div v-if="topCategory" class="hero-focus">
-          <small>최대 지출</small>
-          <b>{{ topCategory?.category || '-' }}</b>
-          <span>{{ topCategory ? `${topCategory.percent}%` : '0%' }}</span>
-        </div>
-        <div v-else class="hero-focus muted">
-          <small>상태</small>
-          <b>{{ isLoading ? '준비 중' : '대기' }}</b>
-          <span>내역 필요</span>
-        </div>
+        <strong class="hero-amount">{{ heroAmountLabel }}</strong>
+        <p v-if="heroInsight" class="hero-insight" :style="{ color: heroInsightColor }">{{ heroInsight }}</p>
       </article>
 
       <div class="insight-actions">
@@ -162,52 +169,63 @@
         </div>
       </article>
 
-      <article v-if="hasUsableAnalysis && topRecommendation" class="analysis-card app-card recommendation-card">
-        <div class="rec-head">
-          <span class="rec-thumb">
-            <img
-              v-if="topRecommendation.imageUrl"
-              :src="topRecommendation.imageUrl"
-              :alt="topRecommendation.name"
-              :class="thumbOrientation['rec']"
-              @load="onThumbLoad('rec', $event)"
-            />
-            <Sparkles v-else :size="20" :stroke-width="2.2" />
-          </span>
-          <div class="rec-head-copy">
-            <small>새 카드 추천</small>
-            <strong>{{ topRecommendation.name }}</strong>
-          </div>
-          <b v-if="recommendationMonthlyGain" class="rec-gain"><i>예상 약</i> {{ recommendationMonthlyGain }}<i>/월</i></b>
+      <section v-if="hasUsableAnalysis && recommendationCards.length" class="rec-section">
+        <div class="rec-section-head">
+          <strong>새 카드 추천</strong>
+          <RouterLink to="/recommendations/new">전체 →</RouterLink>
         </div>
-
-        <div v-if="recommendationBenefitRows.length" class="rec-benefits">
-          <div v-for="b in recommendationBenefitRows" :key="b.id" class="rec-benefit-row">
-            <span class="rec-benefit-emoji">{{ b.icon }}</span>
-            <div class="rec-benefit-main">
-              <div class="rec-benefit-top">
-                <strong>{{ b.field }}</strong>
-                <b>{{ b.value }}</b>
-              </div>
-              <span v-if="b.cap">{{ b.cap }}</span>
+        <article
+          v-for="reco in recommendationCards"
+          :key="reco.id"
+          class="analysis-card app-card recommendation-card"
+        >
+          <div class="rec-head">
+            <span class="rec-rank" :class="`rank-${reco.rank}`">{{ reco.rank }}순위</span>
+            <span class="rec-thumb">
+              <img
+                v-if="reco.imageUrl"
+                :src="reco.imageUrl"
+                :alt="reco.name"
+                :class="thumbOrientation[`rec-${reco.id}`]"
+                @load="onThumbLoad(`rec-${reco.id}`, $event)"
+              />
+              <Sparkles v-else :size="20" :stroke-width="2.2" />
+            </span>
+            <div class="rec-head-copy">
+              <strong>{{ reco.name }}</strong>
+              <small v-if="reco.gain">예상 약 {{ reco.gain }}/월 절약</small>
             </div>
           </div>
-        </div>
 
-        <div class="rec-foot">
-          <span><i>실적</i> 전월 {{ recommendationRequiredSpendLabel }}</span>
-          <RouterLink to="/recommendations/new">자세히 →</RouterLink>
-        </div>
-      </article>
+          <div v-if="reco.benefits.length" class="rec-benefits">
+            <div v-for="b in reco.benefits" :key="b.id" class="rec-benefit-row">
+              <span class="rec-benefit-emoji">{{ b.icon }}</span>
+              <div class="rec-benefit-main">
+                <div class="rec-benefit-top">
+                  <strong>{{ b.field }}</strong>
+                  <b>{{ b.value }}</b>
+                </div>
+                <span v-if="b.cap">{{ b.cap }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rec-foot">
+            <span><i>실적</i> 전월 {{ reco.requiredSpend }}</span>
+            <RouterLink to="/recommendations/new">자세히 →</RouterLink>
+          </div>
+        </article>
+      </section>
     </div>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { BarChart3, ChevronDown, ChevronRight, CreditCard, FileText, RefreshCw, Sparkles } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { cards as mockCards, krw, transactions as mockTransactions } from '@/data/mockData'
+import { demoMonthCategories, demoMonthKeys, demoMonthSummary } from '@/data/monthlyAnalytics'
 import { fetchCardRecommendationBundle, fetchSpendingSummary } from '@/services/api'
 
 const colors = ['#0f5fae', '#008c95', '#24364f', '#c49a49', '#8a9aad', '#5f6b77']
@@ -244,29 +262,65 @@ const LATEST_MONTH = '2026-06'
 const selectedMonth = ref(null)
 const isMonthMenuOpen = ref(false)
 
-const monthOptions = computed(() => {
-  const [year, month] = LATEST_MONTH.split('-').map(Number)
-  const base = year * 12 + (month - 1)
-  return Array.from({ length: 6 }, (_, i) => {
-    const idx = base - i
-    return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}`
-  })
-})
-
-function monthLabel(monthKey) {
-  return `${Number(String(monthKey).split('-')[1])}월`
-}
-
 const safeSummary = computed(() => {
-  if (selectedMonth.value) return buildMockSummary(selectedMonth.value)
+  if (selectedMonth.value) {
+    return demoMonthSummary(selectedMonth.value) || buildMockSummary(selectedMonth.value)
+  }
   return summary.value || (isLoading.value ? buildEmptySummary() : buildMockSummary())
 })
 
-const selectedMonthLabel = computed(() => monthLabel(safeSummary.value.period?.currentMonth || LATEST_MONTH))
+const periodMonthKey = computed(() => safeSummary.value.period?.currentMonth || LATEST_MONTH)
+const periodYear = computed(() => Number(periodMonthKey.value.split('-')[0]))
+const periodMonthNum = computed(() => Number(periodMonthKey.value.split('-')[1]))
 
-function selectMonth(monthKey) {
-  selectedMonth.value = monthKey === LATEST_MONTH ? null : monthKey
-  isMonthMenuOpen.value = false
+const dialYears = [2025, 2026]
+const dialMonths = Array.from({ length: 12 }, (_, i) => i + 1)
+const dialYear = ref(2026)
+const dialMonth = ref(6)
+
+const DIAL_ITEM_H = 36
+const yearColRef = ref(null)
+const monthColRef = ref(null)
+
+function openMonthMenu() {
+  dialYear.value = periodYear.value
+  dialMonth.value = periodMonthNum.value
+  isMonthMenuOpen.value = true
+}
+
+function applyDial(year, monthNum) {
+  dialYear.value = year
+  dialMonth.value = monthNum
+  const key = `${year}-${String(monthNum).padStart(2, '0')}`
+  selectedMonth.value = key === LATEST_MONTH ? null : key
+}
+
+watch(isMonthMenuOpen, async (open) => {
+  if (!open) return
+  await nextTick()
+  if (yearColRef.value) yearColRef.value.scrollTop = dialYears.indexOf(dialYear.value) * DIAL_ITEM_H
+  if (monthColRef.value) monthColRef.value.scrollTop = dialMonths.indexOf(dialMonth.value) * DIAL_ITEM_H
+})
+
+let yearScrollTimer = null
+let monthScrollTimer = null
+
+function onYearScroll() {
+  clearTimeout(yearScrollTimer)
+  yearScrollTimer = setTimeout(() => {
+    const idx = Math.round((yearColRef.value?.scrollTop || 0) / DIAL_ITEM_H)
+    const year = dialYears[Math.max(0, Math.min(dialYears.length - 1, idx))]
+    if (year && year !== dialYear.value) applyDial(year, dialMonth.value)
+  }, 110)
+}
+
+function onMonthScroll() {
+  clearTimeout(monthScrollTimer)
+  monthScrollTimer = setTimeout(() => {
+    const idx = Math.round((monthColRef.value?.scrollTop || 0) / DIAL_ITEM_H)
+    const monthNum = dialMonths[Math.max(0, Math.min(dialMonths.length - 1, idx))]
+    if (monthNum && monthNum !== dialMonth.value) applyDial(dialYear.value, monthNum)
+  }, 110)
 }
 
 function isRecurring(category) {
@@ -282,7 +336,7 @@ const topRecommendation = computed(() => recommendationBundle.value?.results?.[0
 const topRecommendationEconomics = computed(() => topRecommendation.value?.economics || {})
 
 const RECO_FIELD_RULES = [
-  [/배달/, '배달앱', '🛵'],
+  [/배달|요기요|배민|배달의민족|쿠팡이츠/, '배달앱', '🛵'],
   [/카페|커피|베이커리|디저트|스타벅스/, '카페', '☕'],
   [/음식|외식|식당|맛집|푸드|레스토랑|식비/, '음식점', '🍽️'],
   [/편의점/, '편의점', '🏪'],
@@ -315,8 +369,8 @@ function categoryIcon(name) {
   return classifyRecoField(name).icon
 }
 
-const recommendationBenefitRows = computed(() => {
-  const items = topRecommendation.value?.benefitItems || []
+function recoBenefitRows(reco) {
+  const items = reco?.benefitItems || []
   const rows = []
   const seen = new Set()
   items.forEach((item, index) => {
@@ -336,17 +390,46 @@ const recommendationBenefitRows = computed(() => {
     })
   })
   return rows.slice(0, 3)
-})
+}
 
-const recommendationMonthlyGain = computed(() => {
-  const delta = Number(topRecommendationEconomics.value.monthlyDelta || 0)
-  return delta > 0 ? `+${krw(delta)}` : ''
-})
+// 카드가 "매달"로 표시된 분야 혜택을 얼마나 커버하는지 점수화
+function recoRecurringScore(reco, recurringSet) {
+  if (!recurringSet.size) return 0
+  const fields = new Set()
+  ;(reco?.benefitItems || []).forEach((item) => {
+    const raw = String(item.scope || item.label || (item.categories || [])[0] || '')
+    fields.add(classifyRecoField(raw).label)
+    ;(item.categories || []).forEach((c) => fields.add(String(c)))
+  })
+  let score = 0
+  recurringSet.forEach((cat) => {
+    fields.forEach((field) => {
+      if (field === cat || field.includes(cat) || cat.includes(field)) score += 1
+    })
+  })
+  return score
+}
 
-const recommendationRequiredSpendLabel = computed(() => {
-  const reco = topRecommendation.value
-  const required = Number(reco?.previousMonthMinSpend ?? reco?.previous_month_min_spend ?? 0)
-  return required > 0 ? krw(required) : '실적 없음'
+// 1·2순위 추천 카드. 반복지출(매달) 선택에 맞춰 해당 분야를 커버하는 카드를 우선 정렬한다.
+const recommendationCards = computed(() => {
+  const recurring = new Set(recurringOverrides.value)
+  return [...(recommendationBundle.value?.results || [])]
+    .map((reco, index) => ({ reco, index, score: recoRecurringScore(reco, recurring) }))
+    .sort((a, b) => (b.score - a.score) || (a.index - b.index))
+    .slice(0, 2)
+    .map(({ reco }, rank) => {
+      const gain = Number(reco?.economics?.monthlyDelta || 0)
+      const required = Number(reco?.previousMonthMinSpend ?? reco?.previous_month_min_spend ?? 0)
+      return {
+        id: reco.id || reco.cardAdId || `reco-${rank}`,
+        rank: rank + 1,
+        name: reco.name,
+        imageUrl: reco.imageUrl,
+        gain: gain > 0 ? `+${krw(gain)}` : '',
+        requiredSpend: required > 0 ? krw(required) : '실적 없음',
+        benefits: recoBenefitRows(reco),
+      }
+    })
 })
 
 const trendPeriodLabel = computed(() => {
@@ -375,6 +458,49 @@ const visibleCategoryRows = computed(() => rawCategoryRows.value.slice(0, 5))
 const hasCategoryData = computed(() => rawCategoryRows.value.length > 0)
 const categoryCountLabel = computed(() => `${rawCategoryRows.value.length}개 항목`)
 const topCategory = computed(() => rawCategoryRows.value[0] || null)
+
+// 직전 달 카테고리(증감 비교) — 데모 데이터에서 가져온다
+const previousMonthCategories = computed(() => {
+  const key = periodMonthKey.value
+  const keys = demoMonthKeys()
+  let prevKey = null
+  if (key === LATEST_MONTH) prevKey = '2026-05'
+  else {
+    const idx = keys.indexOf(key)
+    if (idx > 0) prevKey = keys[idx - 1]
+  }
+  return prevKey ? demoMonthCategories(prevKey) : null
+})
+
+const mostIncreasedCategory = computed(() => {
+  const prev = previousMonthCategories.value
+  if (!prev) return null
+  let best = null
+  rawCategoryRows.value.forEach((row) => {
+    const before = Number(prev[row.category] || 0)
+    const diff = Number(row.amount || 0) - before
+    if (before > 0 && diff > 0 && (!best || diff > best.diff)) {
+      best = { category: row.category, diff, pct: Math.round((diff / before) * 100) }
+    }
+  })
+  return best
+})
+
+const heroInsight = computed(() => {
+  const top = topCategory.value
+  if (!top) return ''
+  const inc = mostIncreasedCategory.value
+  if (inc && inc.category !== top.category) {
+    return `${top.category} 최다 지출 · 지난달보다 ${inc.category} +${inc.pct}% ↑`
+  }
+  if (inc) {
+    return `${top.category}에 가장 많이 썼어요 · 지난달보다 +${inc.pct}% ↑`
+  }
+  return `${top.category}에 가장 많이 썼어요`
+})
+
+const heroInsightColor = computed(() => topCategory.value?.color || '#0f5fae')
+
 const heroMessage = computed(() => {
   if (!totalExpense.value) return '결제 내역을 쌓으면 소비 성향이 선명하게 보여요.'
   if (!topCategory.value) return '이번 달 소비 데이터를 정리했습니다.'
@@ -705,10 +831,7 @@ onMounted(loadSummary)
 }
 
 .analysis-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: start;
+  display: block;
   overflow: visible;
   border: 1px solid rgba(36, 54, 79, 0.08) !important;
   border-radius: 22px !important;
@@ -719,18 +842,7 @@ onMounted(loadSummary)
   box-shadow: 0 16px 34px rgba(36, 54, 79, 0.08) !important;
 }
 
-.analysis-hero.empty {
-  align-items: center;
-}
-
-.hero-copy span,
-.section-title-row span {
-  color: #0f5fae;
-  font-size: 11px;
-  font-weight: 950;
-}
-
-.hero-copy strong {
+.hero-amount {
   display: block;
   margin-top: 7px;
   color: #17202b;
@@ -740,58 +852,28 @@ onMounted(loadSummary)
   line-height: 1.03;
 }
 
-.hero-copy p {
-  margin: 10px 0 0;
-  color: #5f6b77;
+.hero-insight {
+  display: inline-flex;
+  align-items: center;
+  margin: 9px 0 0;
   font-size: 12px;
-  font-weight: 800;
-  line-height: 1.5;
+  font-weight: 850;
+  line-height: 1.4;
   word-break: keep-all;
-}
-
-.hero-focus {
-  display: grid;
-  min-width: 88px;
-  justify-items: center;
-  gap: 1px;
-  border-radius: 18px;
-  padding: 12px 14px;
-  background: linear-gradient(150deg, #1f6feb 0%, #0aa5a0 100%);
-  color: #fff;
-  box-shadow: 0 12px 22px rgba(15, 95, 174, 0.26);
-}
-
-.hero-focus small {
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.hero-focus b {
-  margin-top: 4px;
-  font-size: 17px;
-  font-weight: 950;
-}
-
-.hero-focus span {
-  margin-top: 5px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.22);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 950;
-}
-
-.hero-focus.muted {
-  background: rgba(36, 54, 79, 0.08) !important;
-  color: #24364f;
-  box-shadow: none;
 }
 
 .hero-month {
   position: relative;
-  margin-bottom: 5px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-bottom: 2px;
+}
+
+.month-suffix {
+  color: #5f6b77;
+  font-size: 13px;
+  font-weight: 850;
 }
 
 .month-chip {
@@ -814,40 +896,78 @@ onMounted(loadSummary)
   z-index: 20;
 }
 
-.month-menu {
+.month-dial {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   left: 0;
   z-index: 21;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-  width: 188px;
-  border-radius: 14px;
-  padding: 8px;
+  width: 196px;
+  border-radius: 16px;
+  padding: 10px 12px 12px;
   background: #fff;
   box-shadow: 0 18px 40px rgba(36, 54, 79, 0.2);
 }
 
-.month-menu button {
-  min-height: 32px;
-  border: 0;
-  border-radius: 9px;
-  background: #f3f6f8;
-  color: #5f6b77;
-  font-size: 12px;
-  font-weight: 900;
-  cursor: pointer;
+.dial-cols {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  height: 132px;
 }
 
-.month-menu button.active {
+.dial-band {
+  position: absolute;
+  top: 48px;
+  right: 12px;
+  left: 12px;
+  height: 36px;
+  z-index: 0;
+  border-radius: 10px;
+  background: rgba(15, 95, 174, 0.09);
+  pointer-events: none;
+}
+
+.dial-col {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  padding: 48px 0;
+}
+
+.dial-item {
+  flex: 0 0 36px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: #9aa6b3;
+  font-size: 15px;
+  font-weight: 800;
+  scroll-snap-align: center;
+  cursor: pointer;
+  transition: color 140ms ease, transform 140ms ease;
+}
+
+.dial-item.sel {
+  color: #0f5fae;
+  font-weight: 950;
+  transform: scale(1.08);
+}
+
+.dial-confirm {
+  width: 100%;
+  min-height: 36px;
+  margin-top: 8px;
+  border: 0;
+  border-radius: 10px;
   background: #0f5fae;
   color: #fff;
-}
-
-.hero-focus.muted small,
-.hero-focus.muted span {
-  color: #7a8592;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
 }
 
 .insight-actions {
@@ -1397,22 +1517,66 @@ onMounted(loadSummary)
   min-width: 0;
 }
 
-.rec-head-copy small {
-  display: block;
-  color: #0f5fae;
-  font-size: 11px;
-  font-weight: 900;
-}
-
 .rec-head-copy strong {
   display: block;
   overflow: hidden;
-  margin-top: 2px;
   color: #17202b;
   font-size: 15px;
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.rec-head-copy small {
+  display: block;
+  margin-top: 2px;
+  color: #15a34a;
+  font-size: 11.5px;
+  font-weight: 900;
+}
+
+.rec-section {
+  margin-top: 12px;
+}
+
+.rec-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+  padding: 0 2px;
+}
+
+.rec-section-head strong {
+  color: #17202b;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.rec-section-head a {
+  color: #0f5fae;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.rec-rank {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.rec-rank.rank-1 {
+  background: rgba(196, 154, 73, 0.16);
+  color: #b5852b;
+}
+
+.rec-rank.rank-2 {
+  background: rgba(36, 54, 79, 0.1);
+  color: #44546b;
 }
 
 .rec-gain {
