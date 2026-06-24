@@ -71,6 +71,11 @@ CARD_HINTS = [
 ]
 
 DEFAULT_OWNED_CARD_IDS = ['10106', '10612', '10029']
+PREFERRED_RECOMMENDATION_CARD_IDS = ['10107', '10071']
+LEGACY_OWNED_CARD_REPLACEMENTS = {
+    '10609': '10106',
+    '10607': '10106',
+}
 LEGACY_DEFAULT_OWNED_CARD_ID_SETS = [
     {'10029', '10612', '10609'},
     {'10033', '10612', '10607'},
@@ -764,30 +769,66 @@ def cleanup_legacy_seed_transactions(user):
 def ensure_transactions_seeded(user=None):
     user = user or get_demo_user()
     cleanup_legacy_seed_transactions(user)
-    existing_ids = set(Transaction.objects.values_list('public_id', flat=True))
+    existing_by_id = {
+        item.public_id: item
+        for item in Transaction.objects.filter(
+            user=user,
+            public_id__in=[seed_public_transaction_id(user, item['id']) for item in TRANSACTIONS],
+        )
+    }
     rows = []
+    updates = []
     for item in TRANSACTIONS:
         public_id = seed_public_transaction_id(user, item['id'])
-        if public_id in existing_ids:
+        values = {
+            'card_id': str(item['cardId']),
+            'merchant_name': item['merchantName'],
+            'category': item['category'],
+            'amount': int(item['amount']),
+            'approved_at': parse_approved_at(item['approvedAt']),
+            'payment_type': item.get('paymentType') or PAYMENT_TYPE_LUMP_SUM,
+            'installment_months': int(item.get('installmentMonths') or 0),
+            'is_interest_free_installment': bool(item.get('isInterestFreeInstallment') or False),
+            'icon': item.get('icon') or '💳',
+            'address': item.get('address') or '-',
+        }
+        existing = existing_by_id.get(public_id)
+        if existing:
+            changed = False
+            for field, value in values.items():
+                if getattr(existing, field) != value:
+                    setattr(existing, field, value)
+                    changed = True
+            if changed:
+                existing.updated_at = timezone.now()
+                updates.append(existing)
             continue
         rows.append(
             Transaction(
                 user=user,
                 public_id=public_id,
-                card_id=str(item['cardId']),
-                merchant_name=item['merchantName'],
-                category=item['category'],
-                amount=int(item['amount']),
-                approved_at=parse_approved_at(item['approvedAt']),
-                payment_type=item.get('paymentType') or PAYMENT_TYPE_LUMP_SUM,
-                installment_months=int(item.get('installmentMonths') or 0),
-                is_interest_free_installment=bool(item.get('isInterestFreeInstallment') or False),
-                icon=item.get('icon') or '💳',
-                address=item.get('address') or '-',
+                **values,
             )
         )
     if rows:
         Transaction.objects.bulk_create(rows, ignore_conflicts=True)
+    if updates:
+        Transaction.objects.bulk_update(
+            updates,
+            [
+                'card_id',
+                'merchant_name',
+                'category',
+                'amount',
+                'approved_at',
+                'payment_type',
+                'installment_months',
+                'is_interest_free_installment',
+                'icon',
+                'address',
+                'updated_at',
+            ],
+        )
 
 
 def ensure_purchase_plans_seeded(user=None):
@@ -1557,6 +1598,15 @@ def ensure_owned_cards_seeded(user=None):
     existing = list(OwnedCard.objects.filter(user=user).order_by('display_order', 'id'))
     if existing:
         existing_ids = {str(card.card_id) for card in existing}
+        for legacy_id, replacement_id in LEGACY_OWNED_CARD_REPLACEMENTS.items():
+            if legacy_id not in existing_ids:
+                continue
+            if replacement_id in existing_ids:
+                OwnedCard.objects.filter(user=user, card_id=legacy_id).delete()
+            else:
+                OwnedCard.objects.filter(user=user, card_id=legacy_id).update(card_id=replacement_id)
+            existing = list(OwnedCard.objects.filter(user=user).order_by('display_order', 'id'))
+            existing_ids = {str(card.card_id) for card in existing}
         if any(existing_ids == legacy_ids and len(existing) == len(legacy_ids) for legacy_ids in LEGACY_DEFAULT_OWNED_CARD_ID_SETS):
             OwnedCard.objects.filter(user=user).delete()
         else:
@@ -3630,6 +3680,14 @@ def card_recommendations(request):
     current_monthly_gross = _as_int(baseline.get('expectedMonthlyBenefit'))
 
     candidates = fetch_cards(request, limit=36, active_only=True)
+    candidate_ids = {str(card.get('cardAdId')) for card in candidates}
+    for preferred_card_id in PREFERRED_RECOMMENDATION_CARD_IDS:
+        if preferred_card_id in owned_ids or preferred_card_id in candidate_ids:
+            continue
+        preferred_card = fetch_card(int(preferred_card_id), request)
+        if preferred_card:
+            candidates.append(preferred_card)
+            candidate_ids.add(preferred_card_id)
     ranked = []
     for card in candidates:
         detailed = fetch_card(int(card['cardAdId']), request) or card

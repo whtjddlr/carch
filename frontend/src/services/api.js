@@ -342,7 +342,7 @@ function buildMockSpendingSummary({ recurringCategories = [] } = {}) {
     .map(({ key, amount }) => ({ cardId: key, amount }))
 
   const baseline = {
-    쇼핑: { previous: 82400, average: 78033, median: 79650 },
+    쇼핑: { previous: 415000, average: 268300, median: 242900 },
     교육: { previous: 35500, average: 33217, median: 33650 },
     식비: { previous: 139400, average: 133533, median: 134750 },
     교통: { previous: 73600, average: 70417, median: 70350 },
@@ -382,8 +382,8 @@ function buildMockSpendingSummary({ recurringCategories = [] } = {}) {
     })
     .sort((a, b) => Math.abs(b.deltaFromBaseline) - Math.abs(a.deltaFromBaseline))
   const adjustedForRecommendation = categoryChanges.reduce((sum, item) => sum + Number(item.adjustedAmount || 0), 0)
-  const previousTotal = 483500
-  const baselineAverageTotal = 463183
+  const previousTotal = 1073600
+  const baselineAverageTotal = 702800
   const topCategory = [...byCategory].sort((a, b) => b.amount - a.amount)[0] || { category: '소비', amount: 0 }
   const oneTimeCandidates = categoryChanges.filter((item) => item.oneTimeCandidate)
   const spendingTrend = {
