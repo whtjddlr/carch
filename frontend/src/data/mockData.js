@@ -174,15 +174,22 @@ export const transactions = [
   { id: 't36', cardId: '10029', merchant: '서울도시가스 요금', cat: '생활', amt: -64000, date: '2026-06-03', time: '09:00', icon: '🏠', addr: '자동납부' },
 ]
 
+// 카테고리별 사용액(spent)은 실제 거래(transactions) 합계와 일치한다.
+// → 분석 탭 "이번 달 사용 금액"(1,051,950원)과 소비계획 총 사용액이 동일.
+//   예산 합 1,400,000원이라 사용률 약 75%(적정).
 export const budgetCategories = [
-  { id: 'b1', name: '식비', icon: '🥗', budget: 260000, spent: 43200, color: '#2c638f' },
-  { id: 'b2', name: '쇼핑', icon: '🛍️', budget: 180000, spent: 160600, color: '#24364f' },
-  { id: 'b3', name: '교통', icon: '🚇', budget: 80000, spent: 19850, color: '#0f5fae' },
-  { id: 'b4', name: '카페', icon: '☕', budget: 70000, spent: 9700, color: '#C49A49' },
-  { id: 'b5', name: '헬스', icon: '🏋️', budget: 80000, spent: 59000, color: '#008c95' },
-  { id: 'b6', name: '교육', icon: '📚', budget: 150000, spent: 131500, color: '#8a9aad' },
-  { id: 'b7', name: '데이트·문화', icon: '🎬', budget: 120000, spent: 70500, color: '#d76a52' },
-  { id: 'b8', name: '구독', icon: '📱', budget: 30000, spent: 4900, color: '#5B6777' },
+  { id: 'b1', name: '쇼핑', icon: '🛍️', budget: 420000, spent: 405900, color: '#24364f' },
+  { id: 'b2', name: '교육', icon: '📚', budget: 160000, spent: 131500, color: '#8a9aad' },
+  { id: 'b3', name: '식비', icon: '🥗', budget: 230000, spent: 89700, color: '#2c638f' },
+  { id: 'b4', name: '뷰티', icon: '💄', budget: 95000, spent: 81700, color: '#d76a52' },
+  { id: 'b5', name: '통신', icon: '📡', budget: 70000, spent: 69000, color: '#0f5fae' },
+  { id: 'b6', name: '생활', icon: '🏠', budget: 90000, spent: 64000, color: '#5B6777' },
+  { id: 'b7', name: '헬스', icon: '🏋️', budget: 80000, spent: 59000, color: '#008c95' },
+  { id: 'b8', name: '교통', icon: '🚇', budget: 70000, spent: 46250, color: '#2c7a7b' },
+  { id: 'b9', name: '문화', icon: '🎬', budget: 60000, spent: 32000, color: '#b5852b' },
+  { id: 'b10', name: '카페', icon: '☕', budget: 60000, spent: 30500, color: '#C49A49' },
+  { id: 'b11', name: '구독', icon: '📱', budget: 25000, spent: 21900, color: '#6b7280' },
+  { id: 'b12', name: '편의점', icon: '🏪', budget: 40000, spent: 20500, color: '#0aa5a0' },
 ]
 
 export const communityPosts = [

@@ -894,7 +894,7 @@ export async function fetchCardRecommendationBundle({ recurringCategories = [] }
       console.warn('Card recommendation API request failed. Falling back to local rows.', error)
       return fallback()
     })
-  return withTimedLocalFallback(request, fallback)
+  return request
 }
 
 export async function fetchCardRecommendations() {
@@ -933,6 +933,7 @@ export async function fetchSpendingSummary({ ai = false, refresh = false, recurr
       return clone(buildMockSpendingSummary({ ai, refresh, recurringCategories }))
     })
 
+  if (ai || refresh) return request
   return withTimedLocalFallback(request, () => clone(buildMockSpendingSummary({ ai, refresh, recurringCategories })))
 }
 

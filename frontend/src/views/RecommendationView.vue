@@ -75,11 +75,13 @@
     <template v-else>
       <header class="recommend-header blue-gradient">
         <AppBackButton fallback="/cards" />
-        <p>{{ isUsageMode ? '소비 추천' : '새 카드 추천' }}</p>
-        <h1 v-if="isUsageMode">보유 카드로<br />어디에 쓸지 정리할게요</h1>
-        <h1 v-else>소비 패턴에 맞는<br />새 카드를 찾아볼게요</h1>
-        <div class="recommend-mode-pills">
-          <span>{{ isUsageMode ? '보유 카드 사용 추천' : '새 카드 발급 추천' }}</span>
+        <div class="recommend-header-main">
+          <p>{{ isUsageMode ? '소비 추천' : '새 카드 추천' }}</p>
+          <h1 v-if="isUsageMode">보유 카드로<br />어디에 쓸지 정리할게요</h1>
+          <h1 v-else>소비 패턴에 맞는<br />새 카드를 찾아볼게요</h1>
+          <div class="recommend-mode-pills">
+            <span>{{ isUsageMode ? '보유 카드 사용 추천' : '새 카드 발급 추천' }}</span>
+          </div>
         </div>
       </header>
 
@@ -95,7 +97,7 @@
           </div>
         </article>
 
-        <article v-if="aiDecision" class="app-card ai-decision-card">
+        <article v-if="displayAiDecision" class="app-card ai-decision-card">
           <div class="ai-decision-heading">
             <span>AI 전략 판단</span>
             <b>{{ aiDecision.aiMode === 'gms' ? 'LLM' : '검증 fallback' }}</b>
@@ -129,7 +131,7 @@
               <div class="usage-guide-main">
                 <div>
                   <span class="usage-label">사용 추천</span>
-                  <h3>{{ item.category }}는 {{ item.cardName }}</h3>
+                  <h3>{{ subjectLabel(item.category) }} {{ item.cardName }}</h3>
                   <p>{{ item.body }}</p>
                 </div>
                 <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.cardName" />
@@ -240,6 +242,7 @@ const ownedUsageGuides = computed(() =>
 )
 const oneTimeCount = computed(() => bundle.value?.profile?.spendingTrend?.oneTimeCandidates?.length || 0)
 const aiDecision = computed(() => bundle.value?.aiDecision || null)
+const displayAiDecision = computed(() => isUsageMode.value && aiDecision.value)
 
 function signedKrw(value) {
   const amount = Number(value || 0)
@@ -255,6 +258,13 @@ function decisionRoleLabel(role) {
     avoid_for_now: '보류',
     no_action: '유지',
   }[role] || '판단'
+}
+
+function subjectLabel(value) {
+  const text = String(value || '추천 분야').trim()
+  const code = text.charCodeAt(text.length - 1)
+  if (code < 0xac00 || code > 0xd7a3) return `${text}는`
+  return `${text}${(code - 0xac00) % 28 ? '은' : '는'}`
 }
 
 function recommendationImpact(item = {}) {
@@ -402,11 +412,18 @@ onMounted(async () => {
   color: #fff;
 }
 
+.recommend-header-main {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
 .recommend-header p {
-  margin: 18px 0 4px;
+  margin: 0;
   color: rgba(255, 255, 255, 0.68);
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .recommend-header h1 {
@@ -430,7 +447,7 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 8px;
 }
 
 .recommend-mode-pills span {
