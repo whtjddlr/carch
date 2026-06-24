@@ -1,14 +1,14 @@
 ﻿<template>
   <section class="screen">
-    <header class="dashboard-header blue-gradient">
+    <header class="dashboard-header">
       <div class="header-top">
-        <div class="brand-lockup">
-          <span class="brand-mark" aria-hidden="true">C</span>
-          <div>
-            <h1>Carch</h1>
-            <p>카드를 읽고 소비를 설계하는 지갑</p>
+        <RouterLink class="brand-lockup" to="/cards" aria-label="Carch 홈">
+          <div class="brand-copy">
+            <span class="brand-logo-shell">
+              <img class="brand-wordmark" src="/brand/carch-wordmark-transparent.png" alt="Carch" />
+            </span>
           </div>
-        </div>
+        </RouterLink>
         <div class="header-actions">
           <RouterLink class="icon-button" to="/search" aria-label="검색">
             <Search :size="18" />
@@ -16,55 +16,29 @@
           <RouterLink class="icon-button" to="/notifications" aria-label="알림">
             <Bell :size="18" />
           </RouterLink>
-          <RouterLink class="icon-button" to="/settings" aria-label="설정">
-            <Settings :size="18" />
+          <RouterLink class="icon-button" to="/settings" aria-label="프로필 및 설정">
+            <User :size="18" />
           </RouterLink>
+        </div>
+      </div>
+
+      <div class="month-summary">
+        <div class="greet">
+          <div class="greet-copy">
+            <span>안녕하세요, {{ user.name }}님</span>
+            <strong>오늘도 선명한 하루 보내세요.</strong>
+          </div>
+        </div>
+        <div class="spend-figure">
+          <span>이번 달 사용 금액</span>
+          <strong>{{ totalSpendLabel }}</strong>
         </div>
       </div>
     </header>
 
     <div class="screen-scroll scrollbar-hide dashboard-body">
-      <div class="month-summary">
-        <div class="greet">
-          <span class="greet-avatar"><User :size="22" /></span>
-          <div class="greet-copy">
-            <span>반가워요</span>
-            <strong>{{ user.name }}님</strong>
-          </div>
-        </div>
-        <div class="spend-figure">
-          <span>이번 달 총 지출</span>
-          <strong>{{ totalSpendLabel }}</strong>
-        </div>
-      </div>
 
       <div class="card-carousel" :class="[{ 'is-gliding': isCarouselGliding }, `glide-${carouselDirection}`]">
-        <div class="card-manage-toolbar">
-          <button
-            type="button"
-            class="wallet-icon-button"
-            aria-label="카드 관리"
-            @click="toggleCardManageMenu"
-          >
-            <MoreHorizontal :size="19" />
-          </button>
-          <div v-if="isCardManageMenuOpen" class="card-manage-menu">
-            <button type="button" @click="openCardPickerFromMenu">
-              <PlusCircle :size="16" />
-              <span>카드 추가</span>
-            </button>
-            <button
-              type="button"
-              class="danger"
-              :disabled="!activeCard || activeCardIndex >= cards.length || isDeletingCard"
-              @click="deleteActiveCardFromMenu"
-            >
-              <Trash2 :size="16" />
-              <span>카드 삭제</span>
-            </button>
-          </div>
-        </div>
-
         <div
           class="card-stage"
           @pointerdown="onDragStart"
@@ -98,7 +72,7 @@
             class="slide-card slide-add"
             :class="{ 'is-active': activeCardIndex === cards.length }"
             :style="slideCardStyle(cards.length)"
-            aria-label="카드 추가"
+            :aria-label="activeCardIndex === cards.length ? '카드 추가 열기' : '카드 추가 선택'"
             @click="onSlideClick(cards.length)"
           >
             <span class="fan-card-media slide-add-media">
@@ -126,7 +100,7 @@
             <div class="card-bottom">
               <div class="spend-progress">
                 <div class="progress-head">
-                  <span>실적 달성률</span>
+                  <span>혜택 조건 충족률</span>
                   <b>{{ spendProgress(detailCard) }}%</b>
                 </div>
                 <div class="progress-track">
@@ -134,17 +108,17 @@
                 </div>
                 <div v-if="detailCard.previousMonthMinSpend" class="progress-meta">
                   <span>
-                    <small>사용 금액</small>
+                    <small>기준 사용액</small>
                     <b>{{ krw(detailCard.spent) }}</b>
                   </span>
                   <span>
-                    <small>남은 실적</small>
+                    <small>남은 조건</small>
                     <b>{{ remainingSpend(detailCard) > 0 ? krw(remainingSpend(detailCard)) : '충족' }}</b>
                   </span>
                 </div>
                 <div v-else class="progress-meta single">
                   <span>
-                    <small>실적 조건</small>
+                    <small>혜택 조건</small>
                     <b>없이 적용</b>
                   </span>
                 </div>
@@ -159,7 +133,6 @@
           <div v-if="activeCardIndex >= cards.length" class="add-card-prompt">
             <strong>새 카드 추가</strong>
             <p>보유 카드를 등록해 한눈에 관리하세요</p>
-            <button type="button" @click="openCardPicker">카드 추가하기</button>
           </div>
         </div>
 
@@ -179,6 +152,45 @@
           <span>{{ action.label }}</span>
         </RouterLink>
       </div>
+
+      <section v-if="merchantRecommendation" class="section-block payment-advice-section">
+        <div class="section-head">
+          <h2>보유 카드 사용 가이드</h2>
+          <RouterLink :to="merchantRecommendationLink">소비계획</RouterLink>
+        </div>
+        <RouterLink class="payment-advice-card" :to="merchantRecommendationLink">
+          <div class="advice-topline">
+            <span><Sparkles :size="14" /> 예정 지출 가이드</span>
+            <b v-if="merchantRecommendation.extraBenefit > 0">+{{ krw(merchantRecommendation.extraBenefit) }}</b>
+            <b v-else-if="merchantRecommendation.isBlocked">다음달 준비</b>
+            <b v-else>적합</b>
+          </div>
+          <div class="advice-main">
+            <div class="advice-copy">
+              <span>{{ merchantRecommendation.category }} · {{ merchantRecommendation.merchant }}</span>
+              <strong>{{ merchantRecommendation.headline }}</strong>
+              <p>{{ merchantRecommendation.message }}</p>
+              <small class="advice-performance" :class="merchantRecommendation.performanceTone">
+                {{ merchantRecommendation.performanceNote }}
+              </small>
+            </div>
+            <span class="advice-card-image">
+              <img
+                v-if="merchantRecommendation.recommendedCard.imageUrl"
+                :src="merchantRecommendation.recommendedCard.imageUrl"
+                :alt="merchantRecommendation.recommendedCard.name"
+                :class="cardImageClass(merchantRecommendation.recommendedCard)"
+                @load="setImageOrientation(merchantRecommendation.recommendedCard.id, $event)"
+              />
+            </span>
+          </div>
+          <div class="advice-route">
+            <span>{{ merchantRecommendation.currentCard.name }}</span>
+            <i aria-hidden="true" />
+            <strong>{{ merchantRecommendation.routeTargetLabel }}</strong>
+          </div>
+        </RouterLink>
+      </section>
 
       <section class="section-block">
         <div class="section-head">
@@ -267,9 +279,11 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Bell, CalendarDays, Check, MoreHorizontal, PlusCircle, Search, Settings, Sparkles, Trash2, User, X } from 'lucide-vue-next'
-import { cards as mockCards, krw, transactions as mockTransactions, user } from '@/data/mockData'
+import { Bell, CalendarDays, Check, PlusCircle, Search, Sparkles, User, X } from 'lucide-vue-next'
+import { budgetCategories, cards as mockCards, krw, transactions as mockTransactions, user } from '@/data/mockData'
 import { addOwnedCard, deleteOwnedCard, fetchCards, fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
+import { readCustomBudgetCategories } from '@/services/budgetStorage'
+import { cardPerformance, scoreCardBenefit } from '@/utils/cardPerformance'
 
 const router = useRouter()
 const cards = ref(mockCards)
@@ -296,6 +310,45 @@ const quickActions = [
   { label: '카드 추천', path: '/recommendations/new', icon: Sparkles, color: '#008c95' },
   { label: '지출계획하기', path: '/plans/new', icon: CalendarDays, color: '#24364f' },
 ]
+const futurePaymentCandidates = computed(() => (
+  [...budgetCategories, ...readCustomBudgetCategories()]
+    .map((category) => {
+      const budget = Number(category.budget || 0)
+      const spent = Number(category.spent || 0)
+      const amount = Math.max(budget - spent, 0)
+      return {
+        id: `budget-${category.id}`,
+        source: 'budget',
+        category: category.name,
+        merchant: '이번 달 남은 예산',
+        amount,
+        budget,
+        spent,
+      }
+    })
+    .filter((item) => item.amount > 0)
+    .sort((a, b) => b.amount - a.amount)
+))
+const merchantRecommendation = computed(() => {
+  const futureRows = futurePaymentCandidates.value
+    .map(buildMerchantRecommendation)
+    .filter(Boolean)
+  return futureRows.find((item) => !item.isBlocked && item.extraBenefit > 0)
+    || futureRows.find((item) => !item.isBlocked)
+    || futureRows[0]
+    || null
+})
+const merchantRecommendationLink = computed(() => {
+  const item = merchantRecommendation.value
+  if (!item) return '/budget'
+  return {
+    path: '/budget',
+    query: {
+      category: item.category,
+      cardId: item.recommendedCard.id,
+    },
+  }
+})
 let cardGlideTimer = null
 let cardSearchTimer = null
 
@@ -325,11 +378,15 @@ function slideCardStyle(index) {
 
 function onSlideClick(index) {
   if (wasDragged.value) return
-  if (index === activeCardIndex.value) {
-    if (index >= cards.value.length) {
+  if (index >= cards.value.length) {
+    if (activeCardIndex.value === cards.value.length) {
       openCardPicker()
       return
     }
+    focusCard(cards.value.length)
+    return
+  }
+  if (index === activeCardIndex.value) {
     router.push(`/cards/${cards.value[index].id}`)
     return
   }
@@ -355,13 +412,11 @@ function onDragEnd(event) {
 }
 
 function spendProgress(card) {
-  const target = Number(card.previousMonthMinSpend || 0)
-  if (!target) return 100
-  return Math.min(100, Math.round((Number(card.spent || 0) / target) * 100))
+  return cardPerformance(card).progress
 }
 
 function remainingSpend(card) {
-  return Math.max(Number(card.previousMonthMinSpend || 0) - Number(card.spent || 0), 0)
+  return cardPerformance(card).remainingBefore
 }
 
 function setImageOrientation(cardId, event) {
@@ -383,6 +438,156 @@ function txCard(tx) {
   return cards.value.find((card) => String(card.id) === String(tx.cardId)) || null
 }
 
+function transactionAmount(tx) {
+  return Number(tx.amount ?? tx.amt) || 0
+}
+
+function transactionCategory(tx) {
+  return String(tx.category || tx.cat || '기타').trim()
+}
+
+function transactionMerchant(tx) {
+  return String(tx.merchant || tx.merchantName || tx.merchant_name || '최근 결제').replace(/\s+/g, ' ').trim()
+}
+
+function normalizeSearchText(value) {
+  return String(value || '').toLowerCase().replace(/\s+/g, ' ')
+}
+
+function includesAny(text, keywords) {
+  return keywords.some((keyword) => text.includes(normalizeSearchText(keyword)))
+}
+
+function cardBenefitText(card) {
+  return normalizeSearchText([
+    card.name,
+    card.issuer,
+    card.benefitSummary,
+    card.titleDescription,
+    ...(card.benefits || []),
+  ].filter(Boolean).join(' '))
+}
+
+function inferPaymentBenefitRate(card, tx) {
+  const cardId = String(card.id || card.cardAdId || card.card_ad_id)
+  const usageText = normalizeSearchText(`${transactionCategory(tx)} ${transactionMerchant(tx)}`)
+  const benefitText = cardBenefitText(card)
+  let rate = 0
+
+  if (cardId === '10106') {
+    if (includesAny(usageText, ['카페', '커피', '컴포즈', '스타벅스', '편의점', 'gs25', 'cu'])) {
+      rate = Math.max(rate, 0.06)
+    } else if (includesAny(usageText, ['식비', '외식', '배달'])) {
+      rate = Math.max(rate, 0.06)
+    }
+  }
+  if (cardId === '10612' && includesAny(usageText, ['쇼핑', '뷰티', '온라인', '무신사', '쿠팡', '올리브영'])) {
+    rate = Math.max(rate, 0.1)
+  }
+  if (cardId === '10029') {
+    rate = Math.max(rate, includesAny(usageText, ['교통', '택시', '전철', '철도', '지하철', '버스', '카카오t']) ? 0.01 : 0.015)
+  }
+
+  if (includesAny(usageText, ['쇼핑', '뷰티', '온라인']) && includesAny(benefitText, ['쇼핑', '온라인', '오프라인'])) {
+    rate = Math.max(rate, 0.01)
+  }
+  if (includesAny(usageText, ['마트', '이마트']) && includesAny(benefitText, ['마트', '이마트'])) {
+    rate = Math.max(rate, 0.15)
+  }
+  if (includesAny(usageText, ['교통', '택시', '전철', '철도', '지하철', '버스']) && includesAny(benefitText, ['교통', '대중교통'])) {
+    rate = Math.max(rate, 0.1)
+  }
+  if (includesAny(usageText, ['편의점', 'gs25']) && includesAny(benefitText, ['편의점', '생활'])) {
+    rate = Math.max(rate, 0.05)
+  }
+  if (!rate && includesAny(benefitText, ['언제나', '일상', '가맹점'])) {
+    rate = 0.015
+  }
+  if (!rate && includesAny(benefitText, ['국내외 가맹점', '적립'])) {
+    rate = 0.005
+  }
+
+  return rate
+}
+
+function formatBenefitRate(rate) {
+  if (!rate) return '혜택'
+  return `${Number((rate * 100).toFixed(1))}%`
+}
+
+function buildMerchantRecommendation(tx) {
+  const amount = Math.abs(transactionAmount(tx))
+  if (!amount || !cards.value.length) return null
+
+  const currentCard = txCard(tx) || activeCard.value || cards.value[0]
+  const scoredCards = cards.value.map((card) => {
+    const rate = inferPaymentBenefitRate(card, tx)
+    const score = scoreCardBenefit({ card, amount, rate })
+    return {
+      card,
+      rate,
+      benefit: score.activeBenefit,
+      grossBenefit: score.grossBenefit,
+      performance: score,
+    }
+  })
+  const currentScore = scoredCards.find((item) => String(item.card.id) === String(currentCard.id)) || scoredCards[0]
+  const activeScores = scoredCards.filter((item) => item.grossBenefit > 0 && item.performance.currentBenefitEligible)
+  const blockedScores = scoredCards.filter((item) => item.grossBenefit > 0)
+  const bestScore = (activeScores.length ? activeScores : blockedScores).sort((a, b) => (
+    b.benefit - a.benefit
+    || Number(!b.performance.blocked) - Number(!a.performance.blocked)
+    || b.grossBenefit - a.grossBenefit
+    || a.performance.remainingAfter - b.performance.remainingAfter
+  ))[0]
+  if (!bestScore || bestScore.grossBenefit <= 0) return null
+
+  const extraBenefit = Math.max(bestScore.benefit - (currentScore?.benefit || 0), 0)
+  const merchant = transactionMerchant(tx)
+  const category = transactionCategory(tx)
+  const performance = bestScore.performance
+  const isBlocked = !performance.currentBenefitEligible
+  const performanceNote = performance.currentBenefitEligible
+    ? '이번 달 혜택 가능 카드'
+    : performance.nextMonthWillQualify
+      ? '이번 지출로 다음 달 조건 충족'
+      : `다음 달 조건까지 ${krw(performance.remainingAfter)} 부족`
+  const performanceTone = isBlocked ? 'is-waiting' : 'is-ready'
+  const isSameCard = String(bestScore.card.id) === String(currentCard.id)
+  const headline = isBlocked
+    ? `${bestScore.card.name}은 다음 달 혜택 준비가 필요해요`
+    : performance.nextMonthWillQualify && !performance.currentBenefitEligible
+      ? `${bestScore.card.name}은 다음 달 혜택 조건을 채워요`
+      : `${bestScore.card.name}로 결제하면 좋아요`
+  const routeTargetLabel = isSameCard
+    ? isBlocked ? '다음달 준비' : '현재 카드 유지'
+    : bestScore.card.name
+  const message = isBlocked
+    ? `이번 결제는 다음 달 실적에 반영돼요. 현재 ${krw(performance.spent)} 사용 중이고, ${category} 예정을 더해도 ${krw(performance.remainingAfter)} 부족합니다.`
+    : extraBenefit > 0
+      ? `${category} 예정 지출은 ${currentCard.name}보다 약 ${krw(extraBenefit)} 더 유리해요.`
+      : `${category} 예정 지출은 실적 조건과 혜택을 함께 보면 지금 카드가 잘 맞아요.`
+
+  return {
+    transaction: tx,
+    merchant,
+    category,
+    amount,
+    currentCard,
+    recommendedCard: bestScore.card,
+    expectedBenefit: bestScore.benefit,
+    potentialBenefit: bestScore.grossBenefit,
+    extraBenefit,
+    rateLabel: formatBenefitRate(bestScore.rate),
+    isBlocked,
+    performanceNote,
+    performanceTone,
+    headline,
+    routeTargetLabel,
+    message,
+  }
+}
+
 function benefitTags(card) {
   const candidates = card.benefits?.length ? card.benefits : [card.benefitSummary || card.titleDescription]
   return candidates
@@ -401,7 +606,17 @@ function isOwnedCandidate(card) {
 }
 
 async function loadWalletData() {
-  const [apiTransactions, apiCards] = await Promise.all([fetchTransactions(), fetchOwnedCards()])
+  const [transactionResult, cardResult] = await Promise.allSettled([fetchTransactions(), fetchOwnedCards()])
+  const apiTransactions = transactionResult.status === 'fulfilled' ? transactionResult.value : transactions.value
+  const apiCards = cardResult.status === 'fulfilled' ? cardResult.value : cards.value
+
+  if (transactionResult.status === 'rejected') {
+    console.warn('거래내역 API를 불러오지 못해 기존 거래 목록을 유지합니다.', transactionResult.reason)
+  }
+  if (cardResult.status === 'rejected') {
+    console.warn('보유 카드 API를 불러오지 못해 기존 카드 목록을 유지합니다.', cardResult.reason)
+  }
+
   transactions.value = apiTransactions
   cards.value = apiCards.map((card, index) => normalizeCard(card, index, apiTransactions))
   activeCardIndex.value = Math.min(activeCardIndex.value, Math.max(cards.value.length - 1, 0))
@@ -509,25 +724,37 @@ onMounted(async () => {
   position: relative;
   flex-shrink: 0;
   overflow: visible;
+  border: 0;
   border-radius: 0;
-  padding: clamp(18px, 5vw, 24px) clamp(16px, 4.8vw, 20px) clamp(40px, 10vw, 56px);
-  color: #fff;
-  background: linear-gradient(180deg, #2c4e72 0%, #2a486b 32%, #324f70 48%, #45617f 62%, #6883a1 74%, #9db1c5 85%, #d4dde6 93%, #f3f6f8 100%) !important;
+  padding: clamp(18px, 5vw, 24px) clamp(16px, 4.8vw, 20px) clamp(8px, 2.6vw, 11px);
+  color: #17202b;
+  background: transparent !important;
   box-shadow: none;
   isolation: isolate;
 }
 
 :global(.app-backdrop .phone-shell .dashboard-header) {
-  background: linear-gradient(180deg, #2c4e72 0%, #2a486b 32%, #324f70 48%, #45617f 62%, #6883a1 74%, #9db1c5 85%, #d4dde6 93%, #f3f6f8 100%) !important;
-  color: #fff !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding-bottom: clamp(8px, 2.6vw, 11px) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #17202b !important;
 }
 
 :global(.app-backdrop .phone-shell .dashboard-header :is(h1, h2, h3, strong, b)) {
-  color: #fff !important;
+  color: #17202b !important;
 }
 
 :global(.app-backdrop .phone-shell .dashboard-header :is(p, span, small)) {
-  color: rgba(255, 255, 255, 0.74) !important;
+  color: #6f7d8c !important;
+}
+
+:global(.app-backdrop .phone-shell .dashboard-header .brand-lockup) {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
 }
 
 .dashboard-header::before,
@@ -553,65 +780,56 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
 }
 
 .brand-lockup {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 10px;
+  flex: 1;
+  border: 0 !important;
+  background: transparent !important;
+  color: inherit !important;
+  box-shadow: none !important;
+  text-decoration: none;
+  backdrop-filter: none !important;
 }
 
-.brand-mark {
-  position: relative;
+.brand-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.brand-logo-shell {
   display: inline-flex;
-  width: 39px;
+  width: clamp(116px, 32vw, 142px);
   height: 39px;
-  flex: 0 0 auto;
   align-items: center;
-  justify-content: center;
-  border-radius: 13px;
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff !important;
-  font-size: 19px;
-  font-weight: 950;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.26), inset -7px -7px 0 rgba(0, 140, 149, 0.34);
-  backdrop-filter: blur(8px);
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
-.brand-mark::after {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  width: 10px;
-  height: 2px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  content: '';
-}
-
-.header-top h1 {
-  margin: 0;
-  color: #fff;
-  font-size: 24px;
-  font-weight: 900;
-  letter-spacing: 0;
-}
-
-.header-top p {
-  margin: 3px 0 0;
-  color: rgba(255, 255, 255, 0.72) !important;
-  font-size: 10.5px;
-  font-weight: 800;
-  line-height: 1.25;
-  word-break: keep-all;
+.brand-wordmark {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: left center;
 }
 
 .header-actions {
   display: flex;
-  gap: 7px;
+  flex-shrink: 0;
+  gap: 8px;
   border: 0;
+  border-radius: 0;
   padding: 0;
   background: transparent;
   box-shadow: none;
@@ -619,19 +837,20 @@ onMounted(async () => {
 }
 
 .header-actions .icon-button {
-  width: 42px;
-  height: 42px;
-  border-radius: 13px !important;
+  width: 38px;
+  height: 38px;
+  border-radius: 50% !important;
   border: 0 !important;
-  background: rgba(255, 255, 255, 0.12) !important;
-  color: #fff !important;
-  box-shadow: none !important;
-  backdrop-filter: blur(10px) saturate(1.08);
-  transition: transform 160ms ease, background-color 160ms ease;
+  background: rgba(255, 255, 255, 0.84) !important;
+  color: #213a56 !important;
+  box-shadow: 0 5px 12px rgba(36, 54, 79, 0.08) !important;
+  backdrop-filter: blur(10px) saturate(1.05);
+  transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
 }
 
 .header-actions .icon-button:hover {
-  background: rgba(255, 255, 255, 0.2) !important;
+  background: #fff !important;
+  box-shadow: 0 10px 22px rgba(36, 54, 79, 0.13) !important;
   transform: translateY(-1px);
 }
 
@@ -640,86 +859,127 @@ onMounted(async () => {
 }
 
 :global(.app-backdrop .phone-shell .dashboard-header .header-actions .icon-button) {
-  border-radius: 13px !important;
+  border-radius: 50% !important;
   border: 0 !important;
-  background: rgba(255, 255, 255, 0.12) !important;
-  color: #fff !important;
-  box-shadow: none !important;
-  backdrop-filter: blur(10px) saturate(1.08);
+  background: rgba(255, 255, 255, 0.84) !important;
+  color: #213a56 !important;
+  box-shadow: 0 5px 12px rgba(36, 54, 79, 0.08) !important;
+  backdrop-filter: blur(10px) saturate(1.05);
 }
 
 .month-summary {
   position: relative;
   z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border-top: 0;
-  border-bottom: 1px solid rgba(32, 36, 42, 0.085);
-  margin: 0 0 8px;
-  padding: 6px 2px 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+  border: 0;
+  border-radius: 0;
+  margin: 16px 0 0;
+  padding: 2px 2px 0;
   background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .greet {
+  position: relative;
   display: flex;
   min-width: 0;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-height: 43px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
-.greet-avatar {
-  display: inline-flex;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border-radius: 13px;
-  background: linear-gradient(155deg, #2c4e72, #1b2f47);
-  color: #fff !important;
-  font-size: 16px;
-  font-weight: 900;
-  box-shadow: 0 7px 16px rgba(27, 47, 71, 0.24);
+.greet::before {
+  position: absolute;
+  top: 3px;
+  left: 0;
+  width: 3px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #0f5fae, #008c95);
+  box-shadow: none;
+  content: '';
+}
+
+.greet-copy {
+  padding-left: 11px;
 }
 
 .greet-copy span {
   display: block;
-  color: #8a96a3 !important;
-  font-size: 10.5px;
-  font-weight: 800;
+  color: #17202b !important;
+  font-size: 12.5px;
+  font-weight: 900;
+  line-height: 1.24;
 }
 
 .greet-copy strong {
   display: block;
-  margin-top: 2px;
-  color: #1b2f47;
-  font-size: 16px;
-  font-weight: 900;
+  margin-top: 4px;
+  color: #8a96a3 !important;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.25;
 }
 
 .spend-figure {
+  display: flex;
+  min-height: 43px;
+  flex-direction: column;
+  justify-content: center;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
   text-align: right;
 }
 
 .spend-figure span {
   display: block;
-  color: #8a96a3 !important;
+  color: #7a8592 !important;
   font-size: 10.5px;
-  font-weight: 800;
+  font-weight: 850;
 }
 
 .spend-figure strong {
   display: block;
   margin-top: 3px;
-  color: #20242a;
-  font-size: clamp(18px, 4.9vw, 21px);
-  font-weight: 900;
+  color: #17202b !important;
+  font-size: clamp(20px, 5.3vw, 23px);
+  font-weight: 950;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+:global(.app-backdrop .phone-shell .dashboard-header .spend-figure span) {
+  color: #7a8592 !important;
+}
+
+:global(.app-backdrop .phone-shell .dashboard-header .spend-figure strong) {
+  color: #17202b !important;
+}
+
+:global(.app-backdrop .phone-shell .dashboard-header .greet-copy span) {
+  color: #24364f !important;
+}
+
+:global(.app-backdrop .phone-shell .dashboard-header .greet-copy strong) {
+  color: #17202b !important;
 }
 
 .dashboard-body {
-  padding: 0 clamp(14px, 4.7vw, 20px) 120px;
+  padding: 14px clamp(14px, 4.7vw, 20px) 120px;
   background: #f3f6f8;
 }
 
@@ -832,21 +1092,10 @@ onMounted(async () => {
 }
 
 .add-card-prompt p {
-  margin: 3px 0 14px;
+  margin: 3px 0 0;
   color: #6e6e73;
   font-size: 12px;
   font-weight: 700;
-}
-
-.add-card-prompt button {
-  border: 0;
-  border-radius: 999px;
-  padding: 12px 24px;
-  background: linear-gradient(150deg, #2c4e72, #1c3149);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
 }
 
 .fan-card-media {
@@ -1779,6 +2028,176 @@ onMounted(async () => {
   stroke-width: 2.25;
 }
 
+.payment-advice-section {
+  margin-top: 18px;
+}
+
+.payment-advice-card {
+  display: block;
+  overflow: hidden;
+  border: 1px solid rgba(15, 95, 174, 0.12);
+  border-radius: 18px;
+  padding: 14px;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(0, 140, 149, 0.1), transparent 34%),
+    linear-gradient(145deg, #ffffff 0%, #f8fbfe 100%);
+  color: inherit;
+  text-decoration: none;
+  box-shadow: 0 10px 24px rgba(36, 54, 79, 0.08);
+}
+
+.advice-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.advice-topline span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.advice-topline b {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: rgba(0, 140, 149, 0.1);
+  color: #008c95;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.advice-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 12px;
+}
+
+.advice-copy {
+  min-width: 0;
+}
+
+.advice-copy span {
+  display: block;
+  color: #7a8795;
+  font-size: 11px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.advice-copy strong {
+  display: block;
+  margin-top: 4px;
+  color: #17202b;
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1.25;
+  word-break: keep-all;
+}
+
+.advice-copy p {
+  margin: 6px 0 0;
+  color: #536170;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+.advice-performance {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 8px;
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: rgba(15, 95, 174, 0.08);
+  color: #0f5fae;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.advice-performance.is-waiting {
+  background: rgba(249, 115, 22, 0.1);
+  color: #c2410c;
+}
+
+.advice-performance.is-ready {
+  background: rgba(0, 140, 149, 0.1);
+  color: #007780;
+}
+
+.advice-card-image {
+  position: relative;
+  display: block;
+  width: 40px;
+  height: 56px;
+  justify-self: end;
+  overflow: hidden;
+  border-radius: 7px;
+  background: #e8edf2;
+  box-shadow: 0 8px 18px rgba(36, 54, 79, 0.16);
+}
+
+.advice-card-image img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.advice-card-image img.is-landscape {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 56px;
+  height: 40px;
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.advice-route {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  border-top: 1px solid rgba(32, 36, 42, 0.08);
+  padding-top: 11px;
+}
+
+.advice-route span,
+.advice-route strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #6f7d8c;
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.advice-route i {
+  display: block;
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(15, 95, 174, 0.48), transparent);
+}
+
+.advice-route strong {
+  color: #24364f;
+  text-align: right;
+}
+
 .section-block {
   margin-top: 20px;
 }
@@ -2098,10 +2517,16 @@ onMounted(async () => {
 @media (max-width: 380px) {
   .dashboard-header {
     border-radius: 0;
+    padding-inline: 16px;
   }
 
   .header-top {
     gap: 10px;
+  }
+
+  .brand-logo-shell {
+    width: 118px;
+    height: 38px;
   }
 
   .header-actions {
@@ -2109,17 +2534,29 @@ onMounted(async () => {
   }
 
   .header-actions .icon-button {
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
   }
 
   .month-summary {
-    gap: 12px;
-    border-radius: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
   }
 
   .month-summary span {
     font-size: 10px;
+  }
+
+  .greet-copy span {
+    font-size: 12px;
+  }
+
+  .greet-copy strong {
+    max-width: 164px;
+  }
+
+  .spend-figure strong {
+    font-size: 20px;
   }
 
   .pay-card {

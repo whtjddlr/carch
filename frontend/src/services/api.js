@@ -17,6 +17,7 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0
 export const DEFAULT_API_TIMEOUT_MS = envNumber(import.meta.env.VITE_API_TIMEOUT_MS, 8000)
 export const AI_REQUEST_TIMEOUT_MS = envNumber(import.meta.env.VITE_AI_TIMEOUT_MS, 50000)
 export const USE_MOCK_API = ['true', '1', 'yes'].includes(String(import.meta.env.VITE_USE_MOCK_API || '').toLowerCase())
+export const DEV_AUTO_LOGIN_ENABLED = import.meta.env.DEV && !['false', '0', 'no'].includes(String(import.meta.env.VITE_DEV_AUTO_LOGIN || 'true').toLowerCase())
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -52,6 +53,26 @@ export async function loginWithEmail(payload) {
     return { ok: true, token: 'mock-auth-token', provider: 'email', user: { ...mockAuthUser, email: payload.email || mockAuthUser.email } }
   }
   const response = await api.post('/api/auth/email/login/', payload)
+  return response.data
+}
+
+export async function loginAsDevAdmin() {
+  if (USE_MOCK_API) {
+    await delay(80)
+    return {
+      ok: true,
+      token: 'mock-dev-admin-token',
+      provider: 'dev-admin',
+      devAutoLogin: true,
+      user: {
+        ...mockAuthUser,
+        name: 'CARCH 관리자',
+        email: 'admin@carch.local',
+        initials: 'C',
+      },
+    }
+  }
+  const response = await api.post('/api/auth/dev-login/')
   return response.data
 }
 
@@ -94,58 +115,44 @@ export async function logoutAuth() {
 const gradients = ['blue', 'purple', 'teal']
 const networkByCardId = {
   10029: 'VISA',
+  10071: 'VISA',
+  10106: 'VISA',
+  10107: 'VISA',
   10612: 'MASTERCARD',
-  10609: 'VISA',
 }
-const preferredCardImages = {
-  10612: '/card-images/2978card.png',
-}
+const preferredCardImages = {}
 const extraMockCards = [
   {
-    id: '10033',
-    cardAdId: 10033,
-    name: 'Deep Dream 체크카드',
-    issuer: '신한카드',
-    titleDescription: '생활 영역을 고르게 챙기는 데일리 카드',
-    benefitSummary: '생활 영역 최대 5% 적립',
-    benefits: ['편의점·카페 적립', '대중교통 적립', '전월 실적 30만원'],
-    annualFee: 0,
-    previousMonthMinSpend: 300000,
-    imageUrl: '/card-images/10033.png',
-    grad: 'teal',
-    brand: 'VISA',
-  },
-  {
-    id: '10035',
-    cardAdId: 10035,
-    name: 'BC 바로 On&Off 카드',
-    issuer: 'BC카드',
-    titleDescription: '온라인과 생활 결제를 함께 관리하는 카드',
-    benefitSummary: '온라인·생활 결제 최대 10%',
-    benefits: ['온라인 쇼핑 10%', '택시 10%', '음식점 10%'],
-    annualFee: 12000,
-    previousMonthMinSpend: 300000,
-    imageUrl: '/card-images/10035.png',
-    grad: 'blue',
-    brand: 'MASTERCARD',
-  },
-  {
-    id: '10607',
-    cardAdId: 10607,
-    name: 'K-패스 신한카드',
-    issuer: '신한카드',
-    titleDescription: '대중교통과 일상 이동에 맞춘 카드',
-    benefitSummary: '대중교통 최대 10% 할인',
-    benefits: ['대중교통 10%', '간편결제 5%', '전월 실적 30만원'],
-    annualFee: 15000,
-    previousMonthMinSpend: 300000,
-    imageUrl: '/card-images/10607.png',
+    id: '10107',
+    cardAdId: 10107,
+    name: 'LOCA LIKIT Shop',
+    issuer: '롯데카드',
+    titleDescription: '온라인 쇼핑과 편의점 지출에 맞춘 카드',
+    benefitSummary: '온라인 쇼핑·편의점 집중 할인',
+    benefits: ['온라인 쇼핑 할인', '편의점 할인', '생활 쇼핑 특화'],
+    annualFee: 10000,
+    previousMonthMinSpend: 400000,
+    imageUrl: '/card-images/10107.png',
     grad: 'purple',
     brand: 'VISA',
   },
+  {
+    id: '10071',
+    cardAdId: 10071,
+    name: 'LOCA LIKIT',
+    issuer: '롯데카드',
+    titleDescription: '카페와 생활 결제를 넓게 챙기는 카드',
+    benefitSummary: '카페·생활 결제 특화 할인',
+    benefits: ['카페 할인', '생활 영역 할인', '전월 실적 40만원'],
+    annualFee: 10000,
+    previousMonthMinSpend: 400000,
+    imageUrl: '/card-images/10071.png',
+    grad: 'teal',
+    brand: 'VISA',
+  },
 ]
-const landscapeCardImageNames = ['10029.png', '10033.png', '10035.png', '10609.png', '2978card.png']
-const portraitCardImageNames = ['10607.png', '10612.png', '2960card.png', '707card.png']
+const landscapeCardImageNames = ['10029.png']
+const portraitCardImageNames = ['10071.png', '10106.png', '10107.png', '10612.png', '2960card.png', '707card.png']
 
 const cardIdentity = (card = {}) => String(card.id || card.cardAdId || card.card_ad_id || card.toCardId || '')
 const preferredCardImageUrl = (card = {}, fallback = '') => preferredCardImages[cardIdentity(card)] || fallback
@@ -223,6 +230,12 @@ export const normalizeTransaction = (tx) => ({
   amount: Number(tx.amount ?? tx.amt ?? 0),
   date: tx.date || String(tx.approvedAt || tx.approved_at || '').slice(0, 10),
   time: tx.time || String(tx.approvedAt || tx.approved_at || '').slice(11, 16),
+  paymentType: tx.paymentType || tx.payment_type || 'lump_sum',
+  payment_type: tx.payment_type || tx.paymentType || 'lump_sum',
+  installmentMonths: Number(tx.installmentMonths ?? tx.installment_months ?? 0),
+  installment_months: Number(tx.installment_months ?? tx.installmentMonths ?? 0),
+  isInterestFreeInstallment: Boolean(tx.isInterestFreeInstallment ?? tx.is_interest_free_installment ?? false),
+  is_interest_free_installment: Boolean(tx.is_interest_free_installment ?? tx.isInterestFreeInstallment ?? false),
   icon: tx.icon || '💳',
   addr: tx.addr || tx.address || '-',
 })
@@ -234,8 +247,9 @@ let mockCardCatalog = cardCatalogSeed.map(applyPreferredCardImage)
 let mockTransactions = clone(seedTransactions).map(normalizeTransaction)
 let mockCommunityPosts = clone(seedCommunityPosts).map((post) => ({
   ...post,
+  editable: true,
   commentItems: post.commentItems || [
-    { id: `${post.id}-comment-1`, author: '남주현', avatar: '남', date: '방금 전', body: '혜택 비교 흐름이 잘 보입니다.' },
+    { id: `${post.id}-comment-1`, author: '남주현', avatar: '남', date: '방금 전', body: '혜택 비교 흐름이 잘 보입니다.', editable: true },
   ],
 }))
 let mockAnalysisRecords = []
@@ -256,6 +270,36 @@ const filterByQuery = (rows, query, fields) => {
     .filter((item) => !q || item.score > 0)
     .sort((a, b) => b.score - a.score)
     .map((item) => item.row)
+}
+
+const isNetworkFallbackError = (error) => !error?.response
+const LOCAL_FALLBACK_DELAY_MS = 700
+
+const withTimedLocalFallback = (requestPromise, fallbackFactory) => Promise.race([
+  requestPromise,
+  delay(LOCAL_FALLBACK_DELAY_MS).then(fallbackFactory),
+])
+
+const localCardCatalogRows = (params = {}) => {
+  const rows = filterByQuery(mockCardCatalog, params.search || params.q || '', ['name', 'issuer', 'benefitSummary', 'titleDescription'])
+  return clone(rows.slice(0, Number(params.limit || 24))).map(applyPreferredCardImage)
+}
+
+const localTransactionRows = (params = {}) => {
+  let rows = [...mockTransactions]
+  if (params.cardId) rows = rows.filter((tx) => String(tx.cardId) === String(params.cardId))
+  if (params.category) rows = rows.filter((tx) => String(tx.category) === String(params.category))
+  return clone(rows).map(normalizeTransaction)
+}
+
+const addMockOwnedCard = (cardId) => {
+  const id = String(cardId)
+  const card = mockCardCatalog.find((item) => String(item.id) === id || String(item.cardAdId) === id)
+  if (!card) throw new Error('Card not found in local catalog.')
+  if (!mockOwnedCards.some((item) => String(item.id) === String(card.id))) {
+    mockOwnedCards = [...mockOwnedCards, applyPreferredCardImage(clone(card))]
+  }
+  return { ok: true, card: clone(card) }
 }
 
 const monthlyRows = () => currentMonthTransactions(mockTransactions)
@@ -378,7 +422,7 @@ function buildMockSpendingSummary({ recurringCategories = [] } = {}) {
         title: `${topCategory.category} 결제 카드 조정`,
         amount: 16060,
         reason: `${topCategory.category} 지출 비중이 높아 혜택이 큰 카드와 비교할 가치가 있습니다.`,
-        action: '추천 카드와 현재 카드의 실적 조건을 함께 확인하세요.',
+        action: '추천 카드와 현재 카드의 다음 달 혜택 조건을 함께 확인하세요.',
         severity: 'attention',
         route: '/recommendations/new',
       },
@@ -398,8 +442,8 @@ function buildMockSpendingSummary({ recurringCategories = [] } = {}) {
       cardName: card.name,
       amount: byCard.find((row) => String(row.cardId) === String(card.id))?.amount || 0,
       fit: '보통',
-      insight: `${card.name}의 실적 충족률을 확인하세요.`,
-      action: '실적 확인',
+      insight: `${card.name}의 이번 달 사용액과 다음 달 혜택 조건을 확인하세요.`,
+      action: '조건 확인',
     })),
     warnings: ['실제 혜택은 카드사 기준에 따라 달라질 수 있습니다.'],
     nextActions: ['상위 지출 확인', '카드 혜택 비교'],
@@ -445,16 +489,16 @@ function buildMockRecommendationBundle(options = {}) {
   const results = [
     {
       id: 'r1',
-      cardAdId: '10035',
-      issuer: 'BC카드',
-      name: 'BC 바로 On&Off 카드',
+      cardAdId: '10107',
+      issuer: '롯데카드',
+      name: 'LOCA LIKIT Shop',
       match: 87,
-      benefit: '온라인·생활 결제 최대 10%',
-      annualFee: 12000,
-      previousMonthMinSpend: 300000,
-      tags: ['쇼핑', '식비', '교통'],
-      imageUrl: '/card-images/10035.png',
-      highlights: ['온라인 쇼핑 10%', '택시 10%', '음식점 10%'],
+      benefit: '온라인 쇼핑·편의점 집중 할인',
+      annualFee: 10000,
+      previousMonthMinSpend: 400000,
+      tags: ['쇼핑', '편의점'],
+      imageUrl: '/card-images/10107.png',
+      highlights: ['온라인 쇼핑 할인', '편의점 할인', '생활 쇼핑 특화'],
       reason: '반복 지출 기준으로 연회비를 반영해도 월 9,624원의 순혜택 개선이 예상됩니다.',
       economics: {
         expectedMonthlyBenefit: 12624,
@@ -469,7 +513,9 @@ function buildMockRecommendationBundle(options = {}) {
       },
       spendingFit: { styleTags: ['생활비', '쇼핑', '이동'] },
     },
-    ...seedRecommendations.map((item, index) => ({
+    ...seedRecommendations
+      .filter((item) => !['10107', '10106', '10612', '10029'].includes(String(item.cardAdId)))
+      .map((item, index) => ({
       ...clone(item),
       id: `r${index + 2}`,
       match: Math.max(76, Number(item.match || 82) - index * 2),
@@ -490,37 +536,37 @@ function buildMockRecommendationBundle(options = {}) {
   ]
   const routingSuggestions = [
     {
-      id: 'route-food-10029-10035',
-      category: '식비',
-      amount: 43200,
-      monthlyGain: 3672,
-      fromCardId: '10029',
-      fromCardName: 'LOCA 100',
+      id: 'route-store-10106-10107',
+      category: '편의점',
+      amount: 6800,
+      monthlyGain: 540,
+      fromCardId: '10106',
+      fromCardName: 'LOCA LIKIT Eat',
       fromIssuer: '롯데카드',
-      toCardId: '10035',
-      toCardName: 'BC 바로 On&Off 카드',
-      toIssuer: 'BC카드',
-      toImageUrl: '/card-images/10035.png',
+      toCardId: '10107',
+      toCardName: 'LOCA LIKIT Shop',
+      toIssuer: '롯데카드',
+      toImageUrl: '/card-images/10107.png',
       scope: 'candidate',
       scopeLabel: '비교 카드',
-      title: '식비는 BC 바로 On&Off 카드',
-      body: '식비 결제를 조정하면 월 3,672원의 추가 혜택이 예상됩니다.',
+      title: '편의점은 LOCA LIKIT Shop',
+      body: '반복되는 편의점 결제를 분리하면 월 540원의 추가 혜택이 예상됩니다.',
     },
     {
-      id: 'route-shopping-10612-10035',
+      id: 'route-shopping-10612-10107',
       category: '쇼핑',
       amount: 79650,
       monthlyGain: 2965,
       fromCardId: '10612',
       fromCardName: '카드의정석2 SHOPPER',
       fromIssuer: '우리카드',
-      toCardId: '10035',
-      toCardName: 'BC 바로 On&Off 카드',
-      toIssuer: 'BC카드',
-      toImageUrl: '/card-images/10035.png',
+      toCardId: '10107',
+      toCardName: 'LOCA LIKIT Shop',
+      toIssuer: '롯데카드',
+      toImageUrl: '/card-images/10107.png',
       scope: 'candidate',
       scopeLabel: '비교 카드',
-      title: '쇼핑은 BC 바로 On&Off 카드',
+      title: '쇼핑은 LOCA LIKIT Shop',
       body: '반복 쇼핑으로 확인된 금액만 반영해 월 2,965원의 개선을 계산했습니다.',
     },
   ].filter((item) => !oneTimeCategorySet.has(item.category))
@@ -551,17 +597,18 @@ function buildMockRecommendationBundle(options = {}) {
 function buildMockSearchResults(params = {}) {
   const query = String(params.q || params.search || '').trim()
   const type = params.type || 'all'
-  const limit = Math.max(1, Math.min(Number(params.limit || 12), 24))
+  const limit = Math.max(1, Math.min(Number(params.limit || 12), 50))
+  const cardLimit = type === 'card' ? limit : Math.min(8, limit)
   const ownedIds = new Set(mockOwnedCards.map((card) => String(card.id)))
   const cardItems = filterByQuery(mockCardCatalog, query, ['name', 'issuer', 'benefitSummary', 'titleDescription'])
-    .slice(0, type === 'card' ? limit : 5)
+    .slice(0, cardLimit)
     .map((card) => ({
       id: String(card.id),
       type: 'card',
       title: card.name,
       description: [card.issuer, card.benefitSummary].filter(Boolean).join(' · '),
       path: ownedIds.has(String(card.id)) ? `/cards/${card.id}` : `/cards/apply/${card.id}`,
-      badge: ownedIds.has(String(card.id)) ? '보유 카드' : '비교 카드',
+      badge: ownedIds.has(String(card.id)) ? '보유중' : '',
       imageUrl: card.imageUrl,
       meta: { issuer: card.issuer, benefitSummary: card.benefitSummary, owned: ownedIds.has(String(card.id)) },
     }))
@@ -600,21 +647,46 @@ export async function fetchOwnedCards() {
     await delay()
     return clone(mockOwnedCards)
   }
-  const response = await api.get('/api/owned-cards/')
-  return response.data.results || []
+  const request = api.get('/api/owned-cards/')
+    .then((response) => response.data.results || [])
+    .catch((error) => {
+      if (!isNetworkFallbackError(error)) throw error
+      console.warn('Owned card API request failed. Falling back to local rows.', error)
+      return clone(mockOwnedCards)
+    })
+  return withTimedLocalFallback(request, () => clone(mockOwnedCards))
 }
 
 export async function fetchCards(params = {}) {
   if (USE_MOCK_API) {
     await delay()
-    const rows = filterByQuery(mockCardCatalog, params.search || params.q || '', ['name', 'issuer', 'benefitSummary', 'titleDescription'])
-    return clone(rows.slice(0, Number(params.limit || 24))).map(applyPreferredCardImage)
+    return localCardCatalogRows(params)
   }
-  const response = await api.get('/api/cards/', { params })
-  return (response.data.results || []).map(applyPreferredCardImage)
+  const request = api.get('/api/cards/', { params })
+    .then((response) => {
+      const rows = (response.data.results || []).map(applyPreferredCardImage)
+      if (rows.length || params.search || params.q) return rows
+      return localCardCatalogRows(params)
+    })
+    .catch((error) => {
+      if (!isNetworkFallbackError(error)) throw error
+      console.warn('Card catalog API request failed. Falling back to local rows.', error)
+      return localCardCatalogRows(params)
+    })
+  return withTimedLocalFallback(request, () => localCardCatalogRows(params))
 }
 
 export async function addOwnedCard(cardId) {
+  if (!USE_MOCK_API) {
+    try {
+      const response = await api.post('/api/owned-cards/', { cardId }, { timeout: Math.min(DEFAULT_API_TIMEOUT_MS, 1800) })
+      return response.data
+    } catch (error) {
+      if (!isNetworkFallbackError(error)) throw error
+      console.warn('Add owned card API request failed. Falling back to local rows.', error)
+      return addMockOwnedCard(cardId)
+    }
+  }
   if (USE_MOCK_API) {
     await delay(120)
     const id = String(cardId)
@@ -625,18 +697,25 @@ export async function addOwnedCard(cardId) {
     }
     return { ok: true, card: clone(card) }
   }
-  const response = await api.post('/api/owned-cards/', { cardId })
-  return response.data
 }
 
 export async function deleteOwnedCard(cardId) {
+  if (!USE_MOCK_API) {
+    try {
+      const response = await api.delete(`/api/owned-cards/${cardId}/`, { timeout: Math.min(DEFAULT_API_TIMEOUT_MS, 1800) })
+      return response.data
+    } catch (error) {
+      if (!isNetworkFallbackError(error)) throw error
+      console.warn('Delete owned card API request failed. Falling back to local rows.', error)
+      mockOwnedCards = mockOwnedCards.filter((card) => String(card.id) !== String(cardId))
+      return { ok: true }
+    }
+  }
   if (USE_MOCK_API) {
     await delay(120)
     mockOwnedCards = mockOwnedCards.filter((card) => String(card.id) !== String(cardId))
     return { ok: true }
   }
-  const response = await api.delete(`/api/owned-cards/${cardId}/`)
-  return response.data
 }
 
 export async function fetchCard(id) {
@@ -653,13 +732,16 @@ export async function fetchCard(id) {
 export async function fetchTransactions(params = {}) {
   if (USE_MOCK_API) {
     await delay()
-    let rows = [...mockTransactions]
-    if (params.cardId) rows = rows.filter((tx) => String(tx.cardId) === String(params.cardId))
-    if (params.category) rows = rows.filter((tx) => String(tx.category) === String(params.category))
-    return clone(rows).map(normalizeTransaction)
+    return localTransactionRows(params)
   }
-  const response = await api.get('/api/transactions/', { params })
-  return (response.data.results || []).map(normalizeTransaction)
+  const request = api.get('/api/transactions/', { params })
+    .then((response) => (response.data.results || []).map(normalizeTransaction))
+    .catch((error) => {
+      if (!isNetworkFallbackError(error)) throw error
+      console.warn('Transaction API request failed. Falling back to local rows.', error)
+      return localTransactionRows(params)
+    })
+  return withTimedLocalFallback(request, () => localTransactionRows(params))
 }
 
 export async function fetchSearchResults(params = {}) {
@@ -678,8 +760,11 @@ export async function parseTransaction(rawText) {
     const amountMatch = text.match(/([\d,]+)\s*원?/)
     const amount = amountMatch ? -Math.abs(Number(amountMatch[1].replace(/,/g, ''))) : -3800
     const shopper = /무신사|쿠팡|쇼핑|우리/.test(text)
+    const installment = /할부|무이자/.test(text)
+    const monthMatch = text.match(/(\d{1,2})\s*개월/)
     const education = /토익|응시|교육|영어|교보/.test(text)
     const cafe = /커피|카페|컴포즈|스타벅스/.test(text)
+    const transport = /교통|택시|카카오T|전철|지하철|버스|공항철도/.test(text)
     const merchant = shopper
       ? text.includes('무신사') ? '무신사 스토어' : '쿠팡 로켓배송'
       : education
@@ -687,8 +772,8 @@ export async function parseTransaction(rawText) {
         : cafe
           ? '컴포즈커피 역삼센터필드점'
           : '확인 필요 가맹점'
-    const category = shopper ? '쇼핑' : education ? '교육' : cafe ? '카페' : '기타'
-    const cardId = shopper ? '10612' : education ? '10609' : '10029'
+    const category = shopper ? '쇼핑' : education ? '교육' : transport ? '교통' : cafe ? '카페' : '기타'
+    const cardId = shopper ? '10612' : transport ? '10029' : '10106'
     return normalizeTransaction({
       id: `parsed-${Date.now()}`,
       cardId,
@@ -697,6 +782,9 @@ export async function parseTransaction(rawText) {
       amount,
       date: '2026-06-23',
       time: shopper ? '23:41' : '08:42',
+      paymentType: installment ? 'installment' : 'lump_sum',
+      installmentMonths: installment ? Number(monthMatch?.[1] || 2) : 0,
+      isInterestFreeInstallment: /무이자/.test(text),
       icon: categoryIcon(category),
       address: shopper || education ? '온라인 결제' : '서울 강남구 테헤란로 231',
       confidence: 0.86,
@@ -716,6 +804,9 @@ export async function createTransaction(payload) {
       category: payload.category,
       amount: payload.amount,
       approvedAt: payload.approvedAt,
+      paymentType: payload.paymentType,
+      installmentMonths: payload.installmentMonths,
+      isInterestFreeInstallment: payload.isInterestFreeInstallment,
       icon: payload.icon || categoryIcon(payload.category),
       address: payload.address,
     })
@@ -738,16 +829,23 @@ export async function fetchCardRecommendationBundle({ recurringCategories = [] }
     await delay()
     return clone(buildMockRecommendationBundle({ recurringCategories }))
   }
-  const response = await api.get('/api/recommendations/cards/', { params })
-  const data = response.data
-  return {
+  const normalizeRecommendationBundle = (data) => ({
     ...data,
     results: (data.results || []).map(applyPreferredCardImage),
     routingSuggestions: (data.routingSuggestions || []).map((item) => ({
       ...item,
       toImageUrl: preferredCardImageUrl({ toCardId: item.toCardId }, item.toImageUrl),
     })),
-  }
+  })
+  const fallback = () => clone(buildMockRecommendationBundle({ recurringCategories }))
+  const request = api.get('/api/recommendations/cards/', { params })
+    .then((response) => normalizeRecommendationBundle(response.data))
+    .catch((error) => {
+      if (!isNetworkFallbackError(error)) throw error
+      console.warn('Card recommendation API request failed. Falling back to local rows.', error)
+      return fallback()
+    })
+  return withTimedLocalFallback(request, fallback)
 }
 
 export async function fetchCardRecommendations() {
@@ -775,11 +873,18 @@ export async function fetchSpendingSummary({ ai = false, refresh = false, recurr
   }
   if (ai) params.ai = 1
   if (refresh) params.refresh = 1
-  const response = await api.get('/api/analytics/spending-summary/', {
+  const request = api.get('/api/analytics/spending-summary/', {
     params,
     timeout: ai && refresh ? AI_REQUEST_TIMEOUT_MS : DEFAULT_API_TIMEOUT_MS,
   })
-  return response.data
+    .then((response) => response.data)
+    .catch((error) => {
+      if (!isNetworkFallbackError(error)) throw error
+      console.warn('Spending summary API request failed. Falling back to local rows.', error)
+      return clone(buildMockSpendingSummary({ ai, refresh, recurringCategories }))
+    })
+
+  return withTimedLocalFallback(request, () => clone(buildMockSpendingSummary({ ai, refresh, recurringCategories })))
 }
 
 export async function fetchAnalysisRecords(params = {}) {
@@ -879,6 +984,7 @@ export async function createCommunityPost(payload) {
       likes: 0,
       comments: 0,
       liked: false,
+      editable: true,
       tags: payload.tags || [],
       commentItems: [],
     }
@@ -935,6 +1041,7 @@ export async function createCommunityComment(postId, payload) {
       avatar: '남',
       date: '방금 전',
       body: payload.body,
+      editable: true,
     }
     post.commentItems = [...(post.commentItems || []), comment]
     post.comments = post.commentItems.length

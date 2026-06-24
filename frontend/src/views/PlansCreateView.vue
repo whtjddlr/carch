@@ -16,7 +16,7 @@
       />
       <PlanLoadingSkeleton
         v-else-if="isGenerating"
-        :messages="['보유 카드의 실적과 혜택 한도를 비교하고 있어요.', '혜택 최대화, 예산 안정, 실적 균형 계획을 만들고 있습니다.']"
+        :messages="['보유 카드의 혜택 조건과 월 한도를 비교하고 있어요.', '혜택 최대화, 예산 안정, 다음 달 조건 준비 계획을 만들고 있습니다.']"
       />
 
       <template v-else-if="currentStep === 0">
@@ -86,13 +86,17 @@
       </template>
     </div>
 
-    <div v-if="showCancel" class="modal-scrim" @click.self="showCancel = false">
-      <div class="sheet">
-        <h2>계획 작성을 취소할까요?</h2>
-        <p>지금까지 입력한 내용이 사라집니다.</p>
-        <div class="sheet-actions">
-          <button class="outline-button" type="button" @click="showCancel = false">계속 작성</button>
-          <button class="danger-button" type="button" @click="cancelCreate">취소하기</button>
+    <div v-if="showCancel" class="modal-scrim cancel-scrim" @click.self="showCancel = false">
+      <div class="sheet cancel-sheet" role="dialog" aria-modal="true" aria-labelledby="cancel-title">
+        <div class="cancel-icon" aria-hidden="true" />
+        <div class="cancel-copy">
+          <span>작성 중인 계획</span>
+          <h2 id="cancel-title">계획 작성을 취소할까요?</h2>
+          <p>입력한 품목, 예산, 기간 정보가 저장되지 않고 사라집니다.</p>
+        </div>
+        <div class="cancel-actions">
+          <button class="cancel-keep-button" type="button" @click="showCancel = false">계속 작성</button>
+          <button class="cancel-danger-button" type="button" @click="cancelCreate">작성 취소</button>
         </div>
       </div>
     </div>
@@ -304,21 +308,21 @@ const cancelCreate = () => {
 .create-body {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 20px;
+  gap: 14px;
+  padding: 18px 20px 116px;
 }
 
 .step-copy h2 {
   margin: 0 0 5px;
   color: #17202b;
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 900;
 }
 
 .step-copy p {
   margin: 0;
   color: #6e6e73;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.5;
 }
@@ -365,11 +369,62 @@ const cancelCreate = () => {
   background: #fbfdff;
 }
 
+.cancel-scrim {
+  align-items: center;
+  padding: 22px;
+  background: rgba(23, 32, 43, 0.34);
+  backdrop-filter: blur(5px);
+}
+
+.cancel-sheet {
+  width: min(336px, calc(100vw - 40px));
+  border: 1px solid rgba(219, 228, 238, 0.9);
+  border-radius: 24px;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 14% 0%, rgba(15, 95, 174, 0.07), transparent 38%),
+    linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  text-align: left;
+  box-shadow: 0 22px 56px rgba(36, 54, 79, 0.18);
+  animation: cancel-pop 180ms ease both;
+  backdrop-filter: none;
+}
+
+.cancel-icon {
+  width: 46px;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2c638f 0%, #8bb9ca 100%);
+}
+
+.cancel-copy {
+  margin-top: 16px;
+}
+
+.cancel-copy span {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  border-radius: 999px;
+  margin-bottom: 10px;
+  padding: 0 9px;
+  background: #edf4fb;
+  color: #2c638f;
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .sheet h2 {
   margin: 0 0 7px;
   color: #17202b;
   font-size: 18px;
   font-weight: 900;
+}
+
+.cancel-sheet h2 {
+  margin-bottom: 8px;
+  font-size: 18px;
+  line-height: 1.25;
 }
 
 .sheet p {
@@ -379,9 +434,58 @@ const cancelCreate = () => {
   font-weight: 700;
 }
 
+.cancel-sheet p {
+  margin-bottom: 20px;
+  color: #6f7d8c;
+  line-height: 1.5;
+}
+
 .sheet-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.cancel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cancel-keep-button,
+.cancel-danger-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.cancel-keep-button {
+  background: #24364f;
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(36, 54, 79, 0.16);
+}
+
+.cancel-danger-button {
+  border: 0;
+  background: transparent;
+  color: #b42318;
+  box-shadow: none;
+}
+
+@keyframes cancel-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 </style>

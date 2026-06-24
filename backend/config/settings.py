@@ -33,16 +33,28 @@ def load_env_file(path):
 load_env_file(BASE_DIR / '.env')
 
 
+def env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.lower() in {'1', 'true', 'yes', 'on'}
+
+
+def env_list(name, default=''):
+    raw = os.environ.get(name, default)
+    return [item.strip() for item in raw.split(',') if item.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-d#m4ume0fm!(b9)j518qm_zi-fqhjfso7w91&@rw=xlvq0np5_'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-d#m4ume0fm!(b9)j518qm_zi-fqhjfso7w91&@rw=xlvq0np5_')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool('DJANGO_DEBUG', True)
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost,testserver')
 
 
 # Application definition
@@ -158,8 +170,22 @@ GMS_TIMEOUT_SECONDS = int(os.environ.get('GMS_TIMEOUT_SECONDS', '45'))
 GMS_MAX_OUTPUT_TOKENS = int(os.environ.get('GMS_MAX_OUTPUT_TOKENS', '3000'))
 
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5175').rstrip('/')
+CORS_ALLOWED_ORIGINS = env_list(
+    'CORS_ALLOWED_ORIGINS',
+    ','.join([
+        FRONTEND_URL,
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:5175',
+        'http://localhost:5173',
+        'http://localhost:5175',
+    ]),
+)
 AUTH_SESSION_DAYS = int(os.environ.get('AUTH_SESSION_DAYS', '14'))
 EMAIL_AUTH_ENABLED = os.environ.get('EMAIL_AUTH_ENABLED', 'true').lower() in {'1', 'true', 'yes'}
+DEV_AUTO_LOGIN_ENABLED = env_bool('DEV_AUTO_LOGIN_ENABLED', DEBUG)
+DEV_ADMIN_EMAIL = os.environ.get('DEV_ADMIN_EMAIL', 'admin@carch.local').strip().lower()
+DEV_ADMIN_PASSWORD = os.environ.get('DEV_ADMIN_PASSWORD', 'Carchadmin123!')
+DEV_ADMIN_NAME = os.environ.get('DEV_ADMIN_NAME', 'CARCH 관리자')
 KAKAO_CLIENT_ID = os.environ.get('KAKAO_REST_API_KEY') or os.environ.get('KAKAO_CLIENT_ID') or ''
 KAKAO_CLIENT_SECRET = os.environ.get('KAKAO_CLIENT_SECRET', '')
 NAVER_CLIENT_ID = os.environ.get('NAVER_CLIENT_ID', '')

@@ -13,6 +13,22 @@
     </header>
 
     <div ref="scrollRef" class="screen-scroll scrollbar-hide chat-body">
+      <section v-if="messages.length === 1" class="chat-starter-panel">
+        <span>바로 시작하기</span>
+        <strong>지금 데이터로 물어볼 수 있는 것</strong>
+        <div class="starter-grid">
+          <button type="button" :disabled="isSending" @click="sendMessage('이번 달 소비 분석해줘')">
+            소비 분석
+          </button>
+          <button type="button" :disabled="isSending" @click="sendMessage('나한테 맞는 카드 추천해줘')">
+            카드 추천
+          </button>
+          <button type="button" :disabled="isSending" @click="sendMessage('큰 지출 계획 세우고 싶어')">
+            지출 계획
+          </button>
+        </div>
+      </section>
+
       <div v-for="message in messages" :key="message.id" class="message-row" :class="message.role">
         <div class="message-bubble">
           <p>{{ message.content }}</p>
@@ -190,6 +206,46 @@ async function sendMessage(text = draft.value) {
   flex-direction: column;
   gap: 12px;
   padding: 18px 16px;
+}
+
+.chat-starter-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(36, 54, 79, 0.08);
+  border-radius: 18px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(0, 140, 149, 0.12), transparent 42%),
+    #fff;
+  box-shadow: 0 12px 24px rgba(36, 54, 79, 0.06);
+}
+
+.chat-starter-panel span {
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.chat-starter-panel strong {
+  color: #17202b;
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.starter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.starter-grid button {
+  min-height: 42px;
+  border-radius: 13px;
+  padding: 8px 6px;
+  background: rgba(15, 95, 174, 0.08);
+  color: #0f5fae;
+  font-size: 11px;
+  font-weight: 900;
 }
 
 .message-row {

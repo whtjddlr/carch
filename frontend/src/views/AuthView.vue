@@ -1,8 +1,10 @@
 <template>
   <section class="screen auth-screen">
     <div class="auth-hero">
-      <div class="brand-mark">C</div>
-      <h1>CARCH</h1>
+      <div class="brand-mark">
+        <img src="/brand/carch-title-bird.png" alt="Carch" />
+      </div>
+      <h1>{{ isSignup ? 'Carch 시작하기' : 'Carch 로그인' }}</h1>
       <p>카드를 읽고 소비를 설계하는 지갑</p>
     </div>
 
@@ -37,6 +39,16 @@
         {{ loading ? '확인 중' : isSignup ? '회원가입' : '로그인' }}
       </button>
 
+      <button
+        v-if="devAutoLoginAvailable"
+        class="dev-login-button"
+        type="button"
+        :disabled="loading"
+        @click="submitDevAdmin"
+      >
+        관리자 계정으로 바로 로그인
+      </button>
+
       <div class="auth-divider"><span>또는</span></div>
 
       <div class="social-buttons">
@@ -65,7 +77,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchAuthProviders, USE_MOCK_API } from '@/services/api'
-import { completeOAuthLogin, emailLogin, emailSignup, oauthStartUrl } from '@/services/auth'
+import { completeOAuthLogin, devAdminLogin, emailLogin, emailSignup, isDevAutoLoginEnabled, oauthStartUrl } from '@/services/auth'
 
 const props = defineProps({
   mode: { type: String, default: 'login' },
@@ -78,6 +90,7 @@ const nextPath = computed(() => String(route.query.next || '/cards'))
 const loading = ref(false)
 const message = ref(String(route.query.error || ''))
 const messageTone = ref(message.value ? 'danger' : 'info')
+const devAutoLoginAvailable = isDevAutoLoginEnabled()
 const providers = ref([
   { id: 'kakao', label: '카카오', enabled: false },
   { id: 'naver', label: '네이버', enabled: false },
@@ -118,6 +131,20 @@ const submitEmail = async () => {
   }
 }
 
+const submitDevAdmin = async () => {
+  loading.value = true
+  message.value = ''
+  try {
+    await devAdminLogin()
+    router.replace(nextPath.value.startsWith('/') ? nextPath.value : '/cards')
+  } catch (error) {
+    message.value = error?.response?.data?.detail || '관리자 자동 로그인을 완료하지 못했습니다.'
+    messageTone.value = 'danger'
+  } finally {
+    loading.value = false
+  }
+}
+
 const startSocial = async (provider) => {
   if (!provider.enabled) {
     message.value = `${provider.label} 로그인 키를 설정해 주세요.`
@@ -142,27 +169,31 @@ const startSocial = async (provider) => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 76px 28px 40px;
+  padding: 58px 28px 30px;
   color: var(--carch-ink);
 }
 
 .brand-mark {
   display: grid;
-  width: 56px;
-  height: 56px;
+  width: min(196px, 56vw);
+  height: 72px;
   place-items: center;
-  border-radius: 19px;
-  background: var(--carch-navy);
-  color: #fff;
-  font-size: 26px;
-  font-weight: 900;
-  box-shadow: 0 18px 36px rgba(36, 54, 79, 0.18);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 18px 36px rgba(36, 54, 79, 0.1);
+}
+
+.brand-mark img {
+  display: block;
+  width: 82%;
+  height: auto;
+  object-fit: contain;
 }
 
 .auth-hero h1 {
-  margin: 18px 0 4px;
+  margin: 14px 0 4px;
   color: var(--carch-ink);
-  font-size: 34px;
+  font-size: 25px;
   font-weight: 900;
 }
 
@@ -178,8 +209,9 @@ const startSocial = async (provider) => {
   flex: 1;
   flex-direction: column;
   gap: 14px;
-  padding: 28px 24px 32px;
+  padding: 24px 24px 32px;
   border-top: 1px solid var(--carch-line);
+  background: rgba(255, 255, 255, 0.42);
 }
 
 .auth-title {
@@ -276,6 +308,20 @@ const startSocial = async (provider) => {
 
 .social-button:disabled {
   opacity: 0.42;
+}
+
+.dev-login-button {
+  min-height: 48px;
+  border: 1px solid rgba(15, 95, 174, 0.26);
+  border-radius: 16px;
+  background: #24364f;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.dev-login-button:disabled {
+  opacity: 0.5;
 }
 
 .social-symbol {

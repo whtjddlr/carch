@@ -26,9 +26,9 @@ CATEGORY_ICONS = {
 }
 
 KNOWN_CARDS = {
-    '10029': 'LOCA 100',
+    '10106': 'LOCA LIKIT Eat',
     '10612': '카드의정석 SHOPPER',
-    '10609': '이마트 신한카드',
+    '10029': 'LOCA 100',
 }
 
 ALLOWED_AI_ROUTES = {
@@ -250,6 +250,7 @@ def normalize_transaction(parsed, source_text):
     ).strip()
 
     review_fields = normalize_string_list(parsed.get('reviewFields') or parsed.get('review_fields'))
+    payment_terms = normalize_payment_terms(parsed, source_text)
 
     return {
         'schemaVersion': str(parsed.get('schemaVersion') or 'transaction-parse-v2'),
@@ -258,6 +259,7 @@ def normalize_transaction(parsed, source_text):
         'category': category,
         'amount': amount,
         'approvedAt': normalize_approved_at(parsed.get('approvedAt') or parsed.get('approved_at')),
+        **payment_terms,
         'icon': parsed.get('icon') or CATEGORY_ICONS[category],
         'address': parsed.get('address') or parsed.get('addr') or '직접 입력',
         'displayTitle': truncate(parsed.get('displayTitle') or merchant or '결제내역 확인', 80),
@@ -273,6 +275,55 @@ def normalize_transaction(parsed, source_text):
     }
 
 
+def normalize_payment_terms(parsed, source_text=''):
+    text = str(source_text or '').replace(' ', '')
+    raw_type = str(parsed.get('paymentType') or parsed.get('payment_type') or '').strip().lower()
+    raw_months = parsed.get('installmentMonths') or parsed.get('installment_months') or 0
+    try:
+        months = int(raw_months or 0)
+    except (TypeError, ValueError):
+        months = 0
+
+    month_match = re.search(r'(\d{1,2})\s*(?:개월|month|months)', str(source_text or ''), re.IGNORECASE)
+    if month_match:
+        months = max(months, int(month_match.group(1)))
+
+    interest_free = coerce_bool(
+        parsed.get('isInterestFreeInstallment')
+        if 'isInterestFreeInstallment' in parsed
+        else parsed.get('is_interest_free_installment'),
+        False,
+    ) or '무이자' in text
+    is_installment = (
+        raw_type in {'installment', 'installments', '할부'}
+        or months > 1
+        or '할부' in text
+        or interest_free
+    )
+    if raw_type in {'lump_sum', 'lump', 'single', '일시불'} and not ('할부' in text or interest_free):
+        is_installment = False
+
+    if not is_installment:
+        return {
+            'paymentType': 'lump_sum',
+            'payment_type': 'lump_sum',
+            'installmentMonths': 0,
+            'installment_months': 0,
+            'isInterestFreeInstallment': False,
+            'is_interest_free_installment': False,
+        }
+
+    months = max(months, 2)
+    return {
+        'paymentType': 'installment',
+        'payment_type': 'installment',
+        'installmentMonths': months,
+        'installment_months': months,
+        'isInterestFreeInstallment': bool(interest_free),
+        'is_interest_free_installment': bool(interest_free),
+    }
+
+
 def normalize_purchase_plan(parsed, fallback_payload):
     fallback_budget = fallback_payload.get('budget') or fallback_payload.get('totalBudget') or 7000000
     start_month = normalize_month(parsed.get('startMonth') or fallback_payload.get('startMonth'), '2026-07')
@@ -282,6 +333,7 @@ def normalize_purchase_plan(parsed, fallback_payload):
         if not isinstance(item, dict):
             continue
         name = str(item.get('name') or f'구매 항목 {index}').strip()
+        payment_terms = normalize_payment_terms(item, f'{name} {item.get("reason") or ""}')
         items.append(
             {
                 'id': str(item.get('id') or f'i{index}'),
@@ -289,6 +341,9 @@ def normalize_purchase_plan(parsed, fallback_payload):
                 'category': str(item.get('category') or '기타').strip(),
                 'amount': coerce_positive_int(item.get('amount'), 0),
                 'targetMonth': normalize_month(item.get('targetMonth'), start_month),
+                'paymentType': payment_terms['paymentType'],
+                'installmentMonths': payment_terms['installmentMonths'],
+                'isInterestFreeInstallment': payment_terms['isInterestFreeInstallment'],
                 'required': coerce_bool(item.get('required'), True),
                 'flexible': coerce_bool(item.get('flexible'), True),
                 'priority': normalize_choice(item.get('priority'), {'high', 'medium', 'low'}, 'medium'),

@@ -20,13 +20,38 @@
         <span>예상 금액</span>
         <input :value="item.amount" type="number" @input="patch('amount', Number($event.target.value))" />
       </label>
+      <div class="picker-field">
+        <AppCalendarPicker
+          :model-value="item.targetMonth"
+          label="목표 구매 월"
+          mode="month"
+          @update:model-value="patch('targetMonth', $event)"
+        />
+      </div>
       <label>
-        <span>목표 구매 월</span>
-        <input :value="item.targetMonth" type="month" @input="patch('targetMonth', $event.target.value)" />
+        <span>결제 방식</span>
+        <select :value="item.paymentType || 'lump_sum'" @change="patchPaymentType($event.target.value)">
+          <option value="lump_sum">일시불</option>
+          <option value="installment">할부</option>
+        </select>
+      </label>
+      <label v-if="(item.paymentType || 'lump_sum') === 'installment'">
+        <span>개월 수</span>
+        <select :value="item.installmentMonths || 2" @change="patch('installmentMonths', Number($event.target.value))">
+          <option v-for="month in installmentMonthOptions" :key="month" :value="month">{{ month }}개월</option>
+        </select>
       </label>
       <div class="check-grid">
         <label><input :checked="item.required" type="checkbox" @change="patch('required', $event.target.checked)" /> 필수</label>
         <label><input :checked="item.flexible" type="checkbox" @change="patch('flexible', $event.target.checked)" /> 일정 변경 가능</label>
+        <label v-if="(item.paymentType || 'lump_sum') === 'installment'">
+          <input
+            :checked="Boolean(item.isInterestFreeInstallment)"
+            type="checkbox"
+            @change="patch('isInterestFreeInstallment', $event.target.checked)"
+          />
+          무이자
+        </label>
       </div>
     </div>
   </article>
@@ -34,14 +59,26 @@
 
 <script setup>
 import { Trash2 } from 'lucide-vue-next'
+import AppCalendarPicker from '@/components/AppCalendarPicker.vue'
 
 const emit = defineEmits(['update', 'remove'])
 const props = defineProps({
   item: { type: Object, required: true },
 })
 
+const installmentMonthOptions = [2, 3, 4, 5, 6, 9, 10, 12]
+
 const patch = (field, value) => {
   emit('update', { ...props.item, [field]: value })
+}
+
+const patchPaymentType = (paymentType) => {
+  emit('update', {
+    ...props.item,
+    paymentType,
+    installmentMonths: paymentType === 'installment' ? Number(props.item.installmentMonths || 2) : 0,
+    isInterestFreeInstallment: paymentType === 'installment' ? Boolean(props.item.isInterestFreeInstallment) : false,
+  })
 }
 </script>
 
@@ -89,6 +126,10 @@ label {
   min-width: 0;
 }
 
+.picker-field {
+  min-width: 0;
+}
+
 label span {
   display: block;
   margin-bottom: 4px;
@@ -97,7 +138,8 @@ label span {
   font-weight: 800;
 }
 
-label input:not([type='checkbox']) {
+label input:not([type='checkbox']),
+label select {
   width: 100%;
   border: 1px solid #dbe4ee;
   border-radius: 10px;

@@ -1,0 +1,236 @@
+{
+  "generatedAt": "2026-06-24T12:24:13",
+  "cardMasterDb": "C:\\Users\\SSAFY\\Desktop\\finalpjt\\pjt-08-db-bundle-20260529\\card_master_api.sqlite",
+  "summary": {
+    "benefitRows": 6201,
+    "fieldCoverage": {
+      "rate_percent": {
+        "count": 5248,
+        "ratio": 0.846
+      },
+      "amount_krw": {
+        "count": 560,
+        "ratio": 0.09
+      },
+      "required_previous_month_spend_krw": {
+        "count": 5703,
+        "ratio": 0.92
+      },
+      "min_payment_amount_krw": {
+        "count": 1041,
+        "ratio": 0.168
+      },
+      "monthly_benefit_limit_krw": {
+        "count": 747,
+        "ratio": 0.12
+      },
+      "target_merchants_json": {
+        "count": 939,
+        "ratio": 0.151
+      },
+      "exclusion_keywords_json": {
+        "count": 1803,
+        "ratio": 0.291
+      }
+    }
+  },
+  "demoCandidateCriteria": [
+    "카테고리/할인값/전월실적/월한도 필드가 많이 채워진 카드",
+    "자동 계산 가능 행이 많고 수동 검수 비율이 낮은 카드",
+    "남주현 시나리오는 이 후보 중 소비 패턴과 맞는 카드만 사용"
+  ],
+  "demoCandidates": [
+    {
+      "card_ad_id": 10447,
+      "card_name": "KB국민 기후동행카드",
+      "issuer_name": "KB국민카드",
+      "official_url": "https://card.kbcard.com/CRD/DVIEW/HCAMCXPRICAC0076?cooperationcode=04918&mainCC=a",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=10447",
+      "benefit_count": 17,
+      "has_value": 16,
+      "has_required": 17,
+      "has_min_payment": 16,
+      "has_monthly_limit": 16,
+      "has_merchants": 5,
+      "has_exclusions": 6,
+      "has_shared": 0,
+      "auto_usable": 16,
+      "manual_review": 1,
+      "coverageScore": 0.84,
+      "manualReviewRatio": 0.059
+    },
+    {
+      "card_ad_id": 10291,
+      "card_name": "I-PET카드",
+      "issuer_name": "IBK기업은행",
+      "official_url": "https://www.ibk.co.kr/cardbiz/detailBizNew.ibk?PDLN_CD=12&PDGR_CD=11&PDTM_CD=342&PDCD=0001&ad_cd=nvpc&mz_cd=ADGROUN",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=10291",
+      "benefit_count": 5,
+      "has_value": 5,
+      "has_required": 5,
+      "has_min_payment": 0,
+      "has_monthly_limit": 5,
+      "has_merchants": 2,
+      "has_exclusions": 4,
+      "has_shared": 0,
+      "auto_usable": 5,
+      "manual_review": 0,
+      "coverageScore": 0.836,
+      "manualReviewRatio": 0.0
+    },
+    {
+      "card_ad_id": 10310,
+      "card_name": "KT DC PLUS 롯데카드",
+      "issuer_name": "롯데카드",
+      "official_url": "http://www.lottecard.co.kr/app/LPBOHAA_V100.lc?bId=92456&vtCdKndC=P14445-A14445&npayUseYn=Y",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=10310",
+      "benefit_count": 2,
+      "has_value": 2,
+      "has_required": 2,
+      "has_min_payment": 2,
+      "has_monthly_limit": 2,
+      "has_merchants": 2,
+      "has_exclusions": 2,
+      "has_shared": 2,
+      "auto_usable": 0,
+      "manual_review": 0,
+      "coverageScore": 0.818,
+      "manualReviewRatio": 0.0
+    },
+    {
+      "card_ad_id": 10126,
+      "card_name": "삼성 iD ENERGY 카드",
+      "issuer_name": "삼성카드",
+      "official_url": "https://www.samsungcard.com/personal/card/simple-apply/UHPPCA0225M0.jsp?code=AAP1753&alncmpC=QACDPC04&affcode=QACDPC04&BSCPN=BCTS&BSPRG=NAVERCARD&BSCCN1=PC_%EC%8B%A0%EA%B2%80_AAP1753_%EC%82%BC%EC%84%B1%20iD%20ENERGY%20%EC%B9%B4%EB%93%9C&utm_campaign=%EC%82%BC%EC%84%B1%20iD%20ENERGY%20%EC%B9%B4%EB%93%9C&utm_medium=CSA&utm_source=%EB%84%A4%EC%9D%B4%EB%B2%84%20%EC%8B%A0%EC%9A%A9%EC%B9%B4%EB%93%9C%20%EA%B2%80%EC%83%89%20PC&utm_term={query}",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=10126",
+      "benefit_count": 10,
+      "has_value": 10,
+      "has_required": 10,
+      "has_min_payment": 3,
+      "has_monthly_limit": 10,
+      "has_merchants": 5,
+      "has_exclusions": 3,
+      "has_shared": 3,
+      "auto_usable": 7,
+      "manual_review": 0,
+      "coverageScore": 0.773,
+      "manualReviewRatio": 0.0
+    },
+    {
+      "card_ad_id": 10186,
+      "card_name": "zgm.streaming카드",
+      "issuer_name": "NH농협카드",
+      "official_url": "https://card.nonghyup.com/index_cardProd.html?SERVICE_ID=IPCC2021R&NAVIGATE_TYPE=1&cd_wrs_sqno=90010179&FromSite=52",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=10186",
+      "benefit_count": 4,
+      "has_value": 4,
+      "has_required": 4,
+      "has_min_payment": 2,
+      "has_monthly_limit": 4,
+      "has_merchants": 1,
+      "has_exclusions": 1,
+      "has_shared": 1,
+      "auto_usable": 3,
+      "manual_review": 0,
+      "coverageScore": 0.773,
+      "manualReviewRatio": 0.0
+    }
+  ],
+  "enrichmentTargets": [
+    {
+      "card_ad_id": 1243,
+      "card_name": "올바른POINT UP 카드",
+      "issuer_name": "NH농협카드",
+      "official_url": "https://card.nonghyup.com/index_cardProd.html?SERVICE_ID=IPCC2021R&NAVIGATE_TYPE=1&cd_wrs_sqno=90000413&FromSite=52",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=1243",
+      "benefit_count": 16,
+      "has_value": 14,
+      "has_required": 16,
+      "has_min_payment": 0,
+      "has_monthly_limit": 0,
+      "has_merchants": 0,
+      "has_exclusions": 0,
+      "has_shared": 0,
+      "auto_usable": 14,
+      "manual_review": 16,
+      "coverageScore": 0.5,
+      "manualReviewRatio": 1.0
+    },
+    {
+      "card_ad_id": 3055,
+      "card_name": "올바른POINT UP+ 카드",
+      "issuer_name": "NH농협카드",
+      "official_url": "https://card.nonghyup.com/index_cardProd.html?SERVICE_ID=IPCC2021R&NAVIGATE_TYPE=1&cd_wrs_sqno=90000414&FromSite=52",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=3055",
+      "benefit_count": 16,
+      "has_value": 14,
+      "has_required": 16,
+      "has_min_payment": 0,
+      "has_monthly_limit": 0,
+      "has_merchants": 0,
+      "has_exclusions": 0,
+      "has_shared": 0,
+      "auto_usable": 14,
+      "manual_review": 16,
+      "coverageScore": 0.5,
+      "manualReviewRatio": 1.0
+    },
+    {
+      "card_ad_id": 10260,
+      "card_name": "신한카드 Globus",
+      "issuer_name": "신한카드",
+      "official_url": "https://www.shinhancard.com/pconts/html/card/apply/credit/1221213_2207.html?EntryLoc2=3317&empSeq=1&btnApp=dp01&utm_source=naver%5Fcredit&utm_medium=cpc&utm_campaign=online%5Fpc%5Fglobus",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=10260",
+      "benefit_count": 16,
+      "has_value": 16,
+      "has_required": 16,
+      "has_min_payment": 0,
+      "has_monthly_limit": 0,
+      "has_merchants": 0,
+      "has_exclusions": 0,
+      "has_shared": 0,
+      "auto_usable": 16,
+      "manual_review": 16,
+      "coverageScore": 0.545,
+      "manualReviewRatio": 1.0
+    },
+    {
+      "card_ad_id": 10617,
+      "card_name": "현대카드 MC GLOBAL",
+      "issuer_name": "현대카드",
+      "official_url": "https://mycompany.hyundaicard.com/cr/in/CRIN1015.do?eventCode=GLO11&pageType=newJoin",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=10617",
+      "benefit_count": 15,
+      "has_value": 14,
+      "has_required": 1,
+      "has_min_payment": 0,
+      "has_monthly_limit": 0,
+      "has_merchants": 0,
+      "has_exclusions": 0,
+      "has_shared": 0,
+      "auto_usable": 14,
+      "manual_review": 15,
+      "coverageScore": 0.352,
+      "manualReviewRatio": 1.0
+    },
+    {
+      "card_ad_id": 10565,
+      "card_name": "현대카드 MC TWO(법인 리워드형)",
+      "issuer_name": "현대카드",
+      "official_url": "https://mycompany.hyundaicard.com/cr/in/CRIN1012.do?_method=X01&prdtCd=03083&pageType=newJoin",
+      "naver_url": "https://card-search.naver.com/item?cardAdId=10565",
+      "benefit_count": 13,
+      "has_value": 12,
+      "has_required": 13,
+      "has_min_payment": 0,
+      "has_monthly_limit": 0,
+      "has_merchants": 0,
+      "has_exclusions": 0,
+      "has_shared": 1,
+      "auto_usable": 12,
+      "manual_review": 13,
+      "coverageScore": 0.517,
+      "manualReviewRatio": 1.0
+    }
+  ]
+}

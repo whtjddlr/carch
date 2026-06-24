@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from pathlib import Path
 
@@ -13,13 +14,20 @@ CURATED_CARD_COPY = {
         'benefitSummary': '쇼핑 최대 15% 할인',
         'benefits': ['온라인 쇼핑 10% 할인', '오프라인 쇼핑 10% 할인', '쇼핑멤버십 50% 할인'],
     },
-    10609: {
-        'benefitSummary': '이마트 계열 15% 할인',
-        'benefits': ['이마트 계열 15% 할인', '국내외 가맹점 0.5% 적립', '전월 실적 40만원'],
+    10106: {
+        'benefitSummary': '카페·음식점 생활권 집중 할인',
+        'benefits': ['카페 할인', '음식점 할인', '생활 영역 특화'],
+    },
+    10107: {
+        'benefitSummary': '온라인 쇼핑·편의점 집중 할인',
+        'benefits': ['온라인 쇼핑 할인', '편의점 할인', '생활 쇼핑 특화'],
+    },
+    10071: {
+        'benefitSummary': '카페·생활 결제 특화 할인',
+        'benefits': ['카페 할인', '생활 영역 할인', '전월 실적 40만원'],
     },
 }
 PREFERRED_CARD_IMAGES = {
-    10612: '2978card.png',
 }
 
 
@@ -52,6 +60,18 @@ def card_image_url(request, card_ad_id, local_path=''):
     return request.build_absolute_uri(f'/api/card-images/{filename}')
 
 
+def parse_json_value(value, fallback=None):
+    if fallback is None:
+        fallback = []
+    if value in (None, '', 'null'):
+        return fallback
+    try:
+        parsed = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return fallback
+    return parsed if parsed is not None else fallback
+
+
 def benefit_label(row):
     scope = row['scope_name'] or '혜택'
     unit = row['benefit_unit']
@@ -67,12 +87,116 @@ def benefit_label(row):
     return scope
 
 
+def missing_rule_fields(benefit):
+    missing = []
+    if benefit['ratePercent'] is None and benefit['amountKrw'] is None and benefit['benefitValue'] is None:
+        missing.append('benefitValue')
+    if benefit['requiredPreviousMonthSpendKrw'] is None:
+        missing.append('previousMonthSpend')
+    if benefit['monthlyBenefitLimitKrw'] is None and not benefit['hasSharedMonthlyLimit']:
+        missing.append('monthlyLimit')
+    if not benefit['normalizedCategories']:
+        missing.append('category')
+    if not benefit['targetMerchants'] and benefit['calculationStatus'] in {'manual_review', 'conditional'}:
+        missing.append('targetMerchants')
+    return missing
+
+
+def benefit_payment_rules(benefit):
+    exclusion_keywords = benefit.get('exclusionKeywords') or []
+    condition_lines = benefit.get('conditionLines') or []
+    excluded_methods = set()
+
+    for raw_keyword in exclusion_keywords:
+        text = str(raw_keyword or '').replace(' ', '')
+        if not text:
+            continue
+        if '무이자' in text:
+            excluded_methods.add('interest_free_installment')
+        elif '할부' in text:
+            excluded_methods.add('installment')
+
+    exclusion_markers = ('제외', '미적용', '불가', '제한', '대상아님', '대상아닌')
+    for raw_line in condition_lines:
+        text = str(raw_line or '').replace(' ', '')
+        if not text or not any(marker in text for marker in exclusion_markers):
+            continue
+        if '무이자' in text:
+            excluded_methods.add('interest_free_installment')
+        elif '할부' in text:
+            excluded_methods.add('installment')
+
+    if 'installment' in excluded_methods:
+        excluded_methods.add('interest_free_installment')
+
+    return {
+        'excludedPaymentMethods': sorted(excluded_methods),
+        'paymentMethodRules': {
+            'installmentBenefitEligible': 'installment' not in excluded_methods,
+            'interestFreeInstallmentEligible': 'interest_free_installment' not in excluded_methods,
+            'source': 'official_rule_text' if excluded_methods else 'not_detected',
+        },
+    }
+
+
+def mark_benefit_review_state(benefit):
+    missing = missing_rule_fields(benefit)
+    verified = bool(benefit['isAutoUsable']) and not benefit['needsManualReview'] and not missing
+    return {
+        **benefit,
+        'missingRuleFields': missing,
+        'verified': verified,
+        'manualInputAllowed': not verified,
+    }
+
+
+def benefit_data_status(benefits):
+    if not benefits:
+        return {
+            'status': 'missing',
+            'label': '혜택 데이터 없음',
+            'manualInputAvailable': True,
+            'missingRuleFields': ['benefits'],
+        }
+
+    missing_fields = sorted({field for benefit in benefits for field in benefit.get('missingRuleFields', [])})
+    verified_count = sum(1 for benefit in benefits if benefit.get('verified'))
+    if verified_count == len(benefits):
+        status = 'verified'
+        label = '검증 완료'
+    elif verified_count:
+        status = 'partial'
+        label = '일부 보완 필요'
+    else:
+        status = 'needs_input'
+        label = '정보 보완 필요'
+    return {
+        'status': status,
+        'label': label,
+        'manualInputAvailable': status != 'verified',
+        'verifiedBenefitCount': verified_count,
+        'totalBenefitCount': len(benefits),
+        'missingRuleFields': missing_fields,
+    }
+
+
 def list_benefits(card_ad_id, limit=5):
+    limit_clause = ''
+    params = [card_ad_id]
+    if limit is not None:
+        limit_clause = 'limit ?'
+        params.append(limit)
+
     with connect_card_db() as connection:
         rows = connection.execute(
-            '''
-            select benefit_type, scope_name, benefit_value, benefit_unit, rate_percent, amount_krw,
-                   required_previous_month_spend_krw, monthly_benefit_limit_krw, calculation_status
+            f'''
+            select benefit_id, benefit_type, scope_name, benefit_value, benefit_unit, rate_percent, amount_krw,
+                   required_previous_month_spend_krw, min_payment_amount_krw,
+                   monthly_benefit_limit_krw, yearly_benefit_limit_krw,
+                   categories_json, normalized_categories_json, target_merchants_json,
+                   channel_flags_json, condition_lines_json, exclusion_keywords_json,
+                   quality_score, needs_manual_review, has_shared_monthly_limit,
+                   calculation_status, is_auto_usable, source_rule_ids_json
             from card_benefits
             where card_ad_id = ?
             order by
@@ -84,9 +208,9 @@ def list_benefits(card_ad_id, limit=5):
                 else 3
               end,
               scope_name
-            limit ?
+            {limit_clause}
             ''',
-            (card_ad_id, limit),
+            params,
         ).fetchall()
 
     benefits = []
@@ -96,24 +220,42 @@ def list_benefits(card_ad_id, limit=5):
         if label in seen:
             continue
         seen.add(label)
-        benefits.append(
-            {
-                'type': row['benefit_type'],
-                'scope': row['scope_name'],
-                'label': label,
-                'ratePercent': row['rate_percent'],
-                'amountKrw': row['amount_krw'],
-                'requiredPreviousMonthSpendKrw': row['required_previous_month_spend_krw'],
-                'monthlyBenefitLimitKrw': row['monthly_benefit_limit_krw'],
-                'calculationStatus': row['calculation_status'],
-            }
-        )
+        benefit = {
+            'id': row['benefit_id'],
+            'benefitId': row['benefit_id'],
+            'type': row['benefit_type'],
+            'scope': row['scope_name'],
+            'label': label,
+            'benefitValue': row['benefit_value'],
+            'benefitUnit': row['benefit_unit'],
+            'ratePercent': row['rate_percent'],
+            'amountKrw': row['amount_krw'],
+            'requiredPreviousMonthSpendKrw': row['required_previous_month_spend_krw'],
+            'minPaymentAmountKrw': row['min_payment_amount_krw'],
+            'monthlyBenefitLimitKrw': row['monthly_benefit_limit_krw'],
+            'yearlyBenefitLimitKrw': row['yearly_benefit_limit_krw'],
+            'categories': parse_json_value(row['categories_json']),
+            'normalizedCategories': parse_json_value(row['normalized_categories_json']),
+            'targetMerchants': parse_json_value(row['target_merchants_json']),
+            'channelFlags': parse_json_value(row['channel_flags_json'], {}),
+            'conditionLines': parse_json_value(row['condition_lines_json']),
+            'exclusionKeywords': parse_json_value(row['exclusion_keywords_json']),
+            'qualityScore': row['quality_score'],
+            'needsManualReview': bool(row['needs_manual_review']),
+            'hasSharedMonthlyLimit': bool(row['has_shared_monthly_limit']),
+            'calculationStatus': row['calculation_status'],
+            'isAutoUsable': bool(row['is_auto_usable']),
+            'sourceRuleIds': parse_json_value(row['source_rule_ids_json']),
+        }
+        benefit.update(benefit_payment_rules(benefit))
+        benefits.append(mark_benefit_review_state(benefit))
     return benefits
 
 
 def serialize_card(row, request, include_benefits=False):
     card_ad_id = row['card_ad_id']
     benefits = list_benefits(card_ad_id, 6 if include_benefits else 3)
+    status_benefits = list_benefits(card_ad_id, None) if include_benefits else benefits
     benefit_labels = [benefit['label'] for benefit in benefits]
     curated = CURATED_CARD_COPY.get(card_ad_id, {})
     display_benefits = curated.get('benefits') or benefit_labels
@@ -135,6 +277,7 @@ def serialize_card(row, request, include_benefits=False):
         'benefitSummary': curated.get('benefitSummary') or (benefit_labels[0] if benefit_labels else row['title_description']),
         'benefits': display_benefits,
         'benefitItems': benefits if include_benefits else [],
+        'benefitDataStatus': benefit_data_status(status_benefits),
         'annualFee': row['domestic_annual_fee'] or 0,
         'domesticAnnualFee': row['domestic_annual_fee'] or 0,
         'domestic_annual_fee': row['domestic_annual_fee'] or 0,

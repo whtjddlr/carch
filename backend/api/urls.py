@@ -8,6 +8,7 @@ urlpatterns = [
     path('auth/providers/', views.auth_providers, name='auth-providers'),
     path('auth/me/', views.auth_me, name='auth-me'),
     path('auth/logout/', views.auth_logout, name='auth-logout'),
+    path('auth/dev-login/', views.dev_login, name='dev-login'),
     path('auth/email/signup/', views.email_signup, name='email-signup'),
     path('auth/email/login/', views.email_login, name='email-login'),
     path('auth/oauth/<str:provider>/start/', views.oauth_start, name='oauth-start'),

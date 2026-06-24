@@ -1,4 +1,4 @@
-import { API_BASE_URL, api, loginWithEmail, logoutAuth, signupWithEmail, fetchCurrentUser } from './api'
+import { API_BASE_URL, DEV_AUTO_LOGIN_ENABLED, api, loginAsDevAdmin, loginWithEmail, logoutAuth, signupWithEmail, fetchCurrentUser } from './api'
 
 const AUTH_TOKEN_KEY = 'carch-auth-token'
 const AUTH_USER_KEY = 'carch-auth-user'
@@ -13,12 +13,14 @@ export const getStoredUser = () => {
   }
 }
 
-export const isAuthenticated = () => Boolean(getAuthToken() || localStorage.getItem('carch-auth') === '1')
+export const isAuthenticated = () => Boolean(getAuthToken())
+export const isDevAutoLoginEnabled = () => DEV_AUTO_LOGIN_ENABLED
+
+let devAutoLoginPromise = null
 
 export const setAuthSession = ({ token, user }) => {
   if (token) localStorage.setItem(AUTH_TOKEN_KEY, token)
   if (user) localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user))
-  localStorage.setItem('carch-auth', '1')
 }
 
 export const clearAuthSession = () => {
@@ -37,19 +39,28 @@ export const hydrateAuthHeader = () => {
 }
 
 export const completeOAuthLogin = async ({ token }) => {
-  setAuthSession({ token })
+  if (!token) {
+    clearAuthSession()
+    hydrateAuthHeader()
+    throw new Error('Missing auth token')
+  }
+
+  localStorage.setItem(AUTH_TOKEN_KEY, token)
   hydrateAuthHeader()
   try {
     const current = await fetchCurrentUser()
     setAuthSession({ token, user: current.user })
     return current.user
-  } catch {
-    return getStoredUser()
+  } catch (error) {
+    clearAuthSession()
+    hydrateAuthHeader()
+    throw error
   }
 }
 
 export const emailLogin = async (payload) => {
   const result = await loginWithEmail(payload)
+  if (!result?.token) throw new Error('Missing auth token')
   setAuthSession(result)
   hydrateAuthHeader()
   return result
@@ -57,9 +68,35 @@ export const emailLogin = async (payload) => {
 
 export const emailSignup = async (payload) => {
   const result = await signupWithEmail(payload)
+  if (!result?.token) throw new Error('Missing auth token')
   setAuthSession(result)
   hydrateAuthHeader()
   return result
+}
+
+export const devAdminLogin = async () => {
+  const result = await loginAsDevAdmin()
+  if (!result?.token) throw new Error('Missing auth token')
+  setAuthSession(result)
+  hydrateAuthHeader()
+  return result
+}
+
+export const ensureDevAutoLogin = async () => {
+  if (isAuthenticated()) return true
+  if (!DEV_AUTO_LOGIN_ENABLED) return false
+  if (!devAutoLoginPromise) {
+    devAutoLoginPromise = devAdminLogin()
+      .then(() => true)
+      .catch((error) => {
+        console.warn('개발용 자동 로그인에 실패했습니다.', error)
+        return false
+      })
+      .finally(() => {
+        devAutoLoginPromise = null
+      })
+  }
+  return devAutoLoginPromise
 }
 
 export const logout = async () => {

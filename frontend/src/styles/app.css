@@ -14,6 +14,14 @@
   --carch-blue-soft: #e8f1fb;
   --carch-teal: #008c95;
   --carch-teal-soft: #e2f5f5;
+  --carch-gold: #c49a49;
+  --carch-coral: #d76a52;
+  --carch-safe: #237aa5;
+  --carch-success: #008c95;
+  --carch-warning: #c4872f;
+  --carch-danger: #d94a3a;
+  --carch-warning-soft: rgba(196, 154, 73, 0.12);
+  --carch-danger-soft: rgba(217, 74, 58, 0.1);
   --carch-surface: #ffffff;
   --carch-page: #f3f6f8;
   --carch-border: rgba(32, 36, 42, 0.08);
@@ -40,8 +48,7 @@
   --carch-control-shadow: none;
   --carch-primary-control: rgba(36, 54, 79, 0.9);
   --carch-primary-control-hover: rgba(36, 54, 79, 0.97);
-  --carch-danger-soft: transparent;
-  --carch-danger-border: rgba(217, 45, 32, 0.2);
+  --carch-danger-border: rgba(217, 74, 58, 0.22);
 }
 
 * {
@@ -220,15 +227,20 @@ a {
   .budget-list-header,
   .plans-header,
   .chat-header,
+  .create-top,
   .create-header,
   .utility-header,
   .recommend-header,
   .detail-header,
   .editor-header
 ) {
-  background: linear-gradient(180deg, #2c4e72 0%, #2a486b 32%, #324f70 48%, #45617f 62%, #6883a1 74%, #9db1c5 85%, #d4dde6 93%, var(--carch-page) 100%) !important;
-  color: #fff !important;
-  padding-bottom: clamp(34px, 9vw, 50px) !important;
+  border-radius: 0 0 28px 28px;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(15, 95, 174, 0.08), transparent 38%),
+    linear-gradient(180deg, #ffffff 0%, #fbfdff 62%, #edf4fb 100%) !important;
+  color: var(--carch-ink) !important;
+  box-shadow: 0 14px 36px rgba(36, 54, 79, 0.1);
+  padding-bottom: clamp(18px, 5vw, 24px) !important;
 }
 
 .app-backdrop .phone-shell :is(
@@ -238,13 +250,14 @@ a {
   .budget-list-header,
   .plans-header,
   .chat-header,
+  .create-top,
   .create-header,
   .utility-header,
   .recommend-header,
   .detail-header,
   .editor-header
 ) :is(h1, h2, h3, strong, b) {
-  color: #fff !important;
+  color: var(--carch-ink) !important;
   font-weight: 900;
   letter-spacing: 0;
 }
@@ -256,13 +269,14 @@ a {
   .budget-list-header,
   .plans-header,
   .chat-header,
+  .create-top,
   .create-header,
   .utility-header,
   .recommend-header,
   .detail-header,
   .editor-header
 ) :is(p, span, small) {
-  color: rgba(255, 255, 255, 0.74) !important;
+  color: #6f7d8c !important;
 }
 
 .app-backdrop .phone-shell :is(
@@ -272,17 +286,18 @@ a {
   .budget-list-header,
   .plans-header,
   .chat-header,
+  .create-top,
   .create-header,
   .utility-header,
   .recommend-header,
   .detail-header,
   .editor-header
 ) :is(a, button, .back-link, .back-button) {
-  border: 0 !important;
-  background: rgba(255, 255, 255, 0.12) !important;
-  color: #fff !important;
-  box-shadow: none !important;
-  backdrop-filter: blur(10px) saturate(1.08);
+  border: 1px solid rgba(138, 154, 173, 0.18) !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  color: #213a56 !important;
+  box-shadow: 0 8px 18px rgba(36, 54, 79, 0.09) !important;
+  backdrop-filter: blur(10px) saturate(1.05);
 }
 
 .header-spacer {
@@ -297,6 +312,28 @@ a {
 .plans-header > div {
   flex: 1;
   min-width: 0;
+}
+
+.app-backdrop .phone-shell :is(
+  .simple-header,
+  .budget-header,
+  .budget-list-header,
+  .plans-header,
+  .chat-header,
+  .create-top,
+  .create-header,
+  .utility-header,
+  .recommend-header,
+  .detail-header,
+  .editor-header
+) h1::before {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  margin-right: 7px;
+  background: url('/brand/carch-title-bird.png') center / contain no-repeat;
+  content: '';
+  vertical-align: -11px;
 }
 
 .app-card {
@@ -372,11 +409,11 @@ a {
 }
 
 .app-backdrop .phone-shell .budget-list-header .current-summary {
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  backdrop-filter: none;
+  border: 1px solid rgba(36, 54, 79, 0.08) !important;
+  border-radius: 20px !important;
+  background: rgba(255, 255, 255, 0.82) !important;
+  box-shadow: 0 14px 28px rgba(36, 54, 79, 0.07) !important;
+  backdrop-filter: blur(12px) saturate(1.04);
 }
 
 .app-backdrop .phone-shell :is(
@@ -935,10 +972,10 @@ a {
 }
 
 .magpie-icon {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 42%;
+  width: 86%;
+  height: 86%;
+  object-fit: contain;
+  object-position: center;
 }
 
 .app-backdrop .phone-shell :is(.section-head a, .selector-head a, .profile-summary a) {

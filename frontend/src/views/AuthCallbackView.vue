@@ -1,7 +1,9 @@
 <template>
   <section class="screen auth-callback-screen">
     <div class="callback-panel">
-      <div class="brand-mark">C</div>
+      <div class="brand-mark">
+        <img src="/brand/carch-title-bird.png" alt="Carch" />
+      </div>
       <strong>로그인 정보를 확인하고 있습니다</strong>
       <p>잠시 후 CARCH로 이동합니다.</p>
     </div>
@@ -23,8 +25,12 @@ onMounted(async () => {
     router.replace({ path: '/login', query: { error: '소셜 로그인을 완료하지 못했습니다.' } })
     return
   }
-  await completeOAuthLogin({ token })
-  router.replace(next.startsWith('/') ? next : '/cards')
+  try {
+    await completeOAuthLogin({ token })
+    router.replace(next.startsWith('/') ? next : '/cards')
+  } catch {
+    router.replace({ path: '/login', query: { error: '소셜 로그인을 완료하지 못했습니다.' } })
+  }
 })
 </script>
 
@@ -45,14 +51,19 @@ onMounted(async () => {
 
 .brand-mark {
   display: grid;
-  width: 54px;
-  height: 54px;
+  width: 156px;
+  height: 64px;
   place-items: center;
-  border-radius: 18px;
-  background: var(--carch-navy);
-  color: #fff;
-  font-size: 24px;
-  font-weight: 900;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 16px 34px rgba(36, 54, 79, 0.1);
+}
+
+.brand-mark img {
+  display: block;
+  width: 82%;
+  height: auto;
+  object-fit: contain;
 }
 
 .callback-panel strong {

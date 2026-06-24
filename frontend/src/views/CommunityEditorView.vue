@@ -44,6 +44,7 @@ const isEdit = computed(() => Boolean(route.params.id))
 const isSubmitting = ref(false)
 const tagText = ref('')
 const error = ref('')
+const canEditPost = ref(true)
 const form = reactive({
   title: '',
   body: '',
@@ -61,6 +62,11 @@ async function loadPost() {
   if (!isEdit.value) return
   try {
     const post = await fetchCommunityPost(route.params.id)
+    canEditPost.value = Boolean(post.editable)
+    if (!canEditPost.value) {
+      error.value = '수정 권한이 없는 게시글입니다.'
+      return
+    }
     form.title = post.title
     form.body = post.body
     tagText.value = (post.tags || []).join(', ')
@@ -71,6 +77,10 @@ async function loadPost() {
 
 async function handleSubmit() {
   error.value = ''
+  if (isEdit.value && !canEditPost.value) {
+    error.value = '수정 권한이 없는 게시글입니다.'
+    return
+  }
   if (!form.title.trim()) {
     error.value = '제목을 입력해 주세요.'
     return

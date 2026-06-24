@@ -20,18 +20,18 @@ defineProps({
 .ai-notice {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   border: 1px solid rgba(37, 99, 235, 0.16);
-  border-radius: 16px;
-  padding: 14px;
+  border-radius: 13px;
+  padding: 10px 12px;
   background: #e8f1ff;
   color: #0f5fae;
 }
 
 .ai-notice p {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 1.55;
+  line-height: 1.45;
 }
 </style>
