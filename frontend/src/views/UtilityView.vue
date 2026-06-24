@@ -34,8 +34,8 @@
             <strong>{{ krw(selectedCard.annualFee) }}</strong>
           </div>
           <div>
-            <span>전월실적</span>
-            <strong>{{ selectedCard.previousMonthMinSpend ? krw(selectedCard.previousMonthMinSpend) : '없음' }}</strong>
+            <span>혜택 조건</span>
+            <strong>{{ selectedCard.previousMonthMinSpend ? `전월 ${krw(selectedCard.previousMonthMinSpend)}` : '전월실적 없음' }}</strong>
           </div>
           <div>
             <span>이번 달 사용</span>
@@ -661,7 +661,7 @@ const canSaveBudget = computed(() => budgetForm.name.length > 0 && Number(budget
 const budgetIconComponent = computed(() => Target)
 
 const applySteps = [
-  { title: '카드 정보 확인', description: '연회비, 전월실적, 대표 혜택을 검토합니다.' },
+  { title: '카드 정보 확인', description: '연회비, 혜택 조건, 대표 혜택을 검토합니다.' },
   { title: '본인 인증', description: '실제 서비스에서는 휴대폰 또는 공동인증서 인증이 들어갑니다.' },
   { title: '신청 제출', description: '심사 결과와 발급 상태를 알림으로 확인합니다.' },
 ]
