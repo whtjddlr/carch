@@ -268,3 +268,32 @@ class AIAnalysisRecord(models.Model):
 
     def __str__(self):
         return f'{self.analysis_type}: {self.title or self.created_at}'
+
+
+class Budget(models.Model):
+    """사용자별·월별 목표(예산) 금액과 카테고리별 예산. month는 'YYYY-MM'."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='budgets',
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+    )
+    month = models.CharField(max_length=7)
+    total_goal = models.PositiveIntegerField(null=True, blank=True)
+    category_budgets = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-month']
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'month'], name='api_budget_user_month_uniq'),
+        ]
+        indexes = [
+            models.Index(fields=['user', 'month']),
+        ]
+
+    def __str__(self):
+        return f'{self.user_id} {self.month} {self.total_goal}'

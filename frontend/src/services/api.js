@@ -937,6 +937,25 @@ export async function fetchSpendingSummary({ ai = false, refresh = false, recurr
   return withTimedLocalFallback(request, () => clone(buildMockSpendingSummary({ ai, refresh, recurringCategories })))
 }
 
+export async function fetchBudget(month) {
+  if (USE_MOCK_API) {
+    await delay(80)
+    return { month, totalGoal: null, categoryBudgets: {} }
+  }
+  const response = await api.get(`/api/budgets/${month}/`)
+  return response.data
+}
+
+export async function saveBudget(month, payload) {
+  if (USE_MOCK_API) {
+    await delay(80)
+    return { month, ...payload }
+  }
+  // PATCH 사용(백엔드 CORS 허용 메서드: GET/POST/PATCH/DELETE/OPTIONS — PUT 미허용)
+  const response = await api.patch(`/api/budgets/${month}/`, payload)
+  return response.data
+}
+
 export async function fetchAnalysisRecords(params = {}) {
   if (USE_MOCK_API) {
     await delay()

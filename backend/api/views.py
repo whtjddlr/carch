@@ -30,7 +30,7 @@ from .ai_service import (
     recommend_cards_with_ai,
 )
 from .card_repository import fetch_card, fetch_cards
-from .models import AIAnalysisRecord, AuthSession, CommunityComment, CommunityPost, CommunityPostLike, OwnedCard, PurchasePlan, SocialAccount, Transaction
+from .models import AIAnalysisRecord, AuthSession, Budget, CommunityComment, CommunityPost, CommunityPostLike, OwnedCard, PurchasePlan, SocialAccount, Transaction
 from .seed_data import PURCHASE_PLANS, TRANSACTIONS
 
 
@@ -1911,6 +1911,51 @@ def parse_transaction(request):
         user=user,
     )
     return json_response(parsed)
+
+
+def serialize_budget(budget, month):
+    if not budget:
+        return {'month': month, 'totalGoal': None, 'categoryBudgets': {}}
+    return {
+        'month': budget.month,
+        'totalGoal': budget.total_goal,
+        'categoryBudgets': budget.category_budgets or {},
+    }
+
+
+@csrf_exempt
+def budget_detail(request, month):
+    """사용자별·월별 목표 금액/카테고리 예산 조회·저장."""
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
+    month = str(month).strip()
+    if not re.match(r'^\d{4}-\d{2}$', month):
+        return json_response({'detail': '월 형식은 YYYY-MM 이어야 합니다.'}, status=400)
+
+    if request.method == 'GET':
+        budget = Budget.objects.filter(user=user, month=month).first()
+        return json_response(serialize_budget(budget, month))
+
+    if request.method in {'PUT', 'POST', 'PATCH'}:
+        payload, error_response = parse_request_body(request)
+        if error_response:
+            return error_response
+        budget, _ = Budget.objects.get_or_create(user=user, month=month)
+        if 'totalGoal' in payload or 'total_goal' in payload:
+            raw = payload.get('totalGoal', payload.get('total_goal'))
+            try:
+                value = int(raw)
+            except (TypeError, ValueError):
+                value = 0
+            budget.total_goal = value if value > 0 else None
+        category_budgets = payload.get('categoryBudgets', payload.get('category_budgets'))
+        if isinstance(category_budgets, dict):
+            budget.category_budgets = category_budgets
+        budget.save()
+        return json_response(serialize_budget(budget, month))
+
+    return json_response({'detail': '지원하지 않는 메서드입니다.'}, status=405)
 
 
 def spending_summary(request):

@@ -246,7 +246,7 @@ import { CalendarClock, Check, ChevronRight, CreditCard, Pencil, PiggyBank, Sear
 import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, cards as mockCards, expenseModes, krw } from '@/data/mockData'
 import { demoMonthSummary } from '@/data/monthlyAnalytics'
-import { fetchCardRecommendationBundle, fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
+import { fetchBudget, fetchCardRecommendationBundle, fetchOwnedCards, fetchSpendingSummary, fetchTransactions, normalizeCard, saveBudget } from '@/services/api'
 import { readBudgetOverride, readCustomBudgetCategories, writeBudgetOverride } from '@/services/budgetStorage'
 import { budgetProgressWidth, budgetRiskColor, budgetRiskLabel, budgetUsagePercent } from '@/utils/budgetRisk'
 import { compareCardBenefitCandidates, scoreCardBenefit, summarizeWalletPerformance } from '@/utils/cardPerformance'
@@ -269,10 +269,39 @@ function modeIcon(id) {
   return Zap
 }
 
+const CURRENT_MONTH = '2026-06'
 const customBudgetCategories = readCustomBudgetCategories()
 const displayBudgetCategories = [...budgetCategories, ...customBudgetCategories]
 const budgetOverride = ref(readBudgetOverride())
 const totalBudget = computed(() => budgetOverride.value ?? displayBudgetCategories.reduce((sum, category) => sum + category.budget, 0))
+
+// 목표 금액: 백엔드(사용자별·월별 Budget) 우선, 실패 시 localStorage 캐시 유지
+async function loadBudgetGoal() {
+  try {
+    const data = await fetchBudget(CURRENT_MONTH)
+    if (data && data.totalGoal != null) {
+      budgetOverride.value = Number(data.totalGoal)
+      writeBudgetOverride(budgetOverride.value)
+    }
+  } catch {
+    // 실패 시 localStorage 캐시 그대로 사용
+  }
+}
+onMounted(loadBudgetGoal)
+
+// 이번 달 사용액: 사용자 실제 거래 합(spending summary) 우선, 실패 시 데모 카테고리 합
+const realSpent = ref(null)
+async function loadCurrentSpending() {
+  try {
+    const summary = await fetchSpendingSummary()
+    if (summary && Number.isFinite(Number(summary.totalExpense))) {
+      realSpent.value = Number(summary.totalExpense)
+    }
+  } catch {
+    // 실패 시 데모 카테고리 합 사용
+  }
+}
+onMounted(loadCurrentSpending)
 
 // 스크롤 내리면 헤더의 '목표 금액' 줄만 접고 '이번 달 사용'은 상단 고정 유지
 const headerCollapsed = ref(false)
@@ -293,9 +322,11 @@ function saveGoal() {
   const next = Number(editGoal.value)
   budgetOverride.value = next > 0 ? next : null
   writeBudgetOverride(budgetOverride.value)
+  // 백엔드(사용자별)에도 저장 — 실패해도 로컬 캐시는 유지되므로 UI는 정상
+  saveBudget(CURRENT_MONTH, { totalGoal: budgetOverride.value || 0 }).catch(() => {})
   isEditingGoal.value = false
 }
-const totalSpent = computed(() => displayBudgetCategories.reduce((sum, category) => sum + category.spent, 0))
+const totalSpent = computed(() => realSpent.value ?? displayBudgetCategories.reduce((sum, category) => sum + category.spent, 0))
 const cards = mockCards
 const walletPerformance = computed(() => summarizeWalletPerformance(cards))
 const cardGuideItems = computed(() => (
