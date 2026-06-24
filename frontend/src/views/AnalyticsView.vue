@@ -24,7 +24,24 @@
 
       <article class="analysis-hero app-card" :class="{ empty: !hasUsableAnalysis }">
         <div class="hero-copy">
-          <span>{{ trendPeriodLabel }}</span>
+          <div class="hero-month">
+            <button type="button" class="month-chip" @click="isMonthMenuOpen = !isMonthMenuOpen">
+              {{ selectedMonthLabel }}
+              <ChevronDown :size="13" :stroke-width="2.6" />
+            </button>
+            <template v-if="isMonthMenuOpen">
+              <div class="month-backdrop" @click="isMonthMenuOpen = false"></div>
+              <div class="month-menu">
+                <button
+                  v-for="m in monthOptions"
+                  :key="m"
+                  type="button"
+                  :class="{ active: monthLabel(m) === selectedMonthLabel }"
+                  @click="selectMonth(m)"
+                >{{ monthLabel(m) }}</button>
+              </div>
+            </template>
+          </div>
           <strong>{{ heroAmountLabel }}</strong>
         </div>
         <div v-if="topCategory" class="hero-focus">
@@ -81,7 +98,7 @@
               </span>
               <div class="category-amount">
                 <strong>{{ krw(category.amount) }}</strong>
-                <em class="rank-pct">{{ category.percent }}%</em>
+                <em class="rank-pct" :style="{ color: category.color }">{{ category.percent }}%</em>
               </div>
             </div>
             <div class="category-track">
@@ -138,8 +155,8 @@
               <span>{{ krw(item.currentAmount) }}</span>
             </div>
             <div class="review-toggle" role="group" :aria-label="`${item.category} 지출 반영 방식`">
-              <button type="button" @click="setRecurringOverride(item.category, false)">이번 달만</button>
-              <button type="button" class="is-recurring" @click="setRecurringOverride(item.category, true)">매달</button>
+              <button type="button" :class="{ active: !isRecurring(item.category) }" @click="setRecurringOverride(item.category, false)">이번 달만</button>
+              <button type="button" class="is-recurring" :class="{ active: isRecurring(item.category) }" @click="setRecurringOverride(item.category, true)">매달</button>
             </div>
           </article>
         </div>
@@ -188,7 +205,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { BarChart3, ChevronRight, CreditCard, FileText, RefreshCw, Sparkles } from 'lucide-vue-next'
+import { BarChart3, ChevronDown, ChevronRight, CreditCard, FileText, RefreshCw, Sparkles } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { cards as mockCards, krw, transactions as mockTransactions } from '@/data/mockData'
 import { fetchCardRecommendationBundle, fetchSpendingSummary } from '@/services/api'
@@ -223,7 +240,38 @@ function writeStoredList(key, value) {
 const recurringOverrides = ref(readStoredList(RECURRING_STORAGE_KEY))
 const handledReviewCategories = ref(readStoredList(REVIEW_HANDLED_STORAGE_KEY))
 
-const safeSummary = computed(() => summary.value || (isLoading.value ? buildEmptySummary() : buildMockSummary()))
+const LATEST_MONTH = '2026-06'
+const selectedMonth = ref(null)
+const isMonthMenuOpen = ref(false)
+
+const monthOptions = computed(() => {
+  const [year, month] = LATEST_MONTH.split('-').map(Number)
+  const base = year * 12 + (month - 1)
+  return Array.from({ length: 6 }, (_, i) => {
+    const idx = base - i
+    return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}`
+  })
+})
+
+function monthLabel(monthKey) {
+  return `${Number(String(monthKey).split('-')[1])}월`
+}
+
+const safeSummary = computed(() => {
+  if (selectedMonth.value) return buildMockSummary(selectedMonth.value)
+  return summary.value || (isLoading.value ? buildEmptySummary() : buildMockSummary())
+})
+
+const selectedMonthLabel = computed(() => monthLabel(safeSummary.value.period?.currentMonth || LATEST_MONTH))
+
+function selectMonth(monthKey) {
+  selectedMonth.value = monthKey === LATEST_MONTH ? null : monthKey
+  isMonthMenuOpen.value = false
+}
+
+function isRecurring(category) {
+  return recurringOverrides.value.includes(category)
+}
 const aiAnalysis = computed(() => safeSummary.value.aiAnalysis || null)
 const spendingTrend = computed(() => safeSummary.value.spendingTrend || null)
 const totalExpense = computed(() => Number(safeSummary.value.totalExpense || 0))
@@ -335,9 +383,7 @@ const heroMessage = computed(() => {
 
 const oneTimeCandidates = computed(() => spendingTrend.value?.oneTimeCandidates || [])
 const reviewCandidates = computed(() => spendingTrend.value?.reviewCandidates || oneTimeCandidates.value)
-const pendingReviewCandidates = computed(() =>
-  reviewCandidates.value.filter((item) => !handledReviewCategories.value.includes(item.category)),
-)
+const pendingReviewCandidates = computed(() => reviewCandidates.value)
 
 const metricCards = computed(() => {
   const total = spendingTrend.value?.total || {}
@@ -439,8 +485,9 @@ const statusMessage = computed(() => {
   return ''
 })
 
-function buildMockSummary() {
-  const expenses = mockTransactions.filter((tx) => Number(tx.amt) < 0)
+function buildMockSummary(monthKey = null) {
+  const inMonth = (tx) => !monthKey || String(tx.date || '').slice(0, 7) === monthKey
+  const expenses = mockTransactions.filter((tx) => Number(tx.amt) < 0 && inMonth(tx))
   const categoryMap = new Map()
   const cardMap = new Map()
   expenses.forEach((tx) => {
@@ -453,13 +500,13 @@ function buildMockSummary() {
   return {
     totalExpense,
     totalIncome: mockTransactions
-      .filter((tx) => Number(tx.amt) > 0)
+      .filter((tx) => Number(tx.amt) > 0 && inMonth(tx))
       .reduce((sum, tx) => sum + Number(tx.amt || 0), 0),
     byCategory,
     byCard,
-    period: { currentMonth: '2026-06' },
+    period: { currentMonth: monthKey || '2026-06' },
     spendingTrend: {
-      currentMonth: '2026-06',
+      currentMonth: monthKey || '2026-06',
       total: {
         deltaFromPrevious: totalExpense - 483500,
         deltaFromBaseline: totalExpense - 463183,
@@ -535,11 +582,7 @@ async function setRecurringOverride(category, enabled) {
   if (enabled) next.add(category)
   else next.delete(category)
   recurringOverrides.value = [...next]
-  if (!handledReviewCategories.value.includes(category)) {
-    handledReviewCategories.value = [...handledReviewCategories.value, category]
-  }
   writeStoredList(RECURRING_STORAGE_KEY, recurringOverrides.value)
-  writeStoredList(REVIEW_HANDLED_STORAGE_KEY, handledReviewCategories.value)
   error.value = ''
   try {
     summary.value = await fetchSpendingSummary(trendRequestOptions({ ai: true }))
@@ -666,7 +709,7 @@ onMounted(loadSummary)
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
   align-items: start;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid rgba(36, 54, 79, 0.08) !important;
   border-radius: 22px !important;
   padding: 14px 18px 16px !important;
@@ -708,38 +751,98 @@ onMounted(loadSummary)
 
 .hero-focus {
   display: grid;
-  min-width: 82px;
+  min-width: 88px;
   justify-items: center;
+  gap: 1px;
   border-radius: 18px;
-  padding: 12px 10px;
-  background: #24364f;
+  padding: 12px 14px;
+  background: linear-gradient(150deg, #1f6feb 0%, #0aa5a0 100%);
   color: #fff;
-  box-shadow: 0 14px 24px rgba(36, 54, 79, 0.18);
+  box-shadow: 0 12px 22px rgba(15, 95, 174, 0.26);
 }
 
 .hero-focus small {
-  color: rgba(255, 255, 255, 0.66);
+  color: rgba(255, 255, 255, 0.82);
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 800;
 }
 
 .hero-focus b {
-  margin-top: 5px;
-  font-size: 16px;
+  margin-top: 4px;
+  font-size: 17px;
   font-weight: 950;
 }
 
 .hero-focus span {
-  margin-top: 3px;
-  color: #9be6df;
+  margin-top: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
   font-size: 12px;
   font-weight: 950;
 }
 
 .hero-focus.muted {
-  background: rgba(36, 54, 79, 0.08);
+  background: rgba(36, 54, 79, 0.08) !important;
   color: #24364f;
   box-shadow: none;
+}
+
+.hero-month {
+  position: relative;
+  margin-bottom: 5px;
+}
+
+.month-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 9px 4px 11px;
+  background: rgba(15, 95, 174, 0.1);
+  color: #0f5fae;
+  font-size: 12px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.month-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.month-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 21;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  width: 188px;
+  border-radius: 14px;
+  padding: 8px;
+  background: #fff;
+  box-shadow: 0 18px 40px rgba(36, 54, 79, 0.2);
+}
+
+.month-menu button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 9px;
+  background: #f3f6f8;
+  color: #5f6b77;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.month-menu button.active {
+  background: #0f5fae;
+  color: #fff;
 }
 
 .hero-focus.muted small,
@@ -1219,30 +1322,30 @@ onMounted(loadSummary)
 
 .review-toggle button {
   min-height: 33px;
+  border: 1px solid rgba(36, 54, 79, 0.16);
   border-radius: 9px;
   padding: 0 12px;
+  background: #fff;
+  color: #8a95a3;
   font-size: 12px;
   font-weight: 900;
   white-space: nowrap;
   touch-action: manipulation;
-  transition: transform 120ms ease, filter 120ms ease;
+  transition: transform 120ms ease, background 140ms ease, color 140ms ease;
 }
 
-.review-toggle button:first-child {
-  border: 1px solid rgba(36, 54, 79, 0.16);
-  background: #fff;
-  color: #5f6b77;
-}
-
-.review-toggle button.is-recurring {
-  border: 0;
+.review-toggle button.active {
+  border-color: transparent;
   background: #24364f;
   color: #fff;
 }
 
+.review-toggle button.is-recurring.active {
+  background: #0f5fae;
+}
+
 .review-toggle button:active {
   transform: scale(0.95);
-  filter: brightness(0.95);
 }
 
 .recommendation-card {
