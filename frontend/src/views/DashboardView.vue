@@ -166,29 +166,53 @@
           <h2>분야별 소비 추천</h2>
           <RouterLink to="/recommendations/usage">더보기</RouterLink>
         </div>
-        <div class="category-guide-list">
-          <RouterLink
-            v-for="guide in categoryGuides"
-            :key="guide.id || guide.label"
-            class="category-guide-row"
-            :to="guide.route || { path: '/recommendations/usage', query: { category: guide.label } }"
+        <div class="guide-carousel">
+          <div
+            class="guide-viewport"
+            @pointerdown="onGuideDragStart"
+            @pointermove="onGuideDragMove"
+            @pointerup="onGuideDragEnd"
+            @pointercancel="onGuideDragEnd"
+            @mouseenter="stopGuideAuto"
+            @mouseleave="startGuideAuto"
           >
-            <span class="cg-emoji">{{ guide.icon }}</span>
-            <div class="cg-info">
-              <span class="cg-cat">{{ guide.label }}</span>
-              <strong>{{ guide.card.name }}</strong>
-              <small v-if="guide.benefitText">{{ guide.benefitText }}</small>
+            <div class="guide-track" :style="{ transform: `translateX(-${activeGuideIndex * 100}%)` }">
+              <RouterLink
+                v-for="guide in categoryGuides"
+                :key="guide.id || guide.label"
+                class="category-guide-row guide-slide"
+                :to="guide.route || { path: '/recommendations/usage', query: { category: guide.label } }"
+                @click="onGuideClick"
+              >
+                <span class="cg-emoji">{{ guide.icon }}</span>
+                <div class="cg-info">
+                  <span class="cg-cat">{{ guide.label }}</span>
+                  <strong>{{ guide.card.name }}</strong>
+                  <small v-if="guide.benefitText">{{ guide.benefitText }}</small>
+                </div>
+                <span class="cg-card-img">
+                  <img
+                    v-if="guide.card.imageUrl"
+                    :src="guide.card.imageUrl"
+                    :alt="guide.card.name"
+                    :class="cardImageClass(guide.card)"
+                    @load="setImageOrientation(guide.card.id, $event)"
+                  />
+                </span>
+              </RouterLink>
             </div>
-            <span class="cg-card-img">
-              <img
-                v-if="guide.card.imageUrl"
-                :src="guide.card.imageUrl"
-                :alt="guide.card.name"
-                :class="cardImageClass(guide.card)"
-                @load="setImageOrientation(guide.card.id, $event)"
-              />
-            </span>
-          </RouterLink>
+          </div>
+          <div v-if="categoryGuides.length > 1" class="guide-dots">
+            <button
+              v-for="(guide, i) in categoryGuides"
+              :key="guide.id || guide.label"
+              type="button"
+              class="guide-dot"
+              :class="{ active: i === activeGuideIndex }"
+              :aria-label="`${guide.label} 추천 보기`"
+              @click="selectGuide(i)"
+            />
+          </div>
         </div>
       </section>
 
@@ -277,7 +301,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Bell, CalendarDays, Check, PlusCircle, Search, Sparkles, User, X } from 'lucide-vue-next'
 import { cards as mockCards, krw, transactions as mockTransactions, user } from '@/data/mockData'
@@ -385,6 +409,7 @@ function buildCategoryGuideFromOwnedGuide(item, index) {
   const label = String(item.category || '추천 분야').replace(/\s+/g, ' ').trim()
   const estimatedBenefit = Number(item.estimatedBenefit || 0)
   const potentialBenefit = Number(item.potentialBenefit || 0)
+  const remaining = Number(item.remainingCurrentSpend || 0)
   const monthlyCap = Number(item.limit || item.monthlyCap || 0)
   const monthlyMax = monthlyCap || Math.max(estimatedBenefit, potentialBenefit)
   const discountLabel = item.benefitLabel || item.body || card.benefitSummary || ''
@@ -469,6 +494,68 @@ const backendCategoryGuides = computed(() => {
     .filter(Boolean)
     .slice(0, 3)
 })
+
+const activeGuideIndex = ref(0)
+const guideDragX = ref(null)
+const guideDragged = ref(false)
+let guideAutoTimer = null
+
+function goGuide(index) {
+  const count = categoryGuides.value.length
+  if (!count) return
+  activeGuideIndex.value = ((index % count) + count) % count
+}
+
+function stopGuideAuto() {
+  if (guideAutoTimer) {
+    clearInterval(guideAutoTimer)
+    guideAutoTimer = null
+  }
+}
+
+function startGuideAuto() {
+  stopGuideAuto()
+  if (categoryGuides.value.length <= 1) return
+  guideAutoTimer = setInterval(() => goGuide(activeGuideIndex.value + 1), 3800)
+}
+
+function onGuideDragStart(event) {
+  guideDragX.value = event.clientX
+  guideDragged.value = false
+  stopGuideAuto()
+}
+
+function onGuideDragMove(event) {
+  if (guideDragX.value === null) return
+  if (Math.abs(event.clientX - guideDragX.value) > 8) guideDragged.value = true
+}
+
+function onGuideDragEnd(event) {
+  if (guideDragX.value === null) return
+  const dx = event.clientX - guideDragX.value
+  guideDragX.value = null
+  if (dx <= -36) goGuide(activeGuideIndex.value + 1)
+  else if (dx >= 36) goGuide(activeGuideIndex.value - 1)
+  startGuideAuto()
+}
+
+function selectGuide(index) {
+  goGuide(index)
+  startGuideAuto()
+}
+
+function onGuideClick(event) {
+  if (guideDragged.value) event.preventDefault()
+}
+
+watch(() => categoryGuides.value.length, (count) => {
+  if (activeGuideIndex.value >= count) activeGuideIndex.value = 0
+  startGuideAuto()
+})
+
+onMounted(startGuideAuto)
+onUnmounted(stopGuideAuto)
+
 let cardGlideTimer = null
 let cardSearchTimer = null
 
@@ -2092,10 +2179,42 @@ onMounted(async () => {
   margin-top: 18px;
 }
 
-.category-guide-list {
+.guide-viewport {
+  overflow: hidden;
+  border-radius: 15px;
+  touch-action: pan-y;
+}
+
+.guide-track {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  transition: transform 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.guide-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+.guide-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.guide-dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(44, 78, 114, 0.2);
+  transition: width 0.25s ease, background 0.25s ease;
+}
+
+.guide-dot.active {
+  width: 18px;
+  background: #2c4e72;
 }
 
 .category-guide-row {
