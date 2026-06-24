@@ -286,7 +286,10 @@ def _oauth_config(provider):
 
 
 def _oauth_redirect_uri(request, provider):
-    return request.build_absolute_uri(f'/api/auth/oauth/{provider}/callback/')
+    explicit_uri = getattr(settings, f'{provider.upper()}_REDIRECT_URI', '')
+    if explicit_uri:
+        return explicit_uri
+    return f'{settings.OAUTH_CALLBACK_BASE_URL}/api/auth/oauth/{provider}/callback/'
 
 
 def _post_form(url, payload, headers=None):

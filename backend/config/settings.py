@@ -170,6 +170,8 @@ GMS_TIMEOUT_SECONDS = int(os.environ.get('GMS_TIMEOUT_SECONDS', '45'))
 GMS_MAX_OUTPUT_TOKENS = int(os.environ.get('GMS_MAX_OUTPUT_TOKENS', '3000'))
 
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5175').rstrip('/')
+BACKEND_URL = os.environ.get('BACKEND_URL', 'http://127.0.0.1:8000').rstrip('/')
+OAUTH_CALLBACK_BASE_URL = os.environ.get('OAUTH_CALLBACK_BASE_URL', BACKEND_URL).rstrip('/')
 CORS_ALLOWED_ORIGINS = env_list(
     'CORS_ALLOWED_ORIGINS',
     ','.join([
@@ -188,8 +190,10 @@ DEV_ADMIN_PASSWORD = os.environ.get('DEV_ADMIN_PASSWORD', 'Carchadmin123!')
 DEV_ADMIN_NAME = os.environ.get('DEV_ADMIN_NAME', 'CARCH 관리자')
 KAKAO_CLIENT_ID = os.environ.get('KAKAO_REST_API_KEY') or os.environ.get('KAKAO_CLIENT_ID') or ''
 KAKAO_CLIENT_SECRET = os.environ.get('KAKAO_CLIENT_SECRET', '')
+KAKAO_REDIRECT_URI = os.environ.get('KAKAO_REDIRECT_URI', '').strip()
 NAVER_CLIENT_ID = os.environ.get('NAVER_CLIENT_ID', '')
 NAVER_CLIENT_SECRET = os.environ.get('NAVER_CLIENT_SECRET', '')
+NAVER_REDIRECT_URI = os.environ.get('NAVER_REDIRECT_URI', '').strip()
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

@@ -5,18 +5,20 @@ function numberValue(value) {
 
 export function cardPerformance(card = {}, plannedAmount = 0) {
   const required = numberValue(card.previousMonthMinSpend ?? card.previous_month_min_spend)
+  const noPerformanceRequired = required <= 0
   const previousSpend = numberValue(card.previousMonthSpend ?? card.previous_month_spend ?? card.spent ?? card.currentSpend ?? card.current_spend)
   const currentSpend = numberValue(card.currentMonthSpend ?? card.current_month_spend ?? card.spent ?? card.currentSpend ?? card.current_spend)
   const projected = currentSpend + Math.max(numberValue(plannedAmount), 0)
   const remainingBefore = Math.max(required - previousSpend, 0)
   const remainingAfter = Math.max(required - projected, 0)
-  const currentBenefitEligible = required <= 0 || remainingBefore <= 0
-  const nextMonthWillQualify = required <= 0 || remainingAfter <= 0
+  const currentBenefitEligible = noPerformanceRequired || remainingBefore <= 0
+  const nextMonthWillQualify = noPerformanceRequired || remainingAfter <= 0
   const progress = required > 0 ? Math.min(100, Math.round((previousSpend / required) * 100)) : 100
   const projectedProgress = required > 0 ? Math.min(100, Math.round((projected / required) * 100)) : 100
 
   return {
     required,
+    noPerformanceRequired,
     spent: currentSpend,
     previousSpend,
     currentSpend,

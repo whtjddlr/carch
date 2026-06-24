@@ -98,30 +98,38 @@
               <p class="benefit-summary">{{ detailCard.benefitSummary || detailCard.titleDescription }}</p>
             </div>
             <div class="card-bottom">
-              <div class="spend-progress">
+              <div class="spend-progress" :class="{ 'is-no-performance': hasNoPerformanceRequirement(detailCard) }">
                 <div class="progress-head">
-                  <span>혜택 조건 충족률</span>
-                  <b>{{ spendProgress(detailCard) }}%</b>
+                  <span>{{ hasNoPerformanceRequirement(detailCard) ? '혜택 조건' : '혜택 조건 충족률' }}</span>
+                  <b>{{ hasNoPerformanceRequirement(detailCard) ? '전월실적 없음' : `${spendProgress(detailCard)}%` }}</b>
                 </div>
-                <div class="progress-track">
-                  <i :style="{ width: `${spendProgress(detailCard)}%` }" />
-                </div>
-                <div v-if="detailCard.previousMonthMinSpend" class="progress-meta">
-                  <span>
-                    <small>기준 사용액</small>
-                    <b>{{ krw(detailCard.spent) }}</b>
-                  </span>
-                  <span>
-                    <small>남은 조건</small>
-                    <b>{{ remainingSpend(detailCard) > 0 ? krw(remainingSpend(detailCard)) : '충족' }}</b>
-                  </span>
-                </div>
-                <div v-else class="progress-meta single">
-                  <span>
-                    <small>혜택 조건</small>
-                    <b>없이 적용</b>
-                  </span>
-                </div>
+                <template v-if="hasNoPerformanceRequirement(detailCard)">
+                  <div class="progress-meta no-requirement">
+                    <span>
+                      <small>이번 달 사용액</small>
+                      <b>{{ krw(detailCard.spent) }}</b>
+                    </span>
+                    <span>
+                      <small>혜택 적용</small>
+                      <b>바로 가능</b>
+                    </span>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="progress-track">
+                    <i :style="{ width: `${spendProgress(detailCard)}%` }" />
+                  </div>
+                  <div class="progress-meta">
+                    <span>
+                      <small>기준 사용액</small>
+                      <b>{{ krw(detailCard.spent) }}</b>
+                    </span>
+                    <span>
+                      <small>남은 조건</small>
+                      <b>{{ remainingSpend(detailCard) > 0 ? krw(remainingSpend(detailCard)) : '충족' }}</b>
+                    </span>
+                  </div>
+                </template>
               </div>
               <div class="benefit-chips">
                 <span v-for="benefit in benefitTags(detailCard)" :key="benefit">{{ benefit }}</span>
@@ -419,6 +427,10 @@ function remainingSpend(card) {
   return cardPerformance(card).remainingBefore
 }
 
+function hasNoPerformanceRequirement(card) {
+  return cardPerformance(card).noPerformanceRequired
+}
+
 function setImageOrientation(cardId, event) {
   const image = event.target
   const orientation = image.naturalWidth > image.naturalHeight ? 'landscape' : 'portrait'
@@ -547,7 +559,9 @@ function buildMerchantRecommendation(tx) {
   const category = transactionCategory(tx)
   const performance = bestScore.performance
   const isBlocked = !performance.currentBenefitEligible
-  const performanceNote = performance.currentBenefitEligible
+  const performanceNote = performance.noPerformanceRequired
+    ? '무실적 혜택 카드'
+    : performance.currentBenefitEligible
     ? '이번 달 혜택 가능 카드'
     : performance.nextMonthWillQualify
       ? '이번 지출로 다음 달 조건 충족'
@@ -556,15 +570,19 @@ function buildMerchantRecommendation(tx) {
   const isSameCard = String(bestScore.card.id) === String(currentCard.id)
   const headline = isBlocked
     ? `${bestScore.card.name}은 다음 달 혜택 준비가 필요해요`
+    : performance.noPerformanceRequired
+      ? `${bestScore.card.name}는 조건 없이 혜택 가능해요`
     : performance.nextMonthWillQualify && !performance.currentBenefitEligible
       ? `${bestScore.card.name}은 다음 달 혜택 조건을 채워요`
       : `${bestScore.card.name}로 결제하면 좋아요`
   const routeTargetLabel = isSameCard
-    ? isBlocked ? '다음달 준비' : '현재 카드 유지'
+    ? isBlocked ? '다음달 준비' : performance.noPerformanceRequired ? '무실적 유지' : '현재 카드 유지'
     : bestScore.card.name
   const message = isBlocked
     ? `이번 결제는 다음 달 실적에 반영돼요. 현재 ${krw(performance.spent)} 사용 중이고, ${category} 예정을 더해도 ${krw(performance.remainingAfter)} 부족합니다.`
-    : extraBenefit > 0
+    : performance.noPerformanceRequired
+      ? `${category} 예정 지출은 전월 조건 없이 바로 혜택 계산이 가능해요.`
+      : extraBenefit > 0
       ? `${category} 예정 지출은 ${currentCard.name}보다 약 ${krw(extraBenefit)} 더 유리해요.`
       : `${category} 예정 지출은 실적 조건과 혜택을 함께 보면 지금 카드가 잘 맞아요.`
 
@@ -1886,6 +1904,15 @@ onMounted(async () => {
   font-weight: 900;
 }
 
+.spend-progress.is-no-performance .progress-head {
+  margin-bottom: 8px;
+}
+
+.spend-progress.is-no-performance .progress-head b {
+  font-size: 15px;
+  white-space: nowrap;
+}
+
 .progress-track {
   height: 4px;
   overflow: hidden;
@@ -1942,6 +1969,12 @@ onMounted(async () => {
 .progress-meta.single span {
   align-items: center;
   text-align: center;
+}
+
+.progress-meta.no-requirement {
+  margin-top: 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(32, 36, 42, 0.08);
 }
 
 .benefit-chips {

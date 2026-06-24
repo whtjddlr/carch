@@ -36,6 +36,7 @@ Thumbs.db
 .DS_Store
 
 # Project generated data
+pjt-08-db-bundle-20260529/
 card_benefit_db/raw/
 card_benefit_db/output/*.sqlite
 card_benefit_db/output/*.json

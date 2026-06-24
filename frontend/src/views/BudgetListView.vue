@@ -327,6 +327,7 @@ function sortCardGuideItems(a, b) {
 
 function performanceStatusLabel(performance) {
   if (!performance) return '실적 정보 없음'
+  if (performance.noPerformanceRequired) return '무실적 혜택'
   if (performance.currentBenefitEligible) return '이번 달 혜택 가능'
   if (performance.nextMonthWillQualify) return '다음 달 조건 충족'
   return `다음 달 조건 ${krw(performance.remainingAfter)} 부족`
@@ -338,6 +339,9 @@ function performanceStatusTone(performance) {
 }
 
 function cardGuideReason(item) {
+  if (item.performance?.noPerformanceRequired) {
+    return `${item.category.name} 예산은 전월 조건 없이 바로 혜택을 받을 수 있어요.`
+  }
   if (item.performance?.currentBenefitEligible) {
     return `${item.category.name} 예산은 전월 실적이 충족된 카드라 이번 달 혜택을 받을 수 있어요.`
   }
