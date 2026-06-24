@@ -861,10 +861,11 @@ onMounted(() => {
   display: block;
   margin-top: 7px;
   color: #17202b;
-  font-size: clamp(30px, 8vw, 38px);
-  font-weight: 950;
+  font-size: 34px;
+  /* 소비계획 '이번 달 사용' 금액(.cs-amount)과 동일한 렌더 굵기로 통일 */
+  font-weight: 500;
   letter-spacing: 0;
-  line-height: 1.03;
+  line-height: 1.05;
 }
 
 .hero-insight {
