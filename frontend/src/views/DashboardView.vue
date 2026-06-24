@@ -2061,7 +2061,7 @@ onMounted(async () => {
 .progress-head b {
   color: #20242a;
   font-size: 16px;
-  font-weight: 900;
+  font-weight: 500;
 }
 
 .spend-progress.is-no-performance .progress-head {
@@ -2116,7 +2116,7 @@ onMounted(async () => {
   min-width: 0;
   color: #20242a;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 500;
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
@@ -2453,7 +2453,7 @@ onMounted(async () => {
 .tx-card b {
   color: #20242a;
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }

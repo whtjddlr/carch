@@ -1409,7 +1409,7 @@ onMounted(() => {
   margin-top: 2px;
   color: #5f6b77;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .review-list {
