@@ -37,6 +37,7 @@ const routes = [
   { path: '/budget/new', name: 'BudgetNew', component: UtilityView, props: { type: 'budgetNew' }, meta: { requiresAuth: true } },
   { path: '/budget/current', name: 'Budget', component: BudgetView, meta: protectedMeta },
   { path: '/recommendations/new', name: 'RecommendationNew', component: RecommendationView, meta: { requiresAuth: true } },
+  { path: '/recommendations/usage', name: 'RecommendationUsage', component: RecommendationView, meta: { requiresAuth: true } },
   { path: '/recommendations/:id', name: 'RecommendationDetail', component: RecommendationView, meta: { requiresAuth: true } },
   { path: '/community', name: 'Community', component: CommunityView, meta: protectedMeta },
   { path: '/community/new', name: 'CommunityNew', component: CommunityEditorView, meta: { requiresAuth: true } },

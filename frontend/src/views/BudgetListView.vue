@@ -29,7 +29,7 @@
       <section v-if="cardGuideItems.length" class="card-guide-section">
         <div class="section-head split">
           <h2>카드 사용 가이드</h2>
-          <RouterLink to="/recommendations/new">상세 추천</RouterLink>
+          <RouterLink to="/recommendations/usage">상세 추천</RouterLink>
         </div>
         <article class="card-guide-card">
           <div class="guide-focus">

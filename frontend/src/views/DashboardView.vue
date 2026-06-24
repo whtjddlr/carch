@@ -163,15 +163,15 @@
 
       <section v-if="categoryGuides.length" class="section-block category-guide-section">
         <div class="section-head">
-          <h2>분야별 카드 추천</h2>
-          <RouterLink to="/recommendations/new">더보기</RouterLink>
+          <h2>분야별 소비 추천</h2>
+          <RouterLink to="/recommendations/usage">더보기</RouterLink>
         </div>
         <div class="category-guide-list">
           <RouterLink
             v-for="guide in categoryGuides"
             :key="guide.id || guide.label"
             class="category-guide-row"
-            :to="guide.route || { path: '/recommendations/new', query: { category: guide.label } }"
+            :to="guide.route || { path: '/recommendations/usage', query: { category: guide.label } }"
           >
             <span class="cg-emoji">{{ guide.icon }}</span>
             <div class="cg-info">
@@ -321,7 +321,7 @@ const activeCard = computed(() => cards.value[activeCardIndex.value] || null)
 const detailCard = computed(() => activeCard.value)
 const quickActions = [
   { label: '결제 추가', path: '/transactions/new', icon: PlusCircle, color: '#0f5fae' },
-  { label: '카드 추천', path: '/recommendations/new', icon: Sparkles, color: '#008c95' },
+  { label: '소비 추천', path: '/recommendations/usage', icon: Sparkles, color: '#008c95' },
   { label: '지출계획하기', path: '/plans/new', icon: CalendarDays, color: '#24364f' },
 ]
 const categoryGuideDefs = [
@@ -398,7 +398,7 @@ function buildCategoryGuideFromOwnedGuide(item, index) {
     icon: categoryIcon(label),
     card,
     benefitText,
-    route: { path: '/recommendations/new', query: { category: label, cardId: card.id } },
+    route: { path: '/recommendations/usage', query: { category: label, cardId: card.id } },
   }
 }
 
@@ -427,7 +427,7 @@ function buildCategoryGuideFromRouting(item, index) {
     benefitText: gain > 0
       ? `월 ${signedKrw(gain)} 예상${fromCardName ? ` · ${fromCardName}보다 유리` : ''}`
       : item.benefitLabel || item.body || card.benefitSummary || '',
-    route: { path: '/recommendations/new', query: { category: label, cardId: card.id } },
+    route: { path: '/recommendations/usage', query: { category: label, cardId: card.id } },
   }
 }
 

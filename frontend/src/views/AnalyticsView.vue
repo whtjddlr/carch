@@ -57,8 +57,8 @@
             <Sparkles :size="18" :stroke-width="2.2" />
           </span>
           <div>
-            <strong>카드 추천</strong>
-            <small>혜택 비교하기</small>
+            <strong>새 카드 추천</strong>
+            <small>발급 후보 비교</small>
           </div>
           <ChevronRight :size="17" :stroke-width="2.2" />
         </RouterLink>
@@ -153,7 +153,7 @@
       <article v-if="hasUsableAnalysis && topRecommendation" class="analysis-card app-card recommendation-card">
         <div class="section-title-row">
           <div>
-            <span>추천 카드</span>
+            <span>새 카드 추천</span>
             <strong>{{ recommendationTitle }}</strong>
           </div>
           <small>{{ topRecommendation.match || 0 }}%</small>
@@ -178,7 +178,7 @@
             <b>{{ signedKrw(topRecommendationEconomics.annualDelta) }}</b>
           </span>
         </div>
-        <RouterLink class="secondary-inline-link" to="/recommendations/new">추천 자세히 보기</RouterLink>
+        <RouterLink class="secondary-inline-link" to="/recommendations/new">새 카드 자세히 보기</RouterLink>
       </article>
     </div>
   </section>
