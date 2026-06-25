@@ -28,7 +28,7 @@
             {{ periodYear }}년 {{ periodMonthNum }}월
             <ChevronDown :size="13" :stroke-width="2.6" />
           </button>
-          <span class="month-suffix">의 소비</span>
+          <span class="month-suffix">소비</span>
           <template v-if="isMonthMenuOpen">
             <div class="month-backdrop" @click="isMonthMenuOpen = false"></div>
             <div class="month-dial">

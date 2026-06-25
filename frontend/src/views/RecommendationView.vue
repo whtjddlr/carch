@@ -204,7 +204,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { krw, recommendations } from '@/data/mockData'
@@ -390,13 +390,28 @@ function mapRecommendation(card, index) {
   })
 }
 
+function resetRecommendationScroll() {
+  const scrollElement = document.querySelector('.recommendation-body')
+  if (scrollElement) scrollElement.scrollTop = 0
+}
+
+async function settleRecommendationScroll() {
+  await nextTick()
+  resetRecommendationScroll()
+  window.setTimeout(resetRecommendationScroll, 80)
+  window.setTimeout(resetRecommendationScroll, 320)
+}
+
 onMounted(async () => {
+  await settleRecommendationScroll()
   try {
     const data = await fetchCardRecommendationBundle()
     bundle.value = data
     recommendationItems.value = (data.results || []).map(mapRecommendation)
   } catch (error) {
     console.warn('카드 추천 API를 불러오지 못해 mock 데이터를 사용합니다.', error)
+  } finally {
+    await settleRecommendationScroll()
   }
 })
 </script>

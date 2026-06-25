@@ -424,6 +424,28 @@ function ownedCardById(cardId) {
   return cards.value.find((card) => String(card.id) === String(cardId) || String(card.cardAdId) === String(cardId))
 }
 
+function compactBenefitLabel(value) {
+  return String(value || '')
+    .replace(/\s*(최대\s*)?\d+(?:\.\d+)?%\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function homeGuideBenefitText(item = {}, label = '') {
+  const estimatedBenefit = Number(item.estimatedBenefit || 0)
+  const potentialBenefit = Number(item.potentialBenefit || 0)
+  const remaining = Number(item.remainingCurrentSpend || 0)
+  const maxBenefit = Number(item.limit || item.monthlyCap || 0)
+  const displayBenefit = maxBenefit || estimatedBenefit || potentialBenefit
+
+  if (item.eligibleForBenefit && displayBenefit > 0) return `이번 달 최대 ${krw(displayBenefit)} 절약`
+  if (item.nextMonthEligible && displayBenefit > 0) return `다음 달 최대 ${krw(displayBenefit)} 절약`
+  if (remaining > 0 && displayBenefit > 0) return `조건 충족 시 최대 ${krw(displayBenefit)} 절약`
+
+  const benefitLabel = compactBenefitLabel(item.benefitLabel || item.title || '')
+  return benefitLabel ? `${benefitLabel} 혜택` : `${label}에 쓰기 좋은 카드`
+}
+
 function buildCategoryGuideFromOwnedGuide(item, index) {
   const toCard = ownedCardById(item.cardId)
   const card = toCard || normalizeCard({
@@ -440,18 +462,13 @@ function buildCategoryGuideFromOwnedGuide(item, index) {
   const estimatedBenefit = Number(item.estimatedBenefit || 0)
   const potentialBenefit = Number(item.potentialBenefit || 0)
   const remaining = Number(item.remainingCurrentSpend || 0)
-  const monthlyCap = Number(item.limit || item.monthlyCap || 0)
-  const discountLabel = item.benefitLabel || item.body || card.benefitSummary || ''
-  const benefitText = monthlyCap > 0
-    ? `${discountLabel} · 월 최대 ${krw(monthlyCap)} 가능`
-    : discountLabel
 
   return {
     id: item.id || `owned-category-${label}-${card.id || index}`,
     label,
     icon: categoryIcon(label),
     card,
-    benefitText,
+    benefitText: homeGuideBenefitText(item, label),
     estimatedBenefit,
     potentialBenefit,
     remainingCurrentSpend: remaining,
@@ -494,8 +511,8 @@ function buildCategoryGuideFromRouting(item, index) {
     icon: categoryIcon(label),
     card,
     benefitText: gain > 0
-      ? `월 ${signedKrw(gain)} 예상${fromCardName ? ` · ${fromCardName}보다 유리` : ''}`
-      : item.benefitLabel || item.body || card.benefitSummary || '',
+      ? `월 최대 ${signedKrw(gain)} 개선`
+      : compactBenefitLabel(item.benefitLabel || item.title || card.benefitSummary || '') || `${label}에 쓰기 좋은 카드`,
     route: { path: '/recommendations/usage', query: { category: label, cardId: card.id } },
   }
 }
