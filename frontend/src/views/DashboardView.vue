@@ -161,7 +161,7 @@
 
       <section v-if="categoryGuides.length" class="section-block category-guide-section">
         <div class="section-head">
-          <h2>분야별 소비 추천</h2>
+          <h2>내 카드로 테마별 추천</h2>
           <RouterLink to="/recommendations/usage">더보기</RouterLink>
         </div>
         <div class="guide-carousel">
@@ -301,7 +301,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Bell, CalendarDays, Check, PlusCircle, Search, Sparkles, User, X } from 'lucide-vue-next'
+import { Bell, CalendarDays, Check, PlusCircle, Search, User, X } from 'lucide-vue-next'
 import { cards as mockCards, krw, transactions as mockTransactions, user } from '@/data/mockData'
 import { addOwnedCard, deleteOwnedCard, fetchCardRecommendationBundle, fetchCards, fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
 import { cardPerformance, paymentContextLabel } from '@/utils/cardPerformance'
@@ -363,9 +363,8 @@ const totalSpendLabel = computed(() => krw(totalSpent.value))
 const activeCard = computed(() => cards.value[activeCardIndex.value] || null)
 const detailCard = computed(() => activeCard.value)
 const quickActions = [
-  { label: '결제 추가', path: '/transactions/new', icon: PlusCircle, color: '#0f5fae' },
-  { label: '소비 추천', path: '/recommendations/usage', icon: Sparkles, color: '#008c95' },
-  { label: '지출계획하기', path: '/plans/new', icon: CalendarDays, color: '#24364f' },
+  { label: '결제추천', path: '/transactions/new', icon: PlusCircle, color: '#0f5fae' },
+  { label: '지출계획', path: '/plans/new', icon: CalendarDays, color: '#24364f' },
 ]
 const categoryGuideDefs = [
   { label: '외식', icon: '🍽️', keywords: ['음식', '외식', '식당', '카페', '음식점', '배달', '맛집', '푸드', '베이커리'] },
@@ -2191,7 +2190,7 @@ onMounted(async () => {
 
 .quick-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 0;
   margin-top: 10px;
   padding: 15px 0;
@@ -2810,7 +2809,7 @@ onMounted(async () => {
   }
 
   .quick-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 5px;
     margin-top: 10px;
   }

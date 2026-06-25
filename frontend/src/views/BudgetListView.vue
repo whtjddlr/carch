@@ -111,49 +111,6 @@
         </div>
       </section>
 
-      <section v-if="aiRecommendations.length" class="ai-reco-section">
-        <div class="section-head split">
-          <h2>AI 카드 추천</h2>
-          <RouterLink class="detail-link" to="/recommendations/usage">
-            <Search :size="14" />
-            <span>자세히 보기</span>
-          </RouterLink>
-        </div>
-
-        <div class="ai-reco-card">
-          <div class="ai-speech">
-            <img class="ai-magpie" src="/card-images/magpie-face2.png" alt="카치AI" />
-            <div class="ai-bubble">{{ aiBubble }}</div>
-          </div>
-
-          <ul class="ai-reco-list">
-            <li v-for="rec in aiRecommendations" :key="rec.category.id" class="ai-reco-item">
-              <span class="ai-reco-thumb">
-                <img
-                  v-if="rec.card.imageUrl"
-                  :src="rec.card.imageUrl"
-                  :alt="rec.card.name"
-                  :class="thumbOrientation['ai-' + rec.card.id]"
-                  @load="onThumbLoad('ai-' + rec.card.id, $event)"
-                />
-                <CreditCard v-else :size="14" />
-              </span>
-              <div class="ai-reco-body">
-                <div class="ai-reco-line">
-                  <span class="ai-reco-cat">{{ rec.category.icon }} {{ rec.category.name }}</span>
-                  <em class="ai-reco-status" :class="rec.performanceTone">{{ rec.performanceShort }}</em>
-                </div>
-                <strong>{{ rec.card.name }}</strong>
-                <small>{{ rec.benefitText }}</small>
-              </div>
-              <b class="ai-reco-benefit" :class="{ muted: rec.benefit <= 0 }">
-                {{ rec.benefit > 0 ? `+${krw(rec.benefit)}` : `최대 +${krw(rec.grossBenefit)}` }}
-              </b>
-            </li>
-          </ul>
-        </div>
-      </section>
-
       <section class="plan-section">
         <div class="section-head split">
           <h2>지출 계획</h2>
@@ -175,64 +132,104 @@
         </div>
       </section>
 
-      <section class="section-block">
+      <section v-if="pendingReviewCandidates.length" class="review-section">
         <div class="section-head split">
-          <h2>나의 예산</h2>
-          <RouterLink to="/budget/new">예산 추가</RouterLink>
+          <h2>이 지출, 매달 반복되나요?</h2>
         </div>
+        <p class="review-sub">매달 나가는 지출인지 알려주면 추천이 정확해져요</p>
 
-        <div class="app-card trend-card">
-          <div class="bar-legend">
-            <span><i class="dot budget"></i>예산</span>
-            <span><i class="dot spent"></i>사용</span>
-          </div>
-          <svg class="bar-svg" :viewBox="`0 0 ${barChart.w} ${barChart.h}`">
-            <g
-              v-for="b in barChart.bars"
-              :key="b.label"
-              class="bar-col"
-              @click="goMonth(b)"
-            >
-              <rect class="bar-hit" :x="b.hx" y="0" :width="b.hw" :height="barChart.h" fill="transparent" />
-              <rect :x="b.cx - b.barW / 2" :y="b.budgetY" :width="b.barW" :height="b.budgetH" rx="5" fill="#e3e9f1" />
-              <rect :x="b.cx - b.barW / 2" :y="b.spentY" :width="b.barW" :height="b.spentH" rx="5" :fill="b.color" />
-              <text
-                :x="b.cx"
-                :y="b.tagY"
-                text-anchor="middle"
-                class="bar-tag"
-                :class="b.remaining < 0 ? 'over' : 'left'"
-              >{{ b.remaining < 0 ? `-${shortKrw(-b.remaining)}` : `+${shortKrw(b.remaining)}` }}</text>
-              <text :x="b.cx" :y="barChart.h - 9" text-anchor="middle" class="bar-month" :class="{ cur: b.current }">{{ b.label }}</text>
-            </g>
-          </svg>
-
-          <div class="trend-months">
-            <div class="tm-row tm-head">
-              <span>월</span>
-              <span>사용</span>
-              <span>예산</span>
-              <span>잔액</span>
-            </div>
-            <div
-              v-for="m in barChart.bars"
-              :key="m.label"
-              class="tm-row tm-clickable"
-              :class="{ cur: m.current }"
+        <div class="analysis-card app-card review-card">
+          <div class="review-list">
+          <div
+            v-for="item in pendingReviewCandidates"
+            :key="item.category"
+            class="review-group"
+            :class="{ open: expandedCategory === item.category }"
+          >
+            <article
+              class="review-item"
               role="button"
-              tabindex="0"
-              @click="goMonth(m)"
-              @keyup.enter="goMonth(m)"
+              :aria-expanded="expandedCategory === item.category"
+              @click="toggleExpand(item.category)"
             >
-              <span class="tm-month">{{ m.label }}</span>
-              <span>{{ shortKrw(m.spent) }}</span>
-              <span class="tm-budget">{{ shortKrw(m.budget) }}</span>
-              <span :class="m.remaining < 0 ? 'neg' : 'pos'">
-                {{ m.remaining < 0 ? '-' : '+' }}{{ shortKrw(Math.abs(m.remaining)) }}
-              </span>
+              <span class="review-emoji">{{ categoryIcon(item.category) }}</span>
+              <div class="review-info">
+                <strong>{{ item.category }}</strong>
+                <span class="review-amount">{{ krw(item.currentAmount) }}</span>
+                <em v-if="spikeLabel(item)" class="review-spike">{{ spikeLabel(item) }}</em>
+              </div>
+              <div class="review-toggle" role="group" :aria-label="`${item.category} 지출 반영 방식`" @click.stop>
+                <button type="button" :class="{ active: !isCategoryRecurring(item.category) }" @click="setCategoryRecurring(item.category, false)">이번 달만</button>
+                <button type="button" class="is-recurring" :class="{ active: isCategoryRecurring(item.category) }" @click="setCategoryRecurring(item.category, true)">매달</button>
+              </div>
+              <ChevronDown class="review-caret" :class="{ open: expandedCategory === item.category }" :size="16" />
+            </article>
+
+            <div v-if="expandedCategory === item.category" class="review-detail">
+              <div v-for="tx in categoryItems(item.category)" :key="tx.id" class="rd-item">
+                <div class="rd-info">
+                  <strong>{{ tx.merchant }}</strong>
+                  <span>{{ tx.date }}</span>
+                </div>
+                <b class="rd-amount">{{ krw(tx.amount) }}</b>
+                <div class="rd-toggle" role="group" :aria-label="`${tx.merchant} 반영 방식`">
+                  <button type="button" :class="{ active: !isItemRecurring(tx.id) }" @click="setItemRecurring(tx.id, false)">이번 달만</button>
+                  <button type="button" class="is-recurring" :class="{ active: isItemRecurring(tx.id) }" @click="setItemRecurring(tx.id, true)">매달</button>
+                </div>
+              </div>
+              <p v-if="!categoryItems(item.category).length" class="rd-empty">이 카테고리의 이번 달 상세 내역을 불러오지 못했어요.</p>
             </div>
           </div>
+          </div>
         </div>
+      </section>
+
+      <section v-if="recommendationCards.length" class="rec-section">
+        <div class="rec-section-head">
+          <strong>새 카드 추천</strong>
+          <RouterLink to="/recommendations/new">전체 →</RouterLink>
+        </div>
+        <article
+          v-for="reco in recommendationCards"
+          :key="reco.id"
+          class="analysis-card app-card recommendation-card"
+        >
+          <div class="rec-head">
+            <span class="rec-rank" :class="`rank-${reco.rank}`">{{ reco.rank }}순위</span>
+            <span class="rec-thumb">
+              <img
+                v-if="reco.imageUrl"
+                :src="reco.imageUrl"
+                :alt="reco.name"
+                :class="thumbOrientation[`rec-${reco.id}`]"
+                @load="onThumbLoad(`rec-${reco.id}`, $event)"
+              />
+              <Sparkles v-else :size="20" :stroke-width="2.2" />
+            </span>
+            <div class="rec-head-copy">
+              <strong>{{ reco.name }}</strong>
+              <small v-if="reco.gain">예상 약 {{ reco.gain }}/월 절약</small>
+            </div>
+          </div>
+
+          <div v-if="reco.benefits.length" class="rec-benefits">
+            <div v-for="b in reco.benefits" :key="b.id" class="rec-benefit-row">
+              <span class="rec-benefit-emoji">{{ b.icon }}</span>
+              <div class="rec-benefit-main">
+                <div class="rec-benefit-top">
+                  <strong>{{ b.field }}</strong>
+                  <b>{{ b.value }}</b>
+                </div>
+                <span v-if="b.cap">{{ b.cap }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rec-foot">
+            <span><i>실적</i> 전월 {{ reco.requiredSpend }}</span>
+            <RouterLink to="/recommendations/new">자세히 →</RouterLink>
+          </div>
+        </article>
       </section>
 
     </div>
@@ -242,7 +239,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { CalendarClock, Check, ChevronRight, CreditCard, Pencil, PiggyBank, Search, Zap } from 'lucide-vue-next'
+import { CalendarClock, Check, ChevronDown, ChevronRight, CreditCard, Pencil, PiggyBank, Search, Sparkles, Zap } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, cards as mockCards, expenseModes, krw } from '@/data/mockData'
 import { demoMonthSummary } from '@/data/monthlyAnalytics'
@@ -303,9 +300,11 @@ onMounted(loadBudgetGoal)
 
 // 이번 달 사용액: 사용자 실제 거래 합(spending summary) 우선, 실패 시 데모 카테고리 합
 const realSpent = ref(null)
+const spendingSummary = ref(null)
 async function loadCurrentSpending() {
   try {
-    const summary = await fetchSpendingSummary()
+    const summary = await fetchSpendingSummary({ recurringCategories: recurringCategories.value })
+    spendingSummary.value = summary
     if (summary && Number.isFinite(Number(summary.totalExpense))) {
       realSpent.value = Number(summary.totalExpense)
     }
@@ -431,18 +430,36 @@ function mergeWalletCard(apiCard, index, transactions) {
   }
 }
 
+const allTransactions = ref([])
 async function loadWallet() {
   try {
     const [txResult, cardResult] = await Promise.allSettled([fetchTransactions(), fetchOwnedCards()])
+    const transactions = txResult.status === 'fulfilled' && Array.isArray(txResult.value) ? txResult.value : null
+    // 반복지출 드릴다운(가맹점별 내역)에서 사용할 거래 원본 보관
+    if (transactions) allTransactions.value = transactions
     // 호출 실패 시에만 초기 목 데이터 유지(오프라인 폴백). 성공하면 빈 배열도 그대로 반영 → 빈 지갑.
     if (cardResult.status !== 'fulfilled' || !Array.isArray(cardResult.value)) return
-    const transactions = txResult.status === 'fulfilled' && Array.isArray(txResult.value) ? txResult.value : null
     walletCards.value = cardResult.value.map((card, index) => mergeWalletCard(card, index, transactions))
   } catch {
     // 어떤 단계든 실패하면 초기 목 데이터 유지
   }
 }
 onMounted(loadWallet)
+
+// AI 추천(ownedCategoryGuides)과 동일한 실제 거래 기준 자격 맵 — 카드 현황과 추천 화면의 '이번달 할인' 표시를 통일
+const ownedEligibilityMap = computed(() => {
+  const map = {}
+  for (const g of (aiBundle.value?.ownedCategoryGuides || [])) {
+    const id = String(g.cardId)
+    if (!(id in map)) {
+      map[id] = {
+        thisMonthOk: Boolean(g.eligibleForBenefit),
+        nextMonthOk: Boolean(g.eligibleForBenefit || g.nextMonthEligible),
+      }
+    }
+  }
+  return map
+})
 
 // 보유 카드별: 사용 한도 / 할인 한도 / 실적 기반 이번달·다음달 할인 가능 여부
 const cardUsageList = computed(() => walletCards.value.map((card) => {
@@ -452,9 +469,11 @@ const cardUsageList = computed(() => walletCards.value.map((card) => {
   const prevSpend = Number(card.previousMonthSpend || 0)
   const curSpend = Number(card.currentMonthSpend ?? spent)
   const noPerf = minSpend <= 0
-  // 이번달 할인 = 지난달(전월) 실적을 채웠는가 / 다음달 할인 = 이번달 실적을 채웠는가
-  const thisMonthOk = noPerf || prevSpend >= minSpend
-  const nextMonthOk = noPerf || curSpend >= minSpend
+  // 이번달/다음달 할인 — AI 추천과 동일한 실제 거래 기준(백엔드 ownedCategoryGuides)으로 통일.
+  // 추천 번들에 잡힌 카드는 백엔드 산출 자격을 그대로 쓰고, 없으면 기존 실적 계산으로 폴백.
+  const elig = ownedEligibilityMap.value[String(card.id)]
+  const thisMonthOk = elig ? elig.thisMonthOk : (noPerf || prevSpend >= minSpend)
+  const nextMonthOk = elig ? elig.nextMonthOk : (noPerf || curSpend >= minSpend)
   // 할인 한도(월 최대)는 카드 metadata, 받은 할인은 이번 달 사용액 × 혜택률을 한도 내에서 계산.
   // 혜택률/한도 정보가 없으면(예: 신규 사용자 카드) metadata 값으로 폴백(보통 0).
   const rawDiscountLimit = Number(card.discountLimit || 0)
@@ -813,6 +832,207 @@ function prioritizeCardGuideItems(items) {
   }
 
   return picked
+}
+
+// ── 분석 탭에서 이동: 새 카드 추천 + "이 지출, 매달 반복되나요?" ──
+const RECO_FIELD_RULES = [
+  [/배달|요기요|배민|배달의민족|쿠팡이츠/, '배달앱', '🛵'],
+  [/카페|커피|베이커리|디저트|스타벅스/, '카페', '☕'],
+  [/음식|외식|식당|맛집|푸드|레스토랑|식비/, '음식점', '🍽️'],
+  [/편의점/, '편의점', '🏪'],
+  [/교육|학원|학습|어학|등록금/, '교육', '✏️'],
+  [/해외|국내외|글로벌/, '국내외', '🌐'],
+  [/항공|여행|면세|숙박|호텔/, '여행', '✈️'],
+  [/통신|휴대폰|모바일|요금제|유플러스|lg\s?u\+|skt|\bkt\b|\bu\+/i, '통신', '📡'],
+  [/간편결제|간편|네이버페이|카카오페이|페이코|\bpay\b/i, '간편결제', '💳'],
+  [/주유|충전소/, '주유', '⛽'],
+  [/교통|대중교통|지하철|버스|택시|주차/, '교통', '🚇'],
+  [/병원|의료|약국|건강|치과/, '의료', '🏥'],
+  [/마트|마켓|백화점|쿠팡|이마트/, '쇼핑', '🛒'],
+  [/쇼핑|아울렛/, '쇼핑', '🛍️'],
+  [/뷰티|화장품|미용/, '뷰티', '💄'],
+  [/영화|공연|도서|서점|문화|cgv/i, '문화', '🎬'],
+  [/구독|스트리밍|넷플릭스|ott/i, '구독', '📺'],
+  [/관리비|공과금|아파트|생활/, '생활', '🏠'],
+]
+
+function classifyRecoField(raw) {
+  const text = String(raw || '')
+  for (const [re, label, icon] of RECO_FIELD_RULES) {
+    if (re.test(text)) return { label, icon }
+  }
+  const clean = text.replace(/\s*(업종|가맹점|에서|최대|이용|결제|할인|적립).*$/, '').trim()
+  return { label: clean || '기본', icon: '💳' }
+}
+
+function categoryIcon(name) {
+  return classifyRecoField(name).icon
+}
+
+function recoBenefitRows(reco) {
+  const items = reco?.benefitItems || []
+  const rows = []
+  const seen = new Set()
+  items.forEach((item, index) => {
+    const rate = Number(item.ratePercent ?? item.rate_percent ?? 0)
+    const amount = Number(item.amountKrw ?? item.amount_krw ?? 0)
+    const raw = String(item.scope || item.label || (item.categories || [])[0] || '')
+    const { label, icon } = classifyRecoField(raw)
+    if (seen.has(label)) return
+    seen.add(label)
+    const cap = Number(item.monthlyBenefitLimitKrw ?? item.monthly_benefit_limit_krw ?? 0)
+    rows.push({
+      id: item.id || item.benefitId || `${label}-${index}`,
+      field: label,
+      icon,
+      value: rate > 0 ? `최대 ${Number(rate.toFixed(1))}% 할인` : (amount > 0 ? `${krw(amount)} 할인` : '혜택 확인'),
+      cap: cap > 0 ? `월 최대 ${krw(cap)}` : '',
+    })
+  })
+  return rows.slice(0, 3)
+}
+
+function recoRecurringScore(reco, recurringSet) {
+  if (!recurringSet.size) return 0
+  const fields = new Set()
+  ;(reco?.benefitItems || []).forEach((item) => {
+    const raw = String(item.scope || item.label || (item.categories || [])[0] || '')
+    fields.add(classifyRecoField(raw).label)
+    ;(item.categories || []).forEach((c) => fields.add(String(c)))
+  })
+  let score = 0
+  recurringSet.forEach((cat) => {
+    fields.forEach((field) => {
+      if (field === cat || field.includes(cat) || cat.includes(field)) score += 1
+    })
+  })
+  return score
+}
+
+// "이 지출, 매달 반복되나요?" — 급증 카테고리 → 클릭 시 가맹점별 내역 → 항목별 이번달만/매달
+const RECURRING_ITEMS_KEY = 'carch.review.recurringItems.v1'
+function readStoredList(key) {
+  try {
+    const value = window.localStorage.getItem(key)
+    const parsed = JSON.parse(value || '[]')
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : []
+  } catch {
+    return []
+  }
+}
+function writeStoredList(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify([...new Set(value.filter(Boolean))]))
+  } catch {
+    // localStorage 사용 불가 시 이번 세션 메모리 값만 유지
+  }
+}
+const recurringItemIds = ref(readStoredList(RECURRING_ITEMS_KEY).map(String))
+const expandedCategory = ref('')
+
+function toggleExpand(category) {
+  expandedCategory.value = expandedCategory.value === category ? '' : category
+}
+
+const pendingReviewCandidates = computed(() => {
+  const trend = spendingSummary.value?.spendingTrend
+  return trend?.reviewCandidates || trend?.oneTimeCandidates || []
+})
+
+// 지난달보다 얼마나 늘었는지 짧은 라벨
+function spikeLabel(item) {
+  const prev = Number(item.previousAmount || 0)
+  const cur = Number(item.currentAmount || 0)
+  if (prev > 0 && cur > prev) return `지난달보다 +${Math.round(((cur - prev) / prev) * 100)}%`
+  const rate = Number(item.changeRateFromBaseline || 0)
+  return rate > 0 ? `평소보다 +${Math.round(rate)}%` : ''
+}
+
+// 이번 달 카테고리별 거래 내역(지출만, 큰 금액순)
+const txByCategory = computed(() => {
+  const map = {}
+  for (const tx of allTransactions.value) {
+    const date = String(tx.date || tx.approvedAt || tx.approved_at || '')
+    if (!date.startsWith(CURRENT_MONTH)) continue
+    const signed = Number(tx.amount ?? tx.amt ?? 0)
+    if (signed >= 0) continue
+    const cat = tx.category || tx.cat || '기타'
+    if (!map[cat]) map[cat] = []
+    map[cat].push({
+      id: String(tx.id),
+      merchant: tx.merchant || tx.merchantName || tx.merchant_name || '가맹점',
+      date: date.slice(0, 10),
+      amount: Math.abs(signed),
+    })
+  }
+  Object.values(map).forEach((list) => list.sort((a, b) => b.amount - a.amount))
+  return map
+})
+
+function categoryItems(category) {
+  return txByCategory.value[category] || []
+}
+function isItemRecurring(id) {
+  return recurringItemIds.value.includes(String(id))
+}
+// 카테고리(어미)는 하위 항목이 '모두 매달'일 때만 반복 지출로 본다 — 자손 하나가 어미를 뒤집지 않게.
+// 카테고리 토글을 누르면 setCategoryRecurring이 하위 항목 전체를 같은 상태로 내려보낸다(어미 우선).
+function isCategoryRecurring(category) {
+  const items = categoryItems(category)
+  return items.length > 0 && items.every((i) => recurringItemIds.value.includes(i.id))
+}
+
+// 추천 엔진(recurringCategories)에는 '하위 항목 전부 매달'인 카테고리만 전달
+const recurringCategories = computed(() =>
+  Object.keys(txByCategory.value).filter((cat) => {
+    const items = txByCategory.value[cat]
+    return items.length > 0 && items.every((i) => recurringItemIds.value.includes(i.id))
+  }),
+)
+
+// 1·2순위 추천 카드 — 분석이 쓰던 같은 추천 번들(aiBundle)을 재사용
+const recommendationCards = computed(() => {
+  const recurring = new Set(recurringCategories.value)
+  return [...(aiBundle.value?.results || [])]
+    .map((reco, index) => ({ reco, index, score: recoRecurringScore(reco, recurring) }))
+    .sort((a, b) => (b.score - a.score) || (a.index - b.index))
+    .slice(0, 2)
+    .map(({ reco }, rank) => {
+      const gain = Number(reco?.economics?.monthlyDelta || 0)
+      const required = Number(reco?.previousMonthMinSpend ?? reco?.previous_month_min_spend ?? 0)
+      return {
+        id: reco.id || reco.cardAdId || `reco-${rank}`,
+        rank: rank + 1,
+        name: reco.name,
+        imageUrl: reco.imageUrl,
+        gain: gain > 0 ? `+${krw(gain)}` : '',
+        requiredSpend: required > 0 ? krw(required) : '실적 없음',
+        benefits: recoBenefitRows(reco),
+      }
+    })
+})
+
+function persistRecurringItems() {
+  writeStoredList(RECURRING_ITEMS_KEY, recurringItemIds.value)
+}
+async function setItemRecurring(id, enabled) {
+  const key = String(id)
+  const next = new Set(recurringItemIds.value)
+  if (enabled) next.add(key)
+  else next.delete(key)
+  recurringItemIds.value = [...next]
+  persistRecurringItems()
+  await loadCurrentSpending()
+}
+async function setCategoryRecurring(category, enabled) {
+  const next = new Set(recurringItemIds.value)
+  categoryItems(category).forEach((item) => {
+    if (enabled) next.add(item.id)
+    else next.delete(item.id)
+  })
+  recurringItemIds.value = [...next]
+  persistRecurringItems()
+  await loadCurrentSpending()
 }
 </script>
 
@@ -1731,5 +1951,457 @@ h1 {
 .plan-entry svg {
   flex-shrink: 0;
   color: #008c95;
+}
+
+/* ── 분석 탭에서 이동: "이 지출 반복?" + 새 카드 추천 ── */
+.analysis-card {
+  margin-top: 12px;
+  border: 1px solid rgba(36, 54, 79, 0.08) !important;
+  border-radius: 18px !important;
+  padding: 16px !important;
+  background: rgba(255, 255, 255, 0.82) !important;
+  box-shadow: 0 13px 28px rgba(36, 54, 79, 0.055) !important;
+}
+
+.review-section {
+  margin-top: 24px;
+}
+
+.review-sub {
+  margin: -3px 0 11px;
+  color: #7a8592;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.review-card {
+  margin-top: 0;
+}
+
+.review-head {
+  margin-bottom: 12px;
+}
+
+.review-head strong {
+  display: block;
+  color: #20242a;
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.review-head small {
+  display: block;
+  margin-top: 3px;
+  color: #7a8592;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.review-info {
+  min-width: 0;
+}
+
+.review-info strong {
+  display: block;
+  color: #17202b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.review-info span {
+  display: block;
+  margin-top: 2px;
+  color: #5f6b77;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review-group {
+  border-radius: 14px;
+  background: #f5f8fb;
+  overflow: hidden;
+}
+
+.review-group + .review-group {
+  margin-top: 8px;
+}
+
+.review-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  border-radius: 14px;
+  padding: 11px 12px;
+  background: #f5f8fb;
+  cursor: pointer;
+}
+
+.review-spike {
+  display: block;
+  margin-top: 2px;
+  color: #d2624a;
+  font-size: 11px;
+  font-weight: 800;
+  font-style: normal;
+}
+
+.review-caret {
+  flex-shrink: 0;
+  color: #9aa6b3;
+  transition: transform 160ms ease;
+}
+
+.review-caret.open {
+  transform: rotate(180deg);
+}
+
+.review-detail {
+  padding: 2px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rd-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'info amount' 'toggle toggle';
+  gap: 6px 10px;
+  align-items: center;
+  border-radius: 11px;
+  padding: 9px 11px;
+  background: #fff;
+  border: 1px solid rgba(36, 54, 79, 0.06);
+}
+
+.rd-info {
+  grid-area: info;
+  min-width: 0;
+}
+
+.rd-info strong {
+  display: block;
+  overflow: hidden;
+  color: #17202b;
+  font-size: 12.5px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rd-info span {
+  display: block;
+  margin-top: 1px;
+  color: #8a95a3;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.rd-amount {
+  grid-area: amount;
+  color: #17202b;
+  font-size: 12.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.rd-toggle {
+  grid-area: toggle;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.rd-toggle button {
+  min-height: 30px;
+  border: 1px solid rgba(36, 54, 79, 0.16);
+  border-radius: 9px;
+  padding: 0 8px;
+  background: #f7f9fc;
+  color: #8a95a3;
+  font-size: 11.5px;
+  font-weight: 900;
+  white-space: nowrap;
+  touch-action: manipulation;
+  transition: transform 120ms ease, background 140ms ease, color 140ms ease;
+}
+
+.rd-toggle button.active {
+  border-color: transparent;
+  background: #24364f;
+  color: #fff;
+}
+
+.rd-toggle button.is-recurring.active {
+  background: #0f5fae;
+}
+
+.rd-toggle button:active {
+  transform: scale(0.96);
+}
+
+.rd-empty {
+  margin: 4px 2px;
+  color: #8a95a3;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.review-emoji {
+  flex: 0 0 auto;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.review-item strong {
+  display: block;
+  color: #17202b;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.review-toggle {
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  gap: 6px;
+}
+
+.review-toggle button {
+  min-height: 33px;
+  border: 1px solid rgba(36, 54, 79, 0.16);
+  border-radius: 9px;
+  padding: 0 12px;
+  background: #fff;
+  color: #8a95a3;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+  touch-action: manipulation;
+  transition: transform 120ms ease, background 140ms ease, color 140ms ease;
+}
+
+.review-toggle button.active {
+  border-color: transparent;
+  background: #24364f;
+  color: #fff;
+}
+
+.review-toggle button.is-recurring.active {
+  background: #0f5fae;
+}
+
+.review-toggle button:active {
+  transform: scale(0.95);
+}
+
+.rec-section {
+  margin-top: 24px;
+}
+
+.rec-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 11px;
+  padding: 0;
+}
+
+.rec-section-head strong {
+  color: #17202b;
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.rec-section-head a {
+  color: #0f5fae;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.recommendation-card {
+  background:
+    linear-gradient(180deg, rgba(240, 253, 250, 0.88), rgba(255, 255, 255, 0.86)) !important;
+}
+
+.rec-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rec-thumb {
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 46px;
+  height: 30px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #008c95;
+  box-shadow: 0 2px 8px rgba(36, 54, 79, 0.16);
+}
+
+.rec-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rec-thumb img.is-portrait {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 30px;
+  height: 46px;
+  max-width: none;
+  transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.rec-head-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rec-head-copy strong {
+  display: block;
+  overflow: hidden;
+  color: #17202b;
+  font-size: 15px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rec-head-copy small {
+  display: block;
+  margin-top: 2px;
+  color: #15a34a;
+  font-size: 11.5px;
+  font-weight: 900;
+}
+
+.rec-rank {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.rec-rank.rank-1 {
+  background: rgba(196, 154, 73, 0.16);
+  color: #b5852b;
+}
+
+.rec-rank.rank-2 {
+  background: rgba(36, 54, 79, 0.1);
+  color: #44546b;
+}
+
+.rec-benefits {
+  display: flex;
+  flex-direction: column;
+}
+
+.rec-benefit-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 2px;
+  border-bottom: 1px solid rgba(36, 54, 79, 0.07);
+}
+
+.rec-benefit-row:last-child {
+  border-bottom: 0;
+}
+
+.rec-benefit-emoji {
+  flex: 0 0 auto;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.rec-benefit-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rec-benefit-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rec-benefit-top strong {
+  color: #17202b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.rec-benefit-top b {
+  flex: 0 0 auto;
+  color: #008c95;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.rec-benefit-main span {
+  display: block;
+  margin-top: 2px;
+  color: #8a95a3;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.rec-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(36, 54, 79, 0.08);
+}
+
+.rec-foot > span {
+  color: #5f6b77;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.rec-foot > span i {
+  margin-right: 6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(15, 95, 174, 0.1);
+  color: #0f5fae;
+  font-size: 10px;
+  font-weight: 900;
+  font-style: normal;
+}
+
+.rec-foot a {
+  flex: 0 0 auto;
+  color: #0f5fae;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
 }
 </style>
