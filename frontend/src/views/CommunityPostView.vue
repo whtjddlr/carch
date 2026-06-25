@@ -293,6 +293,8 @@ h1 {
   font-size: 13px;
   font-weight: 700;
   line-height: 1.7;
+  white-space: pre-line;
+  word-break: keep-all;
 }
 
 .tag-row {

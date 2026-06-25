@@ -1063,52 +1063,73 @@ def create_transaction_from_payload(payload, user=None):
     )
 
 
+from .community_seed import COMMUNITY_SEED_POSTS
+
+# 글 본문에서 카드명/카드사를 자동 추출해 해시태그로 사용 (검색·분류 편의)
+CARD_TAG_RULES = [
+    (r'카드의정석\s*2?\s*SHOPPER|SHOPPER', '카드의정석 SHOPPER'),
+    (r'LOCA\s*LIKIT\s*Eat', 'LOCA LIKIT Eat'),
+    (r'LOCA\s*LIKIT', 'LOCA LIKIT'),
+    (r'LOCA\s*100', 'LOCA 100'),
+    (r'SOL\s*트래블|쏠\s*트래블', 'SOL트래블'),
+    (r'트래블월렛', '트래블월렛'),
+    (r'트래블로그', '트래블로그'),
+    (r'더모아', '더모아'),
+    (r'트라이플러스', '트라이플러스'),
+    (r'페이코', '페이코 포인트카드'),
+    (r'7\s*CORE|7코어', '우리카드 7CORE'),
+    (r'마이위시', '마이위시'),
+    (r'미스터라이프', '미스터라이프'),
+    (r'The\s*BEST-?F', 'The BEST-F'),
+]
+ISSUER_TAG_RULES = [
+    (r'신한', '신한카드'),
+    (r'현대', '현대카드'),
+    (r'삼성', '삼성카드'),
+    (r'국민', '국민카드'),
+    (r'롯데', '롯데카드'),
+    (r'우리카드', '우리카드'),
+    (r'하나', '하나카드'),
+    (r'농협', '농협카드'),
+    (r'\bBC카드\b', 'BC카드'),
+    (r'IBK|기업은행', 'IBK기업은행'),
+]
+
+
+def extract_card_tags(text):
+    text = text or ''
+    tags = []
+    for pattern, tag in CARD_TAG_RULES:
+        if tag not in tags and re.search(pattern, text, re.IGNORECASE):
+            tags.append(tag)
+    for pattern, tag in ISSUER_TAG_RULES:
+        if tag not in tags and re.search(pattern, text):
+            tags.append(tag)
+    return tags[:4]
+
+
 def ensure_community_seeded():
     if CommunityPost.objects.exists():
         return
 
-    demo_user = get_demo_user()
-    seed_posts = [
-        {
-            'title': 'LOCA LIKIT Eat vs 카드의정석2 SHOPPER 비교 후기',
-            'body': '6개월 사용 후 솔직한 후기입니다. LIKIT Eat는 식비와 카페 결제 관리가 편하고, 카드의정석2 SHOPPER는 쇼핑 혜택이 매력적이에요.',
-            'author': '이승민',
-            'avatar': '이',
-            'tags': ['카드비교', '생활카드', '우리카드'],
-            'likes': 47,
-            'liked': False,
-            'comments': [
-                {'author': '남주현', 'avatar': '남', 'body': 'SHOPPER 전월 실적 채우는 게 생각보다 괜찮나요?'},
-                {'author': '박서연', 'avatar': '박', 'body': '쇼핑몰 자주 쓰면 체감 혜택이 꽤 있어요.'},
-            ],
-        },
-        {
-            'title': '월 30만원으로 카드 혜택 최대화하는 법',
-            'body': '실적 채우기 어려운 분들을 위한 가이드입니다. 필수 지출 항목부터 카드 혜택을 최대로 누리는 방법을 공유합니다.',
-            'author': '박서연',
-            'avatar': '박',
-            'tags': ['카드전략', '혜택최대화'],
-            'likes': 89,
-            'liked': True,
-            'comments': [{'author': '최민준', 'avatar': '최', 'body': '교통비랑 구독 먼저 묶는 팁 좋네요.'}],
-        },
-        {
-            'title': 'LOCA 100을 보조 카드로 두는 방식',
-            'body': '주력 할인 카드가 애매한 결제는 LOCA 100 같은 기본 할인 카드로 받쳐두는 방식이 깔끔했습니다.',
-            'author': '최민준',
-            'avatar': '최',
-            'tags': ['롯데카드', '생활'],
-            'likes': 34,
-            'liked': False,
-            'comments': [],
-        },
-    ]
+    # 시드 글/댓글은 소유자를 두지 않는다(user=None) → '나의 글'(본인 작성)에는 잡히지 않고,
+    # 익명 게시판 글로만 노출. 사용자가 직접 쓴 글만 editable=true가 되어 '나의 글'에 들어간다.
+    seed_posts = COMMUNITY_SEED_POSTS
 
-    for item in seed_posts:
-        comments = item.pop('comments')
-        post = CommunityPost.objects.create(user=demo_user, **item)
-        for comment in comments:
-            CommunityComment.objects.create(user=demo_user, post=post, **comment)
+    now = timezone.now()
+    for index, raw in enumerate(seed_posts):
+        item = dict(raw)
+        comments = item.pop('comments', [])
+        days_ago = item.pop('daysAgo', index)
+        # 잡태그 대신 본문에서 추출한 카드명/카드사 태그를 사용
+        item['tags'] = extract_card_tags(f"{item.get('title', '')} {item.get('body', '')}")
+        post = CommunityPost.objects.create(user=None, **item)
+        created = now - timedelta(days=days_ago, hours=(index * 5) % 22, minutes=(index * 13) % 60)
+        CommunityPost.objects.filter(id=post.id).update(created_at=created, updated_at=created)
+        for c_index, comment in enumerate(comments):
+            created_comment = CommunityComment.objects.create(user=None, post=post, **comment)
+            comment_at = created + timedelta(hours=2 + c_index * 4, minutes=(c_index * 17) % 60)
+            CommunityComment.objects.filter(id=created_comment.id).update(created_at=comment_at)
 
 
 def serialize_comment(comment, viewer=None):
@@ -2559,13 +2580,16 @@ def community_post_list(request):
             return json_response({'detail': '본문을 입력해 주세요.'}, status=400)
 
         author = user_display_name(user)
+        # 본문에서 카드명/카드사를 자동 추출해 해시태그로 (사용자 입력 태그가 있으면 뒤에 합침)
+        auto_tags = extract_card_tags(f'{title} {body}')
+        merged_tags = auto_tags + [t for t in normalize_tags(payload.get('tags')) if t not in auto_tags]
         post = CommunityPost.objects.create(
             user=user,
             title=title[:120],
             body=body,
             author=author[:30],
             avatar=user_avatar(user)[:2],
-            tags=normalize_tags(payload.get('tags')),
+            tags=merged_tags[:5],
         )
         return json_response(serialize_community_post(post, include_comments=True, viewer=user), status=201)
 

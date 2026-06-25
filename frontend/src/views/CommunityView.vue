@@ -19,59 +19,98 @@
         />
       </label>
 
-      <section class="community-guide app-card">
-        <div>
-          <span>오늘의 카드 이야기</span>
-          <strong>혜택 비교와 실사용 후기를 모아봤어요</strong>
+      <div class="category-tabs" role="tablist" aria-label="게시판 분류">
+        <button
+          v-for="cat in categories"
+          :key="cat.name"
+          type="button"
+          class="category-tab"
+          :class="{ active: activeCategory === cat.name }"
+          @click="selectCategory(cat.name)"
+        >
+          <component :is="cat.icon" :size="14" :stroke-width="2.4" />
+          <span>{{ cat.name }}</span>
+        </button>
+      </div>
+
+      <section v-if="showHot" class="hot-section">
+        <div class="hot-head">
+          <span class="hot-flame">🔥 실시간 인기글</span>
+          <small>TOP 3</small>
         </div>
-        <div class="guide-topics" aria-label="추천 주제">
-          <button type="button" @click="search = '카드비교'; loadPosts()">카드비교</button>
-          <button type="button" @click="search = '혜택최대화'; loadPosts()">혜택최대화</button>
-          <button type="button" @click="search = '마트'; loadPosts()">마트</button>
-        </div>
+        <button
+          v-for="(post, i) in topPosts"
+          :key="post.id"
+          type="button"
+          class="hot-row"
+          @click="router.push(`/community/${post.id}`)"
+        >
+          <span class="hot-rank">{{ i + 1 }}</span>
+          <span class="hot-row-title">{{ post.title }}</span>
+          <span class="hot-likes"><Heart :size="12" fill="currentColor" />{{ post.likes }}</span>
+        </button>
       </section>
 
       <div v-if="isLoading" class="notice-card">게시글을 불러오는 중입니다.</div>
       <div v-else-if="error" class="notice-card" :class="{ subtle: isFallbackData }">{{ error }}</div>
 
       <article
-        v-for="post in posts"
+        v-for="post in displayPosts"
         :key="post.id"
         class="app-card post-card"
         @click="router.push(`/community/${post.id}`)"
       >
         <div class="post-head">
-          <span>{{ post.avatar }}</span>
-          <div>
-            <strong>{{ post.author }}</strong>
+          <div class="post-author">
+            <strong>
+              <em class="grade-icon" :title="`${gradeOf(post.author).label} 등급`" :aria-label="`${gradeOf(post.author).label} 등급`">{{ gradeOf(post.author).emoji }}</em>
+              <span class="author-name" :style="{ color: gradeOf(post.author).color }">{{ post.author }}</span>
+            </strong>
             <small>{{ post.date }}</small>
           </div>
         </div>
         <h2>{{ post.title }}</h2>
         <p>{{ post.body }}</p>
-        <div class="tag-row">
+        <div v-if="post.tags && post.tags.length" class="tag-row">
           <span v-for="tag in post.tags" :key="tag">#{{ tag }}</span>
         </div>
         <footer>
           <button
             type="button"
+            class="like-btn"
             :class="{ liked: post.liked }"
             :aria-label="`좋아요 ${post.likes}개`"
             @click.stop="handleLike(post)"
           >
-            <Heart :size="16" :fill="post.liked ? 'currentColor' : 'none'" />
+            <Heart :size="15" :fill="post.liked ? 'currentColor' : 'none'" />
+            <b>{{ post.likes }}</b>
           </button>
           <span :aria-label="`댓글 ${post.comments}개`">
-            <MessageCircle :size="16" />
+            <MessageCircle :size="15" />
+            <b>{{ post.comments }}</b>
           </span>
+          <button
+            type="button"
+            class="save-btn"
+            :class="{ saved: isSaved(post) }"
+            :aria-label="isSaved(post) ? '저장 취소' : '저장'"
+            :aria-pressed="isSaved(post)"
+            @click.stop="toggleSave(post)"
+          >
+            <Star :size="16" :fill="isSaved(post) ? 'currentColor' : 'none'" />
+          </button>
         </footer>
       </article>
 
-      <div v-if="!isLoading && !posts.length" class="empty-card">
-        <Users :size="32" />
-        <strong>아직 게시글이 없습니다</strong>
-        <p>첫 카드 후기를 공유해 보세요.</p>
-        <RouterLink to="/community/new">글쓰기</RouterLink>
+      <div v-if="!isLoading && !displayPosts.length" class="empty-card">
+        <Users v-if="activeCategory !== '저장됨'" :size="32" />
+        <Star v-else :size="32" />
+        <strong v-if="activeCategory === '나의 글'">아직 작성한 글이 없어요</strong>
+        <strong v-else-if="activeCategory === '저장됨'">저장한 글이 없어요</strong>
+        <strong v-else>아직 게시글이 없습니다</strong>
+        <p v-if="activeCategory === '저장됨'">글 우측 하단 별표를 누르면 여기 모여요.</p>
+        <p v-else>첫 카드 후기를 공유해 보세요.</p>
+        <RouterLink v-if="activeCategory !== '저장됨'" to="/community/new">글쓰기</RouterLink>
       </div>
     </div>
 
@@ -82,9 +121,9 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Heart, MessageCircle, Plus, Search, Users } from 'lucide-vue-next'
+import { Heart, Info, MessageCircle, PenLine, Plus, Search, Star, Ticket, Users } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { communityPosts } from '@/data/mockData'
 import { fetchCommunityPosts, toggleCommunityPostLike } from '@/services/api'
@@ -95,6 +134,86 @@ const search = ref('')
 const isLoading = ref(false)
 const error = ref('')
 const isFallbackData = ref(false)
+
+// 대분류 탭 — '전체'는 없음(아무것도 선택 안 하면 전체). 같은 탭 다시 누르면 해제.
+const categories = [
+  { name: '이벤트', icon: Ticket },
+  { name: '정보공유', icon: Info },
+  { name: '나의 글', icon: PenLine },
+  { name: '저장됨', icon: Star },
+]
+const activeCategory = ref('')
+function selectCategory(name) {
+  activeCategory.value = activeCategory.value === name ? '' : name
+}
+
+// 글의 태그로 콘텐츠 분류 (이벤트 / 그 외=정보공유)
+function categoryOf(post) {
+  const tags = post.tags || []
+  if (tags.some((t) => ['발급이벤트', '발급중단', '쿠폰', '즉시할인', '공지', '프로모션', '이벤트'].includes(t))) return '이벤트'
+  return '정보공유'
+}
+
+// 저장(북마크) — 로컬 저장
+const SAVED_KEY = 'carch.community.saved.v1'
+function readSaved() {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(SAVED_KEY) || '[]')
+    return Array.isArray(v) ? v.map(String) : []
+  } catch {
+    return []
+  }
+}
+const savedIds = ref(readSaved())
+function isSaved(post) {
+  return savedIds.value.includes(String(post.id))
+}
+function toggleSave(post) {
+  const id = String(post.id)
+  const next = new Set(savedIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  savedIds.value = [...next]
+  try {
+    window.localStorage.setItem(SAVED_KEY, JSON.stringify(savedIds.value))
+  } catch {
+    // 저장 실패 시 이번 세션 메모리만 유지
+  }
+}
+
+const displayPosts = computed(() => {
+  const list = posts.value
+  if (activeCategory.value === '나의 글') return list.filter((post) => post.editable)
+  if (activeCategory.value === '저장됨') return list.filter((post) => isSaved(post))
+  if (activeCategory.value === '이벤트' || activeCategory.value === '정보공유') {
+    return list.filter((post) => categoryOf(post) === activeCategory.value)
+  }
+  return list
+})
+
+// 실시간 인기글 TOP3 (좋아요순) — 전체(미선택) + 검색 안 할 때만
+const topPosts = computed(() => [...posts.value].sort((a, b) => (b.likes || 0) - (a.likes || 0)).slice(0, 3))
+const showHot = computed(() => !activeCategory.value && !search.value && !isLoading.value && topPosts.value.length >= 3)
+
+// 까치 성장 등급제 — 작성자 누적 좋아요로 등급 산정 (알 → 까치)
+const GRADES = [
+  { min: 250, label: '까치', emoji: '🐦‍⬛', color: '#24364f' },
+  { min: 140, label: '어린 까치', emoji: '🐦', color: '#0f5fae' },
+  { min: 70, label: '아기새', emoji: '🐤', color: '#c2410c' },
+  { min: 30, label: '병아리', emoji: '🐣', color: '#b8860b' },
+  { min: 0, label: '알', emoji: '🥚', color: '#7b8794' },
+]
+const authorLikes = computed(() => {
+  const map = {}
+  posts.value.forEach((post) => {
+    map[post.author] = (map[post.author] || 0) + (post.likes || 0)
+  })
+  return map
+})
+function gradeOf(author) {
+  const total = authorLikes.value[author] || 0
+  return GRADES.find((g) => total >= g.min) || GRADES[GRADES.length - 1]
+}
 
 async function loadPosts() {
   isLoading.value = true
@@ -252,22 +371,149 @@ onMounted(loadPosts)
   font-weight: 900;
 }
 
+.category-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.category-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.category-tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  border-radius: 999px;
+  padding: 0 13px;
+  background: #eef2f7;
+  color: #6e7885;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.category-tab svg {
+  opacity: 0.85;
+}
+
+.category-tab.active {
+  background: #24364f;
+  color: #fff;
+}
+
+.hot-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid rgba(217, 45, 32, 0.16);
+  border-radius: 16px;
+  padding: 13px 14px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 99, 71, 0.12), transparent 52%),
+    #fff;
+  box-shadow: 0 10px 24px rgba(217, 45, 32, 0.07);
+}
+
+.hot-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.hot-flame {
+  color: #d92d20;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.hot-head small {
+  color: #f0857a;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.hot-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 2px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.hot-row + .hot-row {
+  border-top: 1px solid rgba(217, 45, 32, 0.08);
+}
+
+.hot-rank {
+  flex: 0 0 auto;
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: #d92d20;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 950;
+  line-height: 1;
+  padding-bottom: 1px;
+}
+
+.hot-row-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: #17202b;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.hot-likes {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #d92d20;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .post-head {
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
-.post-head > span {
+.post-head .post-author strong {
   display: flex;
-  width: 34px;
-  height: 34px;
   align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: rgba(232, 241, 255, 0.64);
-  color: #0f5fae;
+  gap: 6px;
+}
+
+.grade-icon {
+  flex: 0 0 auto;
+  font-size: 18px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.author-name {
+  font-size: 14px;
   font-weight: 900;
 }
 
@@ -327,26 +573,62 @@ footer {
 footer button,
 footer span {
   display: inline-flex;
-  width: 40px;
-  height: 40px;
+  min-height: 34px;
   align-items: center;
   justify-content: center;
+  gap: 5px;
   border-radius: 999px;
   border: 1px solid rgba(23, 32, 43, 0.07);
-  padding: 0;
+  padding: 0 12px;
   background: rgba(251, 253, 255, 0.38);
-  color: inherit;
+  color: #6e6e73;
   font: inherit;
+  /* 좋아요/저장은 누르면 즉시 색이 바뀌도록 색 전환 애니메이션 제거 */
+  transition: none;
+}
+
+footer button svg,
+footer span svg {
+  transition: none;
+}
+
+footer b {
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 footer button {
   cursor: pointer;
 }
 
-footer button.liked {
-  color: #d92d20;
-  border-color: rgba(217, 45, 32, 0.13);
+/* 좋아요 = 항상 빨강(빈 하트도 빨강), 누르면 채워짐. 전역 button !important 를 이겨야 해서 svg까지 직접 지정 */
+footer button.like-btn,
+footer button.like-btn svg {
+  color: #d92d20 !important;
+  stroke: #d92d20 !important;
+}
+
+footer button.like-btn.liked {
+  border-color: rgba(217, 45, 32, 0.18);
   background: rgba(255, 241, 243, 0.72);
+}
+
+/* 저장 = 항상 노랑(빈 별도 노랑), 누르면 채워짐 */
+footer button.save-btn {
+  margin-left: auto;
+  padding: 0 11px;
+}
+
+footer button.save-btn,
+footer button.save-btn svg {
+  color: #e0a700 !important;
+  stroke: #e0a700 !important;
+}
+
+footer .save-btn.saved {
+  border-color: rgba(234, 179, 8, 0.34);
+  background: rgba(254, 243, 199, 0.7);
 }
 
 .empty-card {
