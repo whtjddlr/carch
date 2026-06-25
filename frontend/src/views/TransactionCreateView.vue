@@ -8,78 +8,39 @@
     </header>
 
     <div class="screen-scroll scrollbar-hide create-body">
-      <section class="app-card prompt-card">
-        <div class="source-tabs">
-          <button :class="{ active: sourceMode === 'text' }" type="button" @click="sourceMode = 'text'">
-            <PencilLine :size="15" />
-            문장
-          </button>
-          <button :class="{ active: sourceMode === 'capture' }" type="button" @click="sourceMode = 'capture'">
-            <ImageIcon :size="15" />
-            캡처
-          </button>
-        </div>
-
+      <div class="tx-input">
         <textarea
           v-model="rawText"
           class="form-field prompt-field"
-          rows="5"
+          rows="4"
           aria-label="소비내역 원문"
-          :placeholder="placeholder"
+          placeholder="예: 오늘 컴포즈커피에서 3,800원 LOCA LIKIT Eat로 결제했어"
         />
-
-        <div v-if="sourceMode === 'capture'" class="capture-box">
-          <label>
-            <Upload :size="18" />
-            <span>{{ imageName || '이미지 선택' }}</span>
-            <input type="file" accept="image/*" aria-label="결제 캡처 이미지 선택" @change="onImageChange" />
+        <div class="input-actions">
+          <label class="img-upload">
+            <ImageIcon :size="16" />
+            <span>{{ imageName || '이미지 업로드' }}</span>
+            <input type="file" accept="image/*" aria-label="결제 캡처 업로드" @change="onImageChange" />
           </label>
-          <img v-if="imagePreview" :src="imagePreview" alt="결제 캡처 미리보기" />
-          <p class="capture-helper">이미지는 참고용이에요. 승인 문구도 함께 입력해 주세요.</p>
-        </div>
-
-        <div class="example-row">
-          <button
-            v-for="example in examples"
-            :key="example"
-            type="button"
-            :aria-label="`예시 입력: ${example}`"
-            @click="rawText = example"
-          >
-            {{ example }}
+          <button class="primary-button" type="button" :disabled="isParsing || !rawText.trim()" @click="handleParse">
+            <Sparkles :size="16" />
+            {{ isParsing ? '채우는 중' : 'AI로 채우기' }}
           </button>
         </div>
+      </div>
 
-        <button class="primary-button w-100" type="button" :disabled="isParsing || !rawText.trim()" @click="handleParse">
-          <Sparkles :size="16" />
-          {{ isParsing ? '보정 중' : 'AI로 채우기' }}
-        </button>
-      </section>
-
-      <section class="app-card result-card">
-        <div class="result-head">
-          <span class="rh-emoji">{{ form.icon || '🧾' }}</span>
-          <div class="rh-title">
-            <span>확인 후 저장</span>
-            <h2>{{ form.merchantName || '가맹점 미입력' }}</h2>
-          </div>
-          <strong :class="{ low: confidence < 0.7 }">{{ Math.round(confidence * 100) }}%</strong>
-        </div>
-
-        <div v-if="parsedSourceText" class="source-evidence">
-          <span><Sparkles :size="12" /> AI가 읽은 원문</span>
-          <p>{{ parsedSourceText }}</p>
-        </div>
-
-        <label class="field-label" for="merchantName"><Store :size="14" /> 가맹점</label>
-        <input id="merchantName" v-model="form.merchantName" class="form-field" aria-label="가맹점" />
+      <div class="tx-form">
+        <label class="field">
+          <span class="field-label"><Store :size="14" /> 가맹점</span>
+          <input v-model="form.merchantName" class="form-field" aria-label="가맹점" />
+        </label>
 
         <div class="two-col">
-          <label>
+          <label class="field">
             <span class="field-label"><Coins :size="14" /> 금액</span>
             <input v-model.number="form.amount" class="form-field" inputmode="numeric" aria-label="금액" />
           </label>
-          <label>
+          <label class="field">
             <span class="field-label"><Tag :size="14" /> 카테고리</span>
             <select v-model="form.category" class="form-field" aria-label="카테고리">
               <option v-for="category in categories" :key="category" :value="category">{{ category }}</option>
@@ -87,59 +48,67 @@
           </label>
         </div>
 
-        <label class="field-label" for="cardId"><CreditCard :size="14" /> 카드</label>
-        <select id="cardId" v-model="form.cardId" class="form-field" aria-label="카드">
-          <option v-for="card in cards" :key="card.id" :value="card.id">
-            {{ card.issuer }} · {{ card.name }}
-          </option>
-        </select>
+        <label class="field">
+          <span class="field-label"><CreditCard :size="14" /> 카드</span>
+          <select v-model="form.cardId" class="form-field" aria-label="카드">
+            <option v-for="card in cards" :key="card.id" :value="card.id">{{ card.issuer }} · {{ card.name }}</option>
+          </select>
+        </label>
 
-        <div class="payment-mode-block">
+        <div class="field">
           <span class="field-label"><Wallet :size="14" /> 결제 방식</span>
-          <div class="payment-segment-grid" role="radiogroup" aria-label="결제 방식">
-            <button
-              v-for="option in paymentModeOptions"
-              :key="option.id"
-              type="button"
-              :class="{ active: selectedPaymentMode === option.id }"
-              :aria-pressed="selectedPaymentMode === option.id"
-              @click="setPaymentMode(option.id)"
-            >
-              <strong>{{ option.label }}</strong>
-              <small>{{ option.description }}</small>
-            </button>
+          <div class="pay-seg" role="radiogroup" aria-label="결제 방식">
+            <button type="button" :class="{ active: form.paymentType === 'lump_sum' }" @click="setPaymentMode('lump_sum')">일시불</button>
+            <button type="button" :class="{ active: form.paymentType === 'installment' }" @click="setPaymentMode('installment')">할부</button>
           </div>
-
-          <label v-if="form.paymentType === 'installment'" class="installment-month-field">
-            <span class="field-label"><CalendarClock :size="14" /> 개월 수</span>
+          <div v-if="form.paymentType === 'installment'" class="install-extra">
             <select v-model.number="form.installmentMonths" class="form-field" aria-label="할부 개월 수">
               <option v-for="month in installmentMonthOptions" :key="month" :value="month">{{ month }}개월</option>
             </select>
-          </label>
-
-          <p v-if="paymentHelperText" class="payment-helper" :class="{ warning: selectedPaymentMode === 'interest_free' }">
-            <Info :size="13" /> {{ paymentHelperText }}
-          </p>
+            <label class="free-toggle" :class="{ on: form.isInterestFreeInstallment }">
+              <input type="checkbox" v-model="form.isInterestFreeInstallment" />
+              무이자
+            </label>
+          </div>
         </div>
 
         <div class="two-col">
-          <div class="date-picker-field">
-            <AppCalendarPicker v-model="form.date" label="날짜" mode="date" />
+          <div class="field">
+            <span class="field-label"><CalendarDays :size="14" /> 날짜</span>
+            <AppCalendarPicker v-model="form.date" label="" mode="date" />
           </div>
-          <label>
+          <label class="field">
             <span class="field-label"><Clock :size="14" /> 시간</span>
             <input v-model="form.time" class="form-field" type="time" aria-label="시간" />
           </label>
         </div>
 
-        <label class="field-label" for="address"><MapPin :size="14" /> 장소</label>
-        <input id="address" v-model="form.address" class="form-field" aria-label="장소" />
+        <div class="preview-block">
+          <span class="preview-label">이렇게 추가돼요</span>
+          <div class="tx-preview">
+            <span class="prev-emoji">{{ form.icon || '🧾' }}</span>
+            <div class="prev-info">
+              <strong>{{ form.merchantName || '가맹점' }}</strong>
+              <small>{{ form.category }} · {{ paymentLabel }} · {{ form.time || '시간' }}</small>
+            </div>
+            <span class="prev-card">
+              <img
+                v-if="previewCardImage"
+                :src="previewCardImage"
+                :alt="previewCard?.name"
+                :class="previewOri"
+                @load="onPreviewThumb"
+              />
+            </span>
+            <b>{{ Math.abs(Number(form.amount) || 0).toLocaleString() }}원</b>
+          </div>
+        </div>
 
         <button class="primary-button w-100" type="button" :disabled="isSaving || !canSave" @click="handleSave">
           <Check :size="16" />
           {{ isSaving ? '저장 중' : '소비내역 저장' }}
         </button>
-      </section>
+      </div>
     </div>
   </section>
 </template>
@@ -147,40 +116,26 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { CalendarClock, Check, Clock, Coins, CreditCard, ImageIcon, Info, MapPin, PencilLine, Sparkles, Store, Tag, Upload, Wallet } from 'lucide-vue-next'
+import { CalendarDays, Check, Clock, Coins, CreditCard, ImageIcon, Sparkles, Store, Tag, Wallet } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import AppCalendarPicker from '@/components/AppCalendarPicker.vue'
 import { cards as mockCards } from '@/data/mockData'
 import { createTransaction, fetchOwnedCards, normalizeCard, parseTransaction } from '@/services/api'
 
 const router = useRouter()
-const sourceMode = ref('text')
 const rawText = ref('오늘 컴포즈커피 역삼센터필드점에서 3800원 LOCA LIKIT Eat로 결제했어')
 const isParsing = ref(false)
 const isSaving = ref(false)
-const confidence = ref(0)
-const imagePreview = ref('')
-const imageName = ref('')
 const cards = ref(mockCards)
-const parsedSourceText = ref('')
+const imageName = ref('')
+const previewOri = ref('')
 
 const categories = ['카페', '식비', '쇼핑', '교통', '헬스', '교육', '편의점', '뷰티', '문화', '구독', '기타']
 const installmentMonthOptions = [2, 3, 4, 5, 6, 9, 10, 12]
-const paymentModeOptions = [
-  { id: 'lump_sum', label: '일시불', description: '기본 혜택' },
-  { id: 'installment', label: '할부', description: '개월 확인' },
-  { id: 'interest_free', label: '무이자', description: '조건 확인' },
-]
-const examples = [
-  '오늘 컴포즈커피 역삼센터필드점에서 3800원 LOCA LIKIT Eat로 결제했어',
-  '우리카드 06/20 23:41 무신사 스토어 86,400원 승인',
-  'LOCA 100으로 카카오T 13,600원 결제',
-  '카드의정석 SHOPPER로 쿠팡 240,000원 6개월 무이자 할부',
-]
 
 const form = reactive({
   merchantName: '',
-  amount: -3800,
+  amount: 3800,
   category: '카페',
   cardId: '10106',
   paymentType: 'lump_sum',
@@ -188,31 +143,29 @@ const form = reactive({
   isInterestFreeInstallment: false,
   date: '2026-06-23',
   time: '08:42',
-  address: '서울 강남구 테헤란로 231',
+  address: '',
   icon: '☕',
 })
 
-const placeholder = computed(() => (
-  sourceMode.value === 'capture'
-    ? '[우리카드] 06/20 23:41 무신사 스토어 86,400원 승인'
-    : '오늘 컴포즈커피 역삼센터필드점에서 3800원 LOCA LIKIT Eat로 결제했어'
-))
-
 const canSave = computed(() => form.merchantName.trim() && Number(form.amount) !== 0 && form.cardId && form.date && form.time)
-const selectedPaymentMode = computed(() => (
-  form.paymentType === 'installment'
-    ? form.isInterestFreeInstallment ? 'interest_free' : 'installment'
-    : 'lump_sum'
-))
-const paymentHelperText = computed(() => {
-  if (selectedPaymentMode.value === 'interest_free') {
-    return '무이자 할부는 혜택에서 제외될 수 있어요.'
-  }
-  if (selectedPaymentMode.value === 'installment') {
-    return '할부는 일부 카드 혜택에서 제외될 수 있어요.'
-  }
-  return ''
+
+// 결제내역 목록에 추가될 모습 미리보기
+const paymentLabel = computed(() => {
+  if (form.paymentType !== 'installment') return '일시불'
+  const months = form.installmentMonths || 0
+  return form.isInterestFreeInstallment ? `무이자 ${months}개월` : `할부 ${months}개월`
 })
+const previewCard = computed(() => cards.value.find((card) => String(card.id) === String(form.cardId)) || null)
+const previewCardImage = computed(() => previewCard.value?.imageUrl || '')
+function onPreviewThumb(event) {
+  const img = event.target
+  previewOri.value = img.naturalWidth > img.naturalHeight ? 'is-landscape' : 'is-portrait'
+}
+
+function onImageChange(event) {
+  const file = event.target.files?.[0]
+  if (file) imageName.value = file.name
+}
 
 function setPaymentMode(mode) {
   if (mode === 'lump_sum') {
@@ -222,35 +175,28 @@ function setPaymentMode(mode) {
     return
   }
   form.paymentType = 'installment'
-  form.installmentMonths = form.installmentMonths >= 2 ? form.installmentMonths : 2
-  form.isInterestFreeInstallment = mode === 'interest_free'
+  if (form.installmentMonths < 2) form.installmentMonths = 2
 }
 
 const applyParsed = (parsed) => {
   form.merchantName = parsed.merchantName || parsed.merchant || form.merchantName
-  form.amount = parsed.amount || parsed.amt || form.amount
+  form.amount = Math.abs(parsed.amount || parsed.amt || form.amount)
   form.category = parsed.category || parsed.cat || form.category
   form.cardId = parsed.cardId || form.cardId
   form.paymentType = parsed.paymentType || parsed.payment_type || form.paymentType
   form.installmentMonths = Number(parsed.installmentMonths ?? parsed.installment_months ?? form.installmentMonths) || 0
   form.isInterestFreeInstallment = Boolean(parsed.isInterestFreeInstallment ?? parsed.is_interest_free_installment ?? form.isInterestFreeInstallment)
-  if (form.isInterestFreeInstallment) {
-    form.paymentType = 'installment'
-  }
-  if (form.paymentType === 'installment' && form.installmentMonths < 2) {
-    form.installmentMonths = 2
-  }
+  if (form.isInterestFreeInstallment) form.paymentType = 'installment'
+  if (form.paymentType === 'installment' && form.installmentMonths < 2) form.installmentMonths = 2
   form.date = parsed.date || String(parsed.approvedAt || '').slice(0, 10) || form.date
   form.time = parsed.time || String(parsed.approvedAt || '').slice(11, 16) || form.time
   form.address = parsed.address || parsed.addr || form.address
   form.icon = parsed.icon || form.icon
-  confidence.value = parsed.confidence || 0.8
 }
 
 const handleParse = async () => {
   isParsing.value = true
   try {
-    parsedSourceText.value = rawText.value.trim()
     const parsed = await parseTransaction(rawText.value)
     applyParsed(parsed)
   } catch (error) {
@@ -267,7 +213,7 @@ const handleSave = async () => {
       cardId: form.cardId,
       merchantName: form.merchantName,
       category: form.category,
-      amount: form.amount,
+      amount: -Math.abs(Number(form.amount) || 0),
       approvedAt: `${form.date}T${form.time}:00+09:00`,
       paymentType: form.paymentType,
       installmentMonths: form.paymentType === 'installment' ? form.installmentMonths : 0,
@@ -275,19 +221,12 @@ const handleSave = async () => {
       icon: form.icon,
       address: form.address,
     })
-    router.push('/transactions')
+    router.replace('/transactions')
   } catch (error) {
     console.warn('거래내역 저장 API를 불러오지 못했습니다.', error)
   } finally {
     isSaving.value = false
   }
-}
-
-const onImageChange = (event) => {
-  const file = event.target.files?.[0]
-  if (!file) return
-  imageName.value = file.name
-  imagePreview.value = URL.createObjectURL(file)
 }
 
 onMounted(async () => {
@@ -306,305 +245,196 @@ onMounted(async () => {
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 24px 20px;
+  padding: 16px 20px;
   color: #fff;
-}
-
-.create-header p {
-  margin: 0 0 4px;
-  color: rgba(255, 255, 255, 0.68);
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .create-header h1 {
   margin: 0;
-  font-size: 23px;
+  font-size: 21px;
   font-weight: 900;
 }
 
 .create-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 18px 20px;
+  gap: 14px;
+  padding: 12px 20px 16px;
 }
 
-.prompt-card,
-.result-card {
-  padding: 16px;
+/* 입력 영역 — 박스 없이 입력창 + 버튼만 */
+.tx-input {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
 }
 
-.date-picker-field {
-  min-width: 0;
+.prompt-field {
+  min-height: 74px;
+  resize: vertical;
+  line-height: 1.5;
 }
 
-.source-tabs {
+.input-actions {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  margin-bottom: 12px;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
-.source-tabs button {
+.input-actions .primary-button {
+  min-height: 44px;
+}
+
+.img-upload {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  border-radius: 12px;
-  padding: 10px;
-  background: #e7edf4;
-  color: #6e6e73;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.source-tabs button.active {
-  background: #e8f1ff;
-  color: #0f5fae;
-}
-
-.prompt-field {
-  min-height: 118px;
-  resize: vertical;
-  line-height: 1.55;
-}
-
-.capture-box {
-  display: grid;
-  grid-template-columns: 1fr 92px;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.capture-box label {
-  display: flex;
-  min-height: 72px;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  border: 1px dashed #bfdbfe;
-  border-radius: 14px;
-  padding: 12px;
-  background: #e8f1ff;
-  color: #0f5fae;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.capture-box input {
-  display: none;
-}
-
-.capture-box img {
-  width: 92px;
-  height: 72px;
-  object-fit: cover;
-  border-radius: 12px;
-  border: 1px solid #dbe4ee;
-}
-
-.capture-helper {
-  grid-column: 1 / -1;
-  margin: -2px 0 0;
-  color: #6e6e73;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.45;
-}
-
-.example-row {
-  display: grid;
-  gap: 8px;
-  margin: 12px 0;
-  padding-bottom: 0;
-}
-
-.example-row button {
-  min-height: 44px;
-  overflow: visible;
-  border: 1px solid rgba(15, 95, 174, 0.1);
-  border-radius: 13px;
-  padding: 10px 12px;
-  background: #fbfdff;
-  color: #4a5663;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.45;
-  text-align: left;
-  white-space: normal;
-  word-break: keep-all;
-}
-
-.result-head {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  margin-bottom: 14px;
-}
-
-.rh-emoji {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
-  background: #eef5ff;
-  font-size: 20px;
-}
-
-.rh-title {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.result-head span {
-  color: #0f5fae;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.result-head h2 {
-  margin: 3px 0 0;
+  gap: 7px;
   overflow: hidden;
-  color: #17202b;
-  font-size: 17px;
-  font-weight: 900;
+  border: 1px solid #dbe4ee;
+  border-radius: 999px;
+  padding: 0 14px;
+  background: #fff;
+  color: #4a5663;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.img-upload svg {
+  flex: 0 0 auto;
+  color: #0f5fae;
+}
+
+.img-upload span {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.result-head strong {
-  flex: 0 0 auto;
+.img-upload input {
+  display: none;
 }
 
-.result-head strong {
-  border-radius: 999px;
-  padding: 5px 9px;
-  background: #ecfdf5;
-  color: #008c95;
-  font-size: 12px;
-  font-weight: 900;
+.preview-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
 }
 
-.result-head strong.low {
-  background: #f7f1e6;
-  color: #ea580c;
-}
-
-.source-evidence {
-  display: grid;
-  gap: 7px;
-  margin: -2px 0 14px;
-  border: 1px solid rgba(15, 95, 174, 0.12);
-  border-radius: 14px;
-  padding: 12px;
-  background: rgba(232, 241, 251, 0.58);
-}
-
-.source-evidence span {
+.preview-label {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: #0f5fae;
-  font-size: 11px;
-  font-weight: 950;
-}
-
-.source-evidence p {
-  margin: 0;
-  color: #17202b;
+  gap: 5px;
+  color: #6e7885;
   font-size: 12px;
   font-weight: 800;
-  line-height: 1.5;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
 }
 
-.two-col {
+.tx-preview {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border-radius: 16px;
+  padding: 13px 14px;
+  background: #f4f7fb;
+}
+
+.prev-emoji {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: #fff;
+  font-size: 19px;
+  box-shadow: 0 2px 7px rgba(36, 54, 79, 0.08);
 }
 
-.payment-mode-block {
-  margin-top: 12px;
+.prev-info {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.payment-segment-grid {
+.prev-info strong {
+  display: block;
+  overflow: hidden;
+  color: #17202b;
+  font-size: 13.5px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prev-info small {
+  display: block;
+  margin-top: 2px;
+  color: #6e7885;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.prev-card {
+  position: relative;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 40px;
+  height: 26px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #e8edf2;
 }
 
-.payment-segment-grid button {
+.prev-card img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.prev-card img.is-portrait {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 26px;
+  height: 40px;
+  max-width: none;
+  transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.tx-preview b {
+  flex: 0 0 auto;
+  color: #17202b;
+  font-size: 14px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 결과 폼 — 박스/구분선 없이 한 흐름으로 정렬 */
+.tx-form {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.field {
   display: flex;
   min-width: 0;
-  min-height: 56px;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  border: 1px solid rgba(15, 95, 174, 0.12);
-  border-radius: 13px;
-  padding: 8px 6px;
-  background: #f8fbff;
-  color: #526071;
-}
-
-.payment-segment-grid button.active {
-  border-color: rgba(15, 95, 174, 0.38);
-  background: #e8f1ff;
-  color: #0f5fae;
-  box-shadow: inset 0 0 0 1px rgba(15, 95, 174, 0.08);
-}
-
-.payment-segment-grid strong {
-  font-size: 13px;
-  font-weight: 950;
-  line-height: 1.1;
-}
-
-.payment-segment-grid small {
-  color: currentColor;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.15;
-  opacity: 0.78;
-}
-
-.installment-month-field {
-  display: block;
-  margin-top: 10px;
-}
-
-.payment-helper {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin: 10px 0 0;
-  border-radius: 10px;
-  padding: 8px 10px;
-  background: #f4f7fb;
-  color: #687584;
-  font-size: 11.5px;
-  font-weight: 750;
-  line-height: 1.4;
-  word-break: keep-all;
-}
-
-.payment-helper.warning {
-  background: #fff7ed;
-  color: #b45309;
+  gap: 6px;
 }
 
 .field-label {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin-top: 12px;
+  color: #4a5663;
+  font-size: 12.5px;
+  font-weight: 800;
 }
 
 .field-label :deep(svg),
@@ -612,7 +442,71 @@ onMounted(async () => {
   color: #0f5fae;
 }
 
-.result-card .primary-button {
-  margin-top: 14px;
+.two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+/* 날짜·시간 컨트롤 높이 통일 */
+.two-col .form-field,
+.two-col :deep(.calendar-trigger) {
+  height: 46px;
+  min-height: 46px;
+}
+
+.pay-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.app-backdrop .phone-shell .pay-seg button {
+  min-height: 44px;
+  border: 1px solid #dbe4ee !important;
+  border-radius: 13px;
+  background: #fff !important;
+  color: #526071 !important;
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.app-backdrop .phone-shell .pay-seg button.active {
+  border-color: transparent !important;
+  background: #24364f !important;
+  color: #fff !important;
+}
+
+.install-extra {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.free-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #6e7885;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.free-toggle.on {
+  color: #0f5fae;
+}
+
+.free-toggle input {
+  width: 17px;
+  height: 17px;
+  accent-color: #0f5fae;
+}
+
+.tx-form .primary-button {
+  margin-top: 4px;
 }
 </style>

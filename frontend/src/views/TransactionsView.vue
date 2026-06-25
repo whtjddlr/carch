@@ -188,12 +188,12 @@ onMounted(async () => {
   position: relative;
   display: block;
   justify-self: center;
-  width: 15px;
-  height: 24px;
+  width: 34px;
+  height: 22px;
   overflow: hidden;
-  border-radius: 3px;
+  border-radius: 4px;
   background: #e8edf2;
-  box-shadow: 0 1px 3px rgba(36, 54, 79, 0.2);
+  box-shadow: 0 1px 4px rgba(36, 54, 79, 0.2);
 }
 
 .tx-mini-card img {
@@ -204,13 +204,14 @@ onMounted(async () => {
   object-fit: cover;
 }
 
-.tx-mini-card img.is-landscape {
+.tx-mini-card img.is-portrait {
   inset: auto;
   top: 50%;
   left: 50%;
-  width: 24px;
-  height: 15px;
-  transform: translate(-50%, -50%) rotate(90deg);
+  width: 22px;
+  height: 34px;
+  max-width: none;
+  transform: translate(-50%, -50%) rotate(-90deg);
 }
 
 .tx-list strong {
