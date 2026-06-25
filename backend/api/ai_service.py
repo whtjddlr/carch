@@ -150,12 +150,25 @@ def analyze_spending_with_ai(summary, transactions, cards):
 
 def chat_with_ai(message, history, context):
     message = str(message or '').strip()
-    if not message:
+    if not message or not get_ai_status()['configured']:
         return None
 
-    # Chat LLM serving intentionally goes through the FastAPI proxy so the
-    # required Guardrail -> GMS -> score flow is demonstrable as one API layer.
-    return request_ai_proxy_chat(message, history, context)
+    proxy_result = request_ai_proxy_chat(message, history, context)
+    if proxy_result is not None:
+        return proxy_result
+
+    if getattr(settings, 'AI_PROXY_ENABLED', False):
+        return None
+
+    try:
+        prompt = ai_prompts.build_chat_prompt(message, history, context if isinstance(context, dict) else {})
+        payload = request_gms_json(prompt, ai_prompts.CHAT_DEVELOPER_PROMPT)
+        parsed = extract_json_object(extract_output_text(payload))
+        if not parsed:
+            return None
+        return normalize_chat_response(parsed)
+    except (OSError, ValueError, requests.RequestException):
+        return None
 
 
 def request_ai_proxy_chat(message, history, context):
