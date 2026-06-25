@@ -46,7 +46,7 @@ const routes = [
   { path: '/chat', name: 'Chat', component: ChatView, meta: protectedMeta },
   { path: '/analytics', name: 'Analytics', component: AnalyticsView, meta: protectedMeta },
   { path: '/analytics/cards', name: 'CardAnalytics', component: AnalyticsView, meta: protectedMeta },
-  { path: '/reports/monthly', name: 'MonthlyReport', component: UtilityView, props: { type: 'report' }, meta: { requiresAuth: true } },
+  { path: '/reports/monthly', redirect: '/analytics' },
   { path: '/notifications', name: 'Notifications', component: UtilityView, props: { type: 'notifications' }, meta: { requiresAuth: true } },
   { path: '/settings', name: 'Settings', component: UtilityView, props: { type: 'settings' }, meta: { requiresAuth: true } },
   { path: '/settings/notifications', name: 'NotificationSettings', component: UtilityView, props: { type: 'notificationSettings' }, meta: { requiresAuth: true } },
