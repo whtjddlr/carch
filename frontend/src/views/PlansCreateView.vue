@@ -22,8 +22,7 @@
 
       <template v-else-if="currentStep === 0">
         <div class="step-copy">
-          <h2>어떤 목표 지출을 계획하고 있나요?</h2>
-          <p>여행, 가전, 이사처럼 월 예산과 별도로 관리할 지출을 입력해주세요.</p>
+          <h2 class="step-subtitle">예산과 결제 시기만 알려주세요</h2>
         </div>
         <PlanWarningAlert v-if="error" :message="error" tone="warning" />
         <PlanPromptForm
@@ -41,8 +40,7 @@
 
       <template v-else-if="currentStep === 1">
         <div class="step-copy">
-          <h2>AI가 정리한 품목을 확인하세요</h2>
-          <p>금액과 구매 월을 수정한 뒤 카드 사용 계획을 만들 수 있습니다.</p>
+          <h2 class="step-subtitle">예상 품목을 확인하세요</h2>
         </div>
         <PlanBudgetSummary :budget="Number(planForm.budget)" :total="totalItemAmount" />
 
@@ -65,24 +63,24 @@
         </div>
         <div class="step-actions">
           <button class="outline-button" type="button" @click="currentStep = 0">이전</button>
-          <button class="primary-button" type="button" @click="submitStepTwo">카드 사용 계획 만들기</button>
+          <button class="primary-button" type="button" @click="submitStepTwo">추천 보기</button>
         </div>
       </template>
 
       <template v-else>
         <div class="step-copy">
-          <h2>시나리오를 선택해주세요</h2>
-          <p>3가지 계획을 비교하고 가장 잘 맞는 계획을 선택하세요.</p>
+          <h2>이 지출, 이렇게 결제하세요</h2>
         </div>
-        <PlanScenarioComparison
-          :scenarios="scenarios"
-          :selected-scenario-id="selectedScenarioId"
-          @select="selectedScenarioId = $event"
-          @view-detail="viewDraftDetail"
+        <PlanResultSplit
+          :budget="Number(planForm.budget)"
+          :total-amount="recommendedScenario?.totalAmount || totalItemAmount"
+          :owned-items="ownedItems"
+          :new-cards="newCardRecos"
+          @open-card="openNewCard"
         />
         <div class="step-actions sticky-actions">
           <button class="outline-button" type="button" @click="currentStep = 1">이전</button>
-          <button class="primary-button" type="button" :disabled="!selectedScenarioId" @click="savePlan">최종 저장</button>
+          <button class="primary-button" type="button" :disabled="!selectedScenarioId" @click="savePlan">이 계획으로 저장</button>
         </div>
       </template>
     </div>
@@ -112,11 +110,28 @@ import ExtractedPlanItem from '@/components/plans/ExtractedPlanItem.vue'
 import PlanBudgetSummary from '@/components/plans/PlanBudgetSummary.vue'
 import PlanLoadingSkeleton from '@/components/plans/PlanLoadingSkeleton.vue'
 import PlanPromptForm from '@/components/plans/PlanPromptForm.vue'
-import PlanScenarioComparison from '@/components/plans/PlanScenarioComparison.vue'
+import PlanResultSplit from '@/components/plans/PlanResultSplit.vue'
 import PlanStepIndicator from '@/components/plans/PlanStepIndicator.vue'
 import PlanWarningAlert from '@/components/plans/PlanWarningAlert.vue'
-import { exampleChips, expenseModes, strategies } from '@/data/mockData'
+import { cards as mockCards, exampleChips, expenseModes, strategies } from '@/data/mockData'
+import { fetchCardRecommendationBundle } from '@/services/api'
 import { usePurchasePlan } from '@/composables/usePurchasePlan'
+
+// 카드명 → 이미지 매핑(보유 카드 추천 썸네일용)
+const cardImageByName = {}
+mockCards.forEach((card) => { if (card?.name) cardImageByName[card.name] = card.imageUrl })
+
+// 신규 발급 이벤트(데모) — 발급 시 현금성 캐시백 지원
+const ISSUE_EVENTS = {
+  'LOCA LIKIT': 150000,
+  'LOCA LIKIT Eat': 130000,
+  '카드의정석2 SHOPPER': 120000,
+  'LOCA 100': 100000,
+  '우리카드 7CORE': 130000,
+}
+function issueEventFor(name) {
+  return ISSUE_EVENTS[name] ?? 100000
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -139,6 +154,79 @@ const {
   saveSelectedPlan,
   resetWizard,
 } = usePurchasePlan()
+
+// 신규 발급 추천 (추천 번들 재사용)
+const newCardRecos = ref([])
+
+const recommendedScenario = computed(() => scenarios.value.find((s) => s.recommended) || scenarios.value[0] || null)
+
+function paymentLabel(item) {
+  const months = Number(item?.installmentMonths || 0)
+  if (item?.paymentType === 'installment' || months > 1) return `${months || 2}개월 할부`
+  return '일시불'
+}
+
+// 보유 카드 결제 배정 — 항목마다 1·2순위 카드를 비교해 보여줌
+const ownedItems = computed(() => {
+  const scenario = recommendedScenario.value
+  if (!scenario) return []
+  const payMap = {}
+  extractedItems.value.forEach((it) => { payMap[it.name] = paymentLabel(it) })
+  // 계획에 등장하는 보유 카드 풀(시나리오 카드 요약 → 없으면 월별 배정에서 수집)
+  const pool = (scenario.cardSummary || []).map((c) => c.cardName).filter(Boolean)
+  const fromPlan = (scenario.monthlyPlan || []).flatMap((m) => m.items || []).map((it) => it.card)
+  const cardPool = [...new Set([...pool, ...fromPlan])].filter(Boolean)
+
+  return (scenario.monthlyPlan || [])
+    .flatMap((m) => m.items || [])
+    .map((it) => {
+      const amount = Number(it.amount || 0)
+      const primary = it.card
+      const other = cardPool.find((c) => c !== primary)
+      const baseBenefit = Number(it.benefit || 0)
+      const options = [
+        { card: primary, image: cardImageByName[primary] || '', benefit: baseBenefit, rank: 1 },
+      ]
+      if (other) {
+        options.push({ card: other, image: cardImageByName[other] || '', benefit: Math.round(baseBenefit * 0.6), rank: 2 })
+      }
+      return {
+        name: it.name,
+        amount,
+        payment: payMap[it.name] || '일시불',
+        options,
+      }
+    })
+})
+
+function openNewCard() {
+  router.push('/recommendations/new')
+}
+
+async function loadNewCardRecos() {
+  try {
+    const bundle = await fetchCardRecommendationBundle()
+    const planTotal = totalItemAmount.value || Number(planForm.budget) || 0
+    newCardRecos.value = (bundle?.results || []).slice(0, 2).map((r, i) => {
+      const b = (r.benefitItems || [])[0]
+      const rate = Number(b?.ratePercent || 0)
+      const scope = b?.scope || b?.label || (r.matchedCategories || [])[0] || ''
+      // 이 계획(지출)에 이 카드를 쓰면 받는 예상 혜택 = 품목 합계 × 대표 혜택률
+      const planBenefit = Math.min(Math.round(planTotal * (rate > 0 ? rate / 100 : 0.01)), 80000)
+      return {
+        id: r.id || r.cardAdId || `nc${i}`,
+        name: r.name,
+        imageUrl: r.imageUrl,
+        benefitText: scope ? `${scope}${rate > 0 ? ` 최대 ${Math.round(rate)}%` : ''} 혜택` : '카드 혜택',
+        planBenefit,
+        event: issueEventFor(r.name),
+        orientation: '',
+      }
+    })
+  } catch {
+    newCardRecos.value = []
+  }
+}
 
 const monthDiff = computed(() => {
   const [startYear, startMonth] = String(planForm.startMonth || '').split('-').map(Number)
@@ -249,6 +337,11 @@ const submitStepTwo = async () => {
     return
   }
   await generateScenarios()
+  if (currentStep.value === 2) {
+    // 보유 카드 결제 = 추천 시나리오 자동 선택, 신규 발급 추천은 번들에서
+    selectedScenarioId.value = recommendedScenario.value?.id || ''
+    loadNewCardRecos()
+  }
 }
 
 const viewDraftDetail = () => {
@@ -320,6 +413,13 @@ const cancelCreate = () => {
   font-weight: 900;
 }
 
+.step-copy h2.step-subtitle {
+  margin: 0;
+  color: #2b3a4d;
+  font-size: 15px;
+  font-weight: 800;
+}
+
 .step-copy p {
   margin: 0;
   color: #6e6e73;
@@ -345,16 +445,27 @@ const cancelCreate = () => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: transparent;
   color: #0f5fae;
   font-size: 12px;
   font-weight: 900;
 }
 
+/* 전역 :is(...) button { border:1px !important }(0,3,1)보다 높은 특이성으로 테두리 제거 */
+.app-backdrop .phone-shell .item-section-head button {
+  border: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 .item-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  border: 1px solid rgba(36, 54, 79, 0.08);
+  border-radius: 16px;
+  padding: 2px 14px;
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(36, 54, 79, 0.05);
 }
 
 .step-actions {

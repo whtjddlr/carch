@@ -1,98 +1,88 @@
 <template>
   <form class="prompt-form" @submit.prevent="$emit('submit')">
-    <div>
-      <label class="field-label" for="plan-prompt">자연어 입력</label>
+    <div class="field-block">
+      <label class="field-label" for="plan-prompt">어떤 지출인가요?</label>
       <textarea
         id="plan-prompt"
         :value="rawPrompt"
         class="form-field prompt-textarea"
-        rows="4"
-        placeholder="예: 다음 달 큰 지출 예산 80만 원을 관리하고 싶어요.
-정장 셔츠, 구두, 증명사진, 토익스피킹 응시료를 순서대로 결제할 예정입니다."
+        rows="3"
+        placeholder="예: 이사하면서 가전·가구를 200만 원 정도 장만하려고 해요."
         @input="$emit('update:rawPrompt', $event.target.value)"
       />
+      <PlanExampleChips :examples="examples" @select="$emit('update:rawPrompt', $event)" />
       <p v-if="errors.prompt" class="error-text">{{ errors.prompt }}</p>
     </div>
 
-    <PlanExampleChips :examples="examples" @select="$emit('update:rawPrompt', $event)" />
+    <div class="field-pair">
+      <div class="field-block">
+        <span class="field-label"><Wallet :size="14" /> 예산</span>
+        <div class="field-with-unit">
+          <input
+            id="plan-budget"
+            :value="planForm.budget"
+            class="form-field"
+            min="1"
+            type="number"
+            @input="patch('budget', Number($event.target.value))"
+          />
+          <span>원</span>
+        </div>
+        <p v-if="errors.budget" class="error-text">{{ errors.budget }}</p>
+      </div>
 
-    <div>
-      <span class="field-label">큰 지출 처리 방식</span>
-      <div class="expense-mode-grid">
+      <div class="field-block">
+        <span class="field-label"><CalendarDays :size="14" /> 결제 시기</span>
+        <AppCalendarPicker
+          :model-value="planForm.startMonth"
+          label="결제 예정 월"
+          mode="month"
+          @update:model-value="patchDate"
+        />
+        <p v-if="errors.endMonth" class="error-text">{{ errors.endMonth }}</p>
+      </div>
+    </div>
+
+    <div class="field-block">
+      <span class="field-label"><Layers :size="14" /> 처리 방식</span>
+      <div class="chip-grid">
         <button
           v-for="mode in expenseModes"
           :key="mode.id"
-          class="expense-mode-button"
+          class="select-chip"
           :class="{ active: planForm.expenseMode === mode.id }"
           type="button"
           @click="patch('expenseMode', mode.id)"
         >
-          <strong>{{ mode.label }}</strong>
-          <small>{{ mode.description }}</small>
+          <component :is="modeIcon(mode.id)" :size="17" />
+          {{ mode.label }}
         </button>
       </div>
     </div>
 
-    <div>
-      <label class="field-label" for="plan-budget">전체 예산</label>
-      <div class="field-with-unit">
-        <input
-          id="plan-budget"
-          :value="planForm.budget"
-          class="form-field"
-          min="1"
-          type="number"
-          @input="patch('budget', Number($event.target.value))"
-        />
-        <span>원</span>
-      </div>
-      <p v-if="errors.budget" class="error-text">{{ errors.budget }}</p>
-    </div>
-
-    <div class="month-grid">
-      <div>
-        <AppCalendarPicker
-          :model-value="planForm.startMonth"
-          label="시작 월"
-          mode="month"
-          @update:model-value="patch('startMonth', $event)"
-        />
-      </div>
-      <div>
-        <AppCalendarPicker
-          :model-value="planForm.endMonth"
-          label="종료 월"
-          mode="month"
-          @update:model-value="patch('endMonth', $event)"
-        />
-      </div>
-    </div>
-    <p v-if="errors.endMonth" class="error-text">{{ errors.endMonth }}</p>
-
-    <div>
-      <span class="field-label">우선 전략</span>
-      <div class="strategy-grid">
+    <div class="field-block">
+      <span class="field-label"><Target :size="14" /> 우선 전략</span>
+      <div class="chip-grid">
         <button
           v-for="strategy in strategies"
           :key="strategy"
-          class="strategy-button"
+          class="select-chip"
           :class="{ active: planForm.strategy === strategy }"
           type="button"
           @click="patch('strategy', strategy)"
         >
+          <component :is="strategyIcon(strategy)" :size="17" />
           {{ strategy }}
         </button>
       </div>
     </div>
 
-    <AiRoleNotice />
-
-    <button class="primary-button w-100" type="submit">AI로 품목 정리하기</button>
+    <button class="primary-button w-100" type="submit">다음</button>
   </form>
 </template>
 
 <script setup>
-import AiRoleNotice from './AiRoleNotice.vue'
+import { CalendarDays, Coins, Gift, Layers, PiggyBank, Target, Wallet } from 'lucide-vue-next'
 import PlanExampleChips from './PlanExampleChips.vue'
 import AppCalendarPicker from '@/components/AppCalendarPicker.vue'
 
@@ -106,8 +96,18 @@ const props = defineProps({
   errors: { type: Object, default: () => ({}) },
 })
 
+const MODE_ICONS = { 'within-budget': PiggyBank, 'planned-extra': Coins }
+const STRATEGY_ICONS = { '혜택 최대화': Gift, '실적 채우기': Target }
+const modeIcon = (id) => MODE_ICONS[id] || PiggyBank
+const strategyIcon = (name) => STRATEGY_ICONS[name] || Gift
+
 const patch = (key, value) => {
   emit('update:planForm', { ...props.planForm, [key]: value })
+}
+
+// 단일 예상 결제 시기 → 시작/종료 월을 동일하게 설정(결제일 하나)
+const patchDate = (value) => {
+  emit('update:planForm', { ...props.planForm, startMonth: value, endMonth: value })
 }
 </script>
 
@@ -115,11 +115,38 @@ const patch = (key, value) => {
 .prompt-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
+}
+
+.field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.field-label :deep(svg) {
+  color: #0f5fae;
+}
+
+.field-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.field-pair .field-block {
+  min-width: 0;
 }
 
 .prompt-textarea {
-  min-height: 102px;
+  min-height: 78px;
   resize: vertical;
   line-height: 1.5;
 }
@@ -148,82 +175,62 @@ const patch = (key, value) => {
   gap: 10px;
 }
 
-.strategy-grid {
+/* 처리 방식 · 우선 전략 — 한 줄에 두 개씩 꽉 차는 칩 */
+.chip-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
 }
 
-.expense-mode-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.expense-mode-button {
+.select-chip {
   display: flex;
-  min-height: 64px;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 7px;
+  min-height: 50px;
+  width: 100%;
   border: 1px solid #dbe4ee;
-  border-radius: 13px;
-  padding: 10px 8px;
-  background: rgba(255, 255, 255, 0.82);
-  text-align: center;
-}
-
-.expense-mode-button strong {
-  color: #20242a;
-  font-size: 12px;
-  font-weight: 900;
-  line-height: 1.25;
-}
-
-.expense-mode-button small {
-  display: -webkit-box;
-  overflow: hidden;
-  color: #6e6e73;
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1.25;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.expense-mode-button.active {
-  border-color: rgba(15, 95, 174, 0.34);
-  background: #e8f1fb;
-  box-shadow: inset 0 0 0 1px rgba(15, 95, 174, 0.16);
-}
-
-.expense-mode-button.active strong,
-.expense-mode-button.active small {
-  color: #0f5fae;
-}
-
-.strategy-button {
-  min-height: 40px;
-  border: 1px solid #dbe4ee;
-  border-radius: 12px;
+  border-radius: 14px;
+  padding: 0 12px;
   background: #fff;
-  color: #6e6e73;
-  font-size: 11px;
-  font-weight: 900;
-  line-height: 1.25;
+  color: #6e7885;
+  font-size: 13px;
+  font-weight: 800;
 }
 
-.strategy-button.active {
-  border-color: #0f5fae;
-  background: #e8f1ff;
-  color: #0f5fae;
+.select-chip :deep(svg) {
+  flex: 0 0 auto;
+  color: #98a3b1;
+}
+
+.select-chip.active {
+  border-color: transparent;
+  background: #24364f;
+  color: #fff;
+}
+
+.select-chip.active :deep(svg) {
+  color: #fff;
 }
 
 .error-text {
-  margin: 6px 0 0;
+  margin: 2px 0 0;
   color: #d92d20;
   font-size: 12px;
   font-weight: 700;
+}
+
+/* 다음 버튼 — 딱딱한 네이비 대신 부드러운 블루 그라데이션 (전역 !important 이김) */
+.app-backdrop .phone-shell .prompt-form .primary-button {
+  margin-top: 4px;
+  min-height: 52px;
+  background: linear-gradient(135deg, #2f7be6 0%, #5aa0ff 100%) !important;
+  box-shadow: 0 14px 26px rgba(47, 123, 230, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+  font-size: 14.5px;
+}
+
+.app-backdrop .phone-shell .prompt-form .primary-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2670dd 0%, #4f97fb 100%) !important;
+  box-shadow: 0 16px 30px rgba(47, 123, 230, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.32) !important;
 }
 </style>

@@ -363,7 +363,7 @@ const totalSpendLabel = computed(() => krw(totalSpent.value))
 const activeCard = computed(() => cards.value[activeCardIndex.value] || null)
 const detailCard = computed(() => activeCard.value)
 const quickActions = [
-  { label: '결제추천', path: '/transactions/new', icon: PlusCircle, color: '#0f5fae' },
+  { label: '결제 추가', path: '/transactions/new', icon: PlusCircle, color: '#0f5fae' },
   { label: '지출계획', path: '/plans/new', icon: CalendarDays, color: '#24364f' },
 ]
 const categoryGuideDefs = [

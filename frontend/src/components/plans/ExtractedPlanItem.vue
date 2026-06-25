@@ -1,161 +1,117 @@
 <template>
-  <article class="app-card extracted-item">
-    <div class="item-top">
+  <article class="plan-item">
+    <input
+      class="pi-name"
+      :value="item.name"
+      aria-label="품목명"
+      placeholder="품목명을 입력하세요"
+      @input="patch('name', $event.target.value)"
+    />
+    <label class="pi-amount">
       <input
-        :value="item.name"
-        aria-label="품목명"
-        placeholder="품목명"
-        @input="patch('name', $event.target.value)"
+        :value="item.amount || ''"
+        type="number"
+        min="0"
+        inputmode="numeric"
+        aria-label="예상 금액"
+        placeholder="0"
+        @input="patch('amount', Number($event.target.value))"
       />
-      <button type="button" aria-label="품목 삭제" @click="$emit('remove', item.id)">
-        <Trash2 :size="15" />
-      </button>
-    </div>
-    <div class="item-grid">
-      <label>
-        <span>내부 카테고리</span>
-        <input :value="item.category" @input="patch('category', $event.target.value)" />
-      </label>
-      <label>
-        <span>예상 금액</span>
-        <input :value="item.amount" type="number" @input="patch('amount', Number($event.target.value))" />
-      </label>
-      <div class="picker-field">
-        <AppCalendarPicker
-          :model-value="item.targetMonth"
-          label="목표 구매 월"
-          mode="month"
-          @update:model-value="patch('targetMonth', $event)"
-        />
-      </div>
-      <label>
-        <span>결제 방식</span>
-        <select :value="item.paymentType || 'lump_sum'" @change="patchPaymentType($event.target.value)">
-          <option value="lump_sum">일시불</option>
-          <option value="installment">할부</option>
-        </select>
-      </label>
-      <label v-if="(item.paymentType || 'lump_sum') === 'installment'">
-        <span>개월 수</span>
-        <select :value="item.installmentMonths || 2" @change="patch('installmentMonths', Number($event.target.value))">
-          <option v-for="month in installmentMonthOptions" :key="month" :value="month">{{ month }}개월</option>
-        </select>
-      </label>
-      <div class="check-grid">
-        <label><input :checked="item.required" type="checkbox" @change="patch('required', $event.target.checked)" /> 필수</label>
-        <label><input :checked="item.flexible" type="checkbox" @change="patch('flexible', $event.target.checked)" /> 일정 변경 가능</label>
-        <label v-if="(item.paymentType || 'lump_sum') === 'installment'">
-          <input
-            :checked="Boolean(item.isInterestFreeInstallment)"
-            type="checkbox"
-            @change="patch('isInterestFreeInstallment', $event.target.checked)"
-          />
-          무이자
-        </label>
-      </div>
-    </div>
+      <span>원</span>
+    </label>
+    <button class="pi-del" type="button" aria-label="품목 삭제" @click="$emit('remove', item.id)">
+      <Trash2 :size="15" />
+    </button>
   </article>
 </template>
 
 <script setup>
 import { Trash2 } from 'lucide-vue-next'
-import AppCalendarPicker from '@/components/AppCalendarPicker.vue'
 
 const emit = defineEmits(['update', 'remove'])
 const props = defineProps({
   item: { type: Object, required: true },
 })
 
-const installmentMonthOptions = [2, 3, 4, 5, 6, 9, 10, 12]
-
 const patch = (field, value) => {
   emit('update', { ...props.item, [field]: value })
-}
-
-const patchPaymentType = (paymentType) => {
-  emit('update', {
-    ...props.item,
-    paymentType,
-    installmentMonths: paymentType === 'installment' ? Number(props.item.installmentMonths || 2) : 0,
-    isInterestFreeInstallment: paymentType === 'installment' ? Boolean(props.item.isInterestFreeInstallment) : false,
-  })
 }
 </script>
 
 <style scoped>
-.extracted-item {
-  padding: 14px;
-}
-
-.item-top {
+.plan-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 10px;
+  padding: 13px 2px;
+  border-bottom: 1px solid rgba(36, 54, 79, 0.08);
 }
 
-.item-top input {
+.plan-item:last-child {
+  border-bottom: 0;
+}
+
+.pi-name {
+  flex: 1 1 auto;
   min-width: 0;
-  flex: 1;
   border: 0;
   background: transparent;
   color: #17202b;
-  font-size: 15px;
-  font-weight: 900;
+  font-size: 14px;
+  font-weight: 800;
   outline: none;
 }
 
-.item-top button {
-  display: inline-flex;
-  width: 32px;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background: #fef3f2;
-  color: #d92d20;
-}
-
-.item-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-label {
-  min-width: 0;
-}
-
-.picker-field {
-  min-width: 0;
-}
-
-label span {
-  display: block;
-  margin-bottom: 4px;
-  color: #6e6e73;
-  font-size: 10px;
-  font-weight: 800;
-}
-
-label input:not([type='checkbox']),
-label select {
-  width: 100%;
-  border: 1px solid #dbe4ee;
-  border-radius: 10px;
-  padding: 9px 10px;
-  background: #fbfdff;
-  color: #17202b;
-  font-size: 12px;
+.pi-name::placeholder {
+  color: #b3bdc9;
   font-weight: 700;
 }
 
-.check-grid {
-  display: flex;
-  grid-column: 1 / -1;
-  gap: 14px;
+.pi-amount {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.pi-amount input {
+  width: 100px;
+  border: 1px solid #dbe4ee;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fbfdff;
+  color: #17202b;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.pi-amount input:focus {
+  border-color: #0f5fae;
+}
+
+.pi-amount span {
   color: #6e6e73;
   font-size: 12px;
   font-weight: 800;
+}
+
+.pi-del {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #c0392b !important;
+}
+
+.pi-del:active {
+  background: #fef3f2;
 }
 </style>

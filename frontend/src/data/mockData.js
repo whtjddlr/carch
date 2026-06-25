@@ -217,33 +217,27 @@ export const recommendations = [
 ]
 
 export const planTypes = ['큰 지출', '취업 준비', '여행', '기념일', '운동', '전자기기', '학업', '기타']
-export const strategies = ['혜택 최대화', '예산 안정', '다음 달 조건 준비']
+export const strategies = ['혜택 최대화', '실적 채우기']
 export const expenseModes = [
   {
     id: 'within-budget',
-    label: '예산 안에서 준비',
+    label: '예산 안에서',
     title: '생활비 안에서 모으기',
     description: '월 예산 일부를 따로 떼어 큰 지출을 준비합니다.',
   },
   {
     id: 'planned-extra',
-    label: '예산 밖 예정 지출',
+    label: '예산 밖 지출',
     title: '따로 나갈 돈으로 관리',
-    description: '여행, 가전, 이사처럼 월 예산과 별도로 계획합니다.',
-  },
-  {
-    id: 'unexpected-extra',
-    label: '추가 지출로 기록',
-    title: '갑자기 생긴 지출',
-    description: '수리비나 긴급 결제처럼 예상 밖 지출로 분리합니다.',
+    description: '여행·가전·이사처럼 월 예산과 별도로 계획합니다.',
   },
 ]
 
 export const exampleChips = [
-  { label: '취업 준비 80만 원', text: '7월부터 취업 준비 예산 80만 원을 관리하고 싶어요.\n정장 셔츠, 구두, 증명사진, 토익스피킹 응시료를 순서대로 결제할 예정입니다.' },
-  { label: '기념일 데이트 45만 원', text: '다음 달 여자친구와 기념일이 있어서 45만 원 정도 준비하려고 해요.\n식사, 영화, 작은 선물까지 포함해서 카드 혜택을 보고 싶습니다.' },
-  { label: '헬스 3개월 35만 원', text: '헬스장 3개월권과 보충제, 운동복을 합쳐 35만 원 안에서 계획하고 싶어요.\n정기 지출과 쇼핑 지출을 나눠서 보고 싶습니다.' },
-  { label: '노트북 교체 140만 원', text: '코딩 테스트와 과제용 노트북을 140만 원 안에서 교체하려고 해요.\n카드 혜택과 전월 실적을 같이 보면서 결제 월을 정하고 싶습니다.' },
+  { label: '노트북 교체', text: '7월에 노트북을 140만 원 정도로 바꾸려고 해요.' },
+  { label: '여행 경비', text: '8월 제주 여행 경비 60만 원을 항공·숙소·식비로 계획하고 싶어요.' },
+  { label: '이사 준비', text: '다음 달 이사하면서 가전·가구를 100만 원 안에서 사려고 해요.' },
+  { label: '기념일 선물', text: '기념일에 선물과 식사로 40만 원 정도 쓰려고 해요.' },
 ]
 
 export const mockPlans = [

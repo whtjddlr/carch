@@ -232,6 +232,25 @@
         </article>
       </section>
 
+      <section v-if="planSummaries.length" class="plan-reco-section">
+        <div class="section-head split">
+          <h2>내 지출 계획 추천</h2>
+          <RouterLink to="/plans">전체</RouterLink>
+        </div>
+        <RouterLink
+          v-for="p in planSummaries"
+          :key="p.id"
+          :to="`/plans/${p.id}`"
+          class="plan-reco analysis-card app-card"
+        >
+          <div class="pr-top">
+            <strong>{{ p.title }}</strong>
+            <span>{{ krw(p.total) }}</span>
+          </div>
+          <p class="pr-line"><b>{{ p.card }}</b>{{ p.tail }}</p>
+        </RouterLink>
+      </section>
+
     </div>
   </section>
 </template>
@@ -244,6 +263,7 @@ import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, cards as mockCards, expenseModes, krw } from '@/data/mockData'
 import { demoMonthSummary } from '@/data/monthlyAnalytics'
 import { fetchBudget, fetchCardRecommendationBundle, fetchMonthlySpending, fetchOwnedCards, fetchSpendingSummary, fetchTransactions, normalizeCard, saveBudget } from '@/services/api'
+import { getPurchasePlans } from '@/services/purchasePlans'
 import { readBudgetOverride, readCustomBudgetCategories, writeBudgetOverride } from '@/services/budgetStorage'
 import { budgetProgressWidth, budgetRiskColor, budgetRiskLabel, budgetUsagePercent } from '@/utils/budgetRisk'
 import { compareCardBenefitCandidates, scoreCardBenefit, summarizeWalletPerformance } from '@/utils/cardPerformance'
@@ -574,6 +594,32 @@ async function loadMonthly() {
   }
 }
 onMounted(loadMonthly)
+
+// 소비계획 하단 요약 — 저장된 목표 지출 계획의 카드 추천을 간략히
+const purchasePlanList = ref([])
+async function loadPurchasePlanSummaries() {
+  try {
+    purchasePlanList.value = await getPurchasePlans()
+  } catch {
+    // 실패 시 빈 목록(섹션 자동 숨김)
+  }
+}
+onMounted(loadPurchasePlanSummaries)
+
+const planSummaries = computed(() => (purchasePlanList.value || []).slice(0, 3).map((plan) => {
+  const scs = plan.scenarios || []
+  const sc = scs.find((s) => s.id === plan.selectedScenarioId) || scs[0]
+  const items = (sc?.monthlyPlan || []).flatMap((m) => m.items || [])
+  const card = sc?.cardSummary?.[0]?.cardName || items[0]?.card || ''
+  const total = Number(plan.totalBudget || 0) || (plan.items || []).reduce((sum, i) => sum + Number(i.amount || 0), 0)
+  return {
+    id: plan.id,
+    title: plan.title,
+    total,
+    card: card || '카드 추천',
+    tail: card ? '로 결제하면 혜택을 챙길 수 있어요' : ' 확인이 필요해요',
+  }
+}))
 
 // 최근 5개월 예산(연한 트랙) + 사용(색상) 겹침 막대그래프
 const barChart = computed(() => {
@@ -2403,5 +2449,56 @@ h1 {
   font-size: 12px;
   font-weight: 900;
   text-decoration: none;
+}
+
+/* 소비계획 하단 — 목표 지출 계획 추천 요약 */
+.plan-reco-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.plan-reco {
+  display: block;
+  padding: 14px 15px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.pr-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pr-top strong {
+  overflow: hidden;
+  color: #17202b;
+  font-size: 14px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pr-top span {
+  flex: 0 0 auto;
+  color: #5f6b77;
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.pr-line {
+  margin: 6px 0 0;
+  color: #5f6b77;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pr-line b {
+  color: #0f5fae;
+  font-weight: 900;
 }
 </style>

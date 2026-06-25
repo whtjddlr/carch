@@ -1,12 +1,6 @@
-import axios from 'axios'
 import { clone, mockPlans } from '@/data/mockData'
-import { AI_REQUEST_TIMEOUT_MS, API_BASE_URL, DEFAULT_API_TIMEOUT_MS } from '@/services/api'
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
-  timeout: DEFAULT_API_TIMEOUT_MS,
-})
+// 공용 인증 인스턴스(api)를 그대로 사용 — auth.js가 붙인 Authorization 헤더가 함께 전송됨(401 방지)
+import { AI_REQUEST_TIMEOUT_MS, api } from '@/services/api'
 
 const useMockApi = import.meta.env.VITE_USE_MOCK_API === 'true'
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))

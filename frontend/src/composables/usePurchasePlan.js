@@ -18,7 +18,7 @@ const planForm = reactive({
   type: '큰 지출',
   budget: 800000,
   startMonth: '2026-07',
-  endMonth: '2026-08',
+  endMonth: '2026-07',
   strategy: '혜택 최대화',
   expenseMode: 'planned-extra',
 })
