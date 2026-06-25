@@ -22,6 +22,7 @@
         {{ statusMessage }}
       </div>
 
+      <div class="hero-sticky">
       <article class="analysis-hero app-card" :class="{ empty: !hasUsableAnalysis }">
         <div class="hero-month">
           <button type="button" class="month-chip" @click="isMonthMenuOpen ? (isMonthMenuOpen = false) : openMonthMenu()">
@@ -62,6 +63,7 @@
         <strong class="hero-amount">{{ heroAmountLabel }}</strong>
         <p v-if="heroInsight" class="hero-insight" :style="{ color: heroInsightColor }">{{ heroInsight }}</p>
       </article>
+      </div>
 
       <section v-if="hasUsableAnalysis" class="metric-row" aria-label="분석 핵심 지표">
         <article v-for="metric in metricCards" :key="metric.label" class="metric-tile" :class="metric.tone">
@@ -987,7 +989,7 @@ onMounted(() => {
 }
 
 .analytics-body {
-  padding: 10px clamp(14px, 4.6vw, 20px) 120px;
+  padding: 0 clamp(14px, 4.6vw, 20px) 120px;
   background: #f3f6f8;
 }
 
@@ -1008,16 +1010,27 @@ onMounted(() => {
   color: #8a640e;
 }
 
+/* 소비계획 헤더처럼: 전체 너비 불투명 띠가 고정되어 뒤 콘텐츠가 비치지 않게 */
+.hero-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: 0 calc(-1 * clamp(14px, 4.6vw, 20px));
+  padding: 12px clamp(14px, 4.6vw, 20px);
+  background: var(--carch-page);
+}
+
 .analysis-hero {
   display: block;
   overflow: visible;
-  border: 1px solid rgba(36, 54, 79, 0.08) !important;
+}
+
+.app-backdrop .phone-shell .analytics-body .analysis-hero {
+  border: 0 !important;
   border-radius: 22px !important;
   padding: 14px 18px 16px !important;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(238, 247, 250, 0.9)),
-    radial-gradient(circle at 100% 0%, rgba(0, 140, 149, 0.16), transparent 40%) !important;
-  box-shadow: 0 16px 34px rgba(36, 54, 79, 0.08) !important;
+  background: linear-gradient(135deg, #ffffff 0%, #e9f2f6 100%) !important;
+  box-shadow: none !important;
 }
 
 .hero-amount {

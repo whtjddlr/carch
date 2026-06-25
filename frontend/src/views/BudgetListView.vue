@@ -1156,7 +1156,7 @@ async function setCategoryRecurring(category, enabled) {
   background:
     radial-gradient(circle at 18% 0%, rgba(15, 95, 174, 0.1), transparent 38%),
     linear-gradient(180deg, #ffffff 0%, #fbfdff 62%, #edf4fb 100%) !important;
-  box-shadow: 0 14px 36px rgba(36, 54, 79, 0.1);
+  box-shadow: none;
 }
 
 .header-row {
@@ -1185,10 +1185,9 @@ h1 {
   border: 0;
   border-radius: 20px;
   padding: 15px 18px 14px;
-  background: rgba(255, 255, 255, 0.92);
+  background: #ffffff;
   color: #17202b;
-  box-shadow: 0 14px 28px rgba(36, 54, 79, 0.07);
-  backdrop-filter: blur(12px) saturate(1.04);
+  box-shadow: none;
 }
 
 .cs-main {

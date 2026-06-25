@@ -7,30 +7,32 @@
       </div>
     </header>
 
-    <div class="screen-scroll scrollbar-hide page-padding">
-      <label class="search-box">
-        <Search :size="16" />
-        <input
-          v-model="search"
-          type="search"
-          aria-label="커뮤니티 검색"
-          placeholder="카드명, 혜택, 작성자 검색"
-          @keyup.enter="loadPosts"
-        />
-      </label>
+    <div ref="scrollEl" class="screen-scroll scrollbar-hide page-padding" @scroll="onScroll">
+      <div class="community-top">
+        <label class="search-box">
+          <Search :size="16" />
+          <input
+            v-model="search"
+            type="search"
+            aria-label="커뮤니티 검색"
+            placeholder="카드명, 혜택, 작성자 검색"
+            @keyup.enter="loadPosts"
+          />
+        </label>
 
-      <div class="category-tabs" role="tablist" aria-label="게시판 분류">
-        <button
-          v-for="cat in categories"
-          :key="cat.name"
-          type="button"
-          class="category-tab"
-          :class="{ active: activeCategory === cat.name }"
-          @click="selectCategory(cat.name)"
-        >
-          <component :is="cat.icon" :size="14" :stroke-width="2.4" />
-          <span>{{ cat.name }}</span>
-        </button>
+        <div class="category-tabs" role="tablist" aria-label="게시판 분류">
+          <button
+            v-for="cat in categories"
+            :key="cat.name"
+            type="button"
+            class="category-tab"
+            :class="{ active: activeCategory === cat.name }"
+            @click="selectCategory(cat.name)"
+          >
+            <component :is="cat.icon" :size="14" :stroke-width="2.4" />
+            <span>{{ cat.name }}</span>
+          </button>
+        </div>
       </div>
 
       <section v-if="showHot" class="hot-section">
@@ -114,6 +116,9 @@
       </div>
     </div>
 
+    <button v-show="showTop" class="scroll-top-btn" type="button" aria-label="맨 위로" @click="scrollToTop">
+      <ChevronUp :size="18" />
+    </button>
     <RouterLink class="floating-action-button" to="/community/new" aria-label="글쓰기">
       <Plus :size="20" />
     </RouterLink>
@@ -123,7 +128,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Heart, Info, MessageCircle, PenLine, Plus, Search, Star, Ticket, Users } from 'lucide-vue-next'
+import { ChevronUp, Heart, Info, MessageCircle, PenLine, Plus, Search, Star, Ticket, Users } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { communityPosts } from '@/data/mockData'
 import { fetchCommunityPosts, toggleCommunityPostLike } from '@/services/api'
@@ -134,6 +139,16 @@ const search = ref('')
 const isLoading = ref(false)
 const error = ref('')
 const isFallbackData = ref(false)
+
+// 스크롤 시 맨 위로 버튼 노출
+const scrollEl = ref(null)
+const showTop = ref(false)
+function onScroll() {
+  showTop.value = (scrollEl.value?.scrollTop || 0) > 500
+}
+function scrollToTop() {
+  scrollEl.value?.scrollTo({ top: 0, behavior: 'smooth' })
+}
 
 // 대분류 탭 — '전체'는 없음(아무것도 선택 안 하면 전체). 같은 탭 다시 누르면 해제.
 const categories = [
@@ -276,7 +291,36 @@ onMounted(loadPosts)
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 18px 20px 116px;
+  padding: 0 20px 116px;
+}
+
+.community-top {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 -20px;
+  padding: 14px 20px 12px;
+  background: var(--carch-page);
+}
+
+.scroll-top-btn {
+  position: absolute;
+  right: 22px;
+  bottom: 150px;
+  z-index: 39;
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(36, 54, 79, 0.12);
+  border-radius: 50%;
+  background: #fff;
+  color: #24364f;
+  box-shadow: 0 8px 22px rgba(36, 54, 79, 0.16);
 }
 
 .search-box {

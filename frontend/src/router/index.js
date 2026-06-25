@@ -66,7 +66,8 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
-  if (to.meta.devOnly && !import.meta.env.DEV) return { name: 'Dashboard' }
+  const allowDev = import.meta.env.DEV || ['localhost', '127.0.0.1'].includes(window.location.hostname)
+  if (to.meta.devOnly && !allowDev) return { name: 'Dashboard' }
   if (to.meta.requiresAuth && !isAuthenticated()) {
     const didAutoLogin = await ensureDevAutoLogin()
     if (didAutoLogin) return true

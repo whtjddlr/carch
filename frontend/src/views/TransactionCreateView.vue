@@ -3,7 +3,7 @@
     <header class="create-header blue-gradient">
       <AppBackButton fallback="/transactions" />
       <div>
-        <h1>AI 입력 보정</h1>
+        <h1>결제내역 추가</h1>
       </div>
     </header>
 
@@ -31,13 +31,11 @@
         <div v-if="sourceMode === 'capture'" class="capture-box">
           <label>
             <Upload :size="18" />
-            <span>{{ imageName || '이미지 참고용 선택' }}</span>
+            <span>{{ imageName || '이미지 선택' }}</span>
             <input type="file" accept="image/*" aria-label="결제 캡처 이미지 선택" @change="onImageChange" />
           </label>
           <img v-if="imagePreview" :src="imagePreview" alt="결제 캡처 미리보기" />
-          <p class="capture-helper">
-            이미지는 참고용으로 첨부됩니다. 승인 문구를 함께 입력하면 AI로 항목을 채울 수 있어요.
-          </p>
+          <p class="capture-helper">이미지는 참고용이에요. 승인 문구도 함께 입력해 주세요.</p>
         </div>
 
         <div class="example-row">
@@ -60,7 +58,8 @@
 
       <section class="app-card result-card">
         <div class="result-head">
-          <div>
+          <span class="rh-emoji">{{ form.icon || '🧾' }}</span>
+          <div class="rh-title">
             <span>확인 후 저장</span>
             <h2>{{ form.merchantName || '가맹점 미입력' }}</h2>
           </div>
@@ -68,27 +67,27 @@
         </div>
 
         <div v-if="parsedSourceText" class="source-evidence">
-          <span>AI가 읽은 원문</span>
+          <span><Sparkles :size="12" /> AI가 읽은 원문</span>
           <p>{{ parsedSourceText }}</p>
         </div>
 
-        <label class="field-label" for="merchantName">가맹점</label>
+        <label class="field-label" for="merchantName"><Store :size="14" /> 가맹점</label>
         <input id="merchantName" v-model="form.merchantName" class="form-field" aria-label="가맹점" />
 
         <div class="two-col">
           <label>
-            <span class="field-label">금액</span>
+            <span class="field-label"><Coins :size="14" /> 금액</span>
             <input v-model.number="form.amount" class="form-field" inputmode="numeric" aria-label="금액" />
           </label>
           <label>
-            <span class="field-label">카테고리</span>
+            <span class="field-label"><Tag :size="14" /> 카테고리</span>
             <select v-model="form.category" class="form-field" aria-label="카테고리">
               <option v-for="category in categories" :key="category" :value="category">{{ category }}</option>
             </select>
           </label>
         </div>
 
-        <label class="field-label" for="cardId">카드</label>
+        <label class="field-label" for="cardId"><CreditCard :size="14" /> 카드</label>
         <select id="cardId" v-model="form.cardId" class="form-field" aria-label="카드">
           <option v-for="card in cards" :key="card.id" :value="card.id">
             {{ card.issuer }} · {{ card.name }}
@@ -96,7 +95,7 @@
         </select>
 
         <div class="payment-mode-block">
-          <span class="field-label">결제 방식</span>
+          <span class="field-label"><Wallet :size="14" /> 결제 방식</span>
           <div class="payment-segment-grid" role="radiogroup" aria-label="결제 방식">
             <button
               v-for="option in paymentModeOptions"
@@ -112,14 +111,14 @@
           </div>
 
           <label v-if="form.paymentType === 'installment'" class="installment-month-field">
-            <span class="field-label">개월 수</span>
+            <span class="field-label"><CalendarClock :size="14" /> 개월 수</span>
             <select v-model.number="form.installmentMonths" class="form-field" aria-label="할부 개월 수">
               <option v-for="month in installmentMonthOptions" :key="month" :value="month">{{ month }}개월</option>
             </select>
           </label>
 
-          <p class="payment-helper" :class="{ warning: selectedPaymentMode === 'interest_free' }">
-            {{ paymentHelperText }}
+          <p v-if="paymentHelperText" class="payment-helper" :class="{ warning: selectedPaymentMode === 'interest_free' }">
+            <Info :size="13" /> {{ paymentHelperText }}
           </p>
         </div>
 
@@ -128,12 +127,12 @@
             <AppCalendarPicker v-model="form.date" label="날짜" mode="date" />
           </div>
           <label>
-            <span class="field-label">시간</span>
+            <span class="field-label"><Clock :size="14" /> 시간</span>
             <input v-model="form.time" class="form-field" type="time" aria-label="시간" />
           </label>
         </div>
 
-        <label class="field-label" for="address">장소</label>
+        <label class="field-label" for="address"><MapPin :size="14" /> 장소</label>
         <input id="address" v-model="form.address" class="form-field" aria-label="장소" />
 
         <button class="primary-button w-100" type="button" :disabled="isSaving || !canSave" @click="handleSave">
@@ -148,7 +147,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, ImageIcon, PencilLine, Sparkles, Upload } from 'lucide-vue-next'
+import { CalendarClock, Check, Clock, Coins, CreditCard, ImageIcon, Info, MapPin, PencilLine, Sparkles, Store, Tag, Upload, Wallet } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import AppCalendarPicker from '@/components/AppCalendarPicker.vue'
 import { cards as mockCards } from '@/data/mockData'
@@ -207,12 +206,12 @@ const selectedPaymentMode = computed(() => (
 ))
 const paymentHelperText = computed(() => {
   if (selectedPaymentMode.value === 'interest_free') {
-    return '무이자 할부는 카드에 따라 혜택에서 제외될 수 있어요. 확인된 규칙만 확정 혜택으로 계산합니다.'
+    return '무이자 할부는 혜택에서 제외될 수 있어요.'
   }
   if (selectedPaymentMode.value === 'installment') {
-    return '할부 결제는 일부 카드 혜택에서 제외될 수 있어요. 카드 규칙이 없으면 확인 필요로 표시합니다.'
+    return '할부는 일부 카드 혜택에서 제외될 수 있어요.'
   }
-  return '일시불은 카드 혜택 계산의 기본 기준입니다.'
+  return ''
 })
 
 function setPaymentMode(mode) {
@@ -440,10 +439,25 @@ onMounted(async () => {
 
 .result-head {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: center;
+  gap: 11px;
   margin-bottom: 14px;
+}
+
+.rh-emoji {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  background: #eef5ff;
+  font-size: 20px;
+}
+
+.rh-title {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .result-head span {
@@ -453,10 +467,17 @@ onMounted(async () => {
 }
 
 .result-head h2 {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
+  overflow: hidden;
   color: #17202b;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-head strong {
+  flex: 0 0 auto;
 }
 
 .result-head strong {
@@ -484,6 +505,9 @@ onMounted(async () => {
 }
 
 .source-evidence span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: #0f5fae;
   font-size: 11px;
   font-weight: 950;
@@ -557,20 +581,35 @@ onMounted(async () => {
 }
 
 .payment-helper {
-  margin: 9px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 10px 0 0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #f4f7fb;
   color: #687584;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 750;
-  line-height: 1.45;
+  line-height: 1.4;
   word-break: keep-all;
 }
 
 .payment-helper.warning {
+  background: #fff7ed;
   color: #b45309;
 }
 
 .field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   margin-top: 12px;
+}
+
+.field-label :deep(svg),
+.field-label svg {
+  color: #0f5fae;
 }
 
 .result-card .primary-button {

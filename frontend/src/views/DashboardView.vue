@@ -235,7 +235,7 @@
                 @load="setImageOrientation(txCard(tx)?.id, $event)"
               />
             </span>
-            <b :class="{ plus: tx.amt > 0 }">{{ tx.amt > 0 ? '+' : '-' }}{{ krw(tx.amt) }}</b>
+            <b :class="{ plus: tx.amt > 0 }">{{ Math.abs(tx.amt).toLocaleString() }}원</b>
           </button>
         </article>
       </section>
