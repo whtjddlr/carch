@@ -23,3 +23,4 @@ Thumbs.db
 # generated reference bundles not used by the Vue app entry
 src/app/
 src/imports/
+.vercel

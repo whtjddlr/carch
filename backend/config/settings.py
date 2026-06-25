@@ -53,10 +53,14 @@ def env_list(name, default=''):
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-d#m4ume0fm!(b9)j518qm_zi-fqhjfso7w91&@rw=xlvq0np5_')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env_bool('DJANGO_DEBUG', True)
+IS_VERCEL = env_bool('VERCEL', False)
 
-ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost,testserver')
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = env_bool('DJANGO_DEBUG', not IS_VERCEL)
+
+ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost,testserver,.vercel.app')
+if os.environ.get('VERCEL_URL'):
+    ALLOWED_HOSTS.append(os.environ['VERCEL_URL'])
 
 
 # Application definition
@@ -189,8 +193,10 @@ AI_PROXY_URL = os.environ.get('AI_PROXY_URL', '').rstrip('/')
 AI_PROXY_ENABLED = env_bool('AI_PROXY_ENABLED', bool(AI_PROXY_URL))
 AI_PROXY_TIMEOUT_SECONDS = int(os.environ.get('AI_PROXY_TIMEOUT_SECONDS', '20'))
 
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5175').rstrip('/')
-BACKEND_URL = os.environ.get('BACKEND_URL', 'http://127.0.0.1:8000').rstrip('/')
+DEFAULT_FRONTEND_URL = 'https://carch-web.vercel.app' if IS_VERCEL else 'http://127.0.0.1:5175'
+DEFAULT_BACKEND_URL = 'https://carch-api.vercel.app' if IS_VERCEL else 'http://127.0.0.1:8000'
+FRONTEND_URL = os.environ.get('FRONTEND_URL', DEFAULT_FRONTEND_URL).rstrip('/')
+BACKEND_URL = os.environ.get('BACKEND_URL', DEFAULT_BACKEND_URL).rstrip('/')
 OAUTH_CALLBACK_BASE_URL = os.environ.get('OAUTH_CALLBACK_BASE_URL', BACKEND_URL).rstrip('/')
 CORS_ALLOWED_ORIGINS = env_list(
     'CORS_ALLOWED_ORIGINS',

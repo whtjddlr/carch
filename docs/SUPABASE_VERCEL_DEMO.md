@@ -65,7 +65,7 @@ backend
 Environment variables:
 
 ```txt
-DATABASE_URL=<optional pooled Supabase Postgres URL for full Django ORM runtime>
+DATABASE_URL=<pooled Supabase Postgres URL required for Django auth/transactions/analytics>
 DATABASE_SSL_REQUIRE=true
 DATABASE_CONN_MAX_AGE=60
 DJANGO_SECRET_KEY=<generate-a-secret>
@@ -77,9 +77,9 @@ BACKEND_URL=https://<backend-vercel-domain>
 OAUTH_CALLBACK_BASE_URL=https://<backend-vercel-domain>
 
 SUPABASE_URL=https://<project-ref>.supabase.co
-SUPABASE_SECRET_KEY=<server-only-key>
-SUPABASE_PUBLISHABLE_KEY=<publishable-key>
-CARD_CATALOG_SOURCE=supabase
+SUPABASE_SECRET_KEY=<server-only-key, only needed when CARD_CATALOG_SOURCE=supabase>
+SUPABASE_PUBLISHABLE_KEY=<publishable-key, only needed when CARD_CATALOG_SOURCE=supabase>
+CARD_CATALOG_SOURCE=postgres
 CARD_IMAGE_BASE_URL=https://<project-ref>.supabase.co/storage/v1/object/public/card-images
 
 AI_MODE=gms
@@ -89,7 +89,8 @@ GMS_MODEL=gpt-5-mini
 GMS_FALLBACK_MODEL=gpt-5.4-mini
 GMS_TIMEOUT_SECONDS=45
 GMS_MAX_OUTPUT_TOKENS=3000
-AI_PROXY_ENABLED=false
+AI_PROXY_URL=https://<ai-proxy-vercel-domain>
+AI_PROXY_ENABLED=true
 
 EMAIL_AUTH_ENABLED=true
 DEV_AUTO_LOGIN_ENABLED=true
@@ -108,7 +109,8 @@ frontend
 Environment variables:
 
 ```txt
-VITE_API_BASE_URL=https://<backend-vercel-domain>
+BACKEND_URL=https://<backend-vercel-domain>
+VITE_API_BASE_URL=
 VITE_USE_MOCK_API=false
 VITE_DEV_AUTO_LOGIN=false
 VITE_API_TIMEOUT_MS=8000

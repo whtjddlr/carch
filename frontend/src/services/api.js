@@ -14,9 +14,10 @@ const envNumber = (value, fallback) => {
 }
 
 const normalizeBaseUrl = (value) => String(value || '').trim().replace(/\/+$/, '')
+const envApiBaseUrl = import.meta.env.PROD ? '' : import.meta.env.VITE_API_BASE_URL
 const defaultApiBaseUrl = import.meta.env.PROD ? '' : 'http://127.0.0.1:8000'
 
-export const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL || defaultApiBaseUrl)
+export const API_BASE_URL = normalizeBaseUrl(envApiBaseUrl || defaultApiBaseUrl)
 export const DEFAULT_API_TIMEOUT_MS = envNumber(import.meta.env.VITE_API_TIMEOUT_MS, 8000)
 export const AI_REQUEST_TIMEOUT_MS = envNumber(import.meta.env.VITE_AI_TIMEOUT_MS, 100000)
 export const USE_MOCK_API = ['true', '1', 'yes'].includes(String(import.meta.env.VITE_USE_MOCK_API || '').toLowerCase())
@@ -891,8 +892,10 @@ const applyCategoryOverrides = (params, categories = []) => {
   return params
 }
 
-export async function fetchCardRecommendationBundle({ recurringCategories = [] } = {}) {
+export async function fetchCardRecommendationBundle({ recurringCategories = [], ai = false, refreshAi = false } = {}) {
   const params = applyCategoryOverrides({}, recurringCategories)
+  if (!ai) params.ai = 0
+  if (refreshAi) params.refreshAi = 1
   if (USE_MOCK_API) {
     await delay()
     return clone(buildMockRecommendationBundle({ recurringCategories }))

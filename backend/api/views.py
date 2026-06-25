@@ -798,8 +798,38 @@ def serialize_transaction(transaction):
     }
 
 
+def dedupe_serialized_transactions(rows):
+    deduped = []
+    seen = set()
+    for item in rows:
+        key = (
+            item.get('cardId'),
+            item.get('merchantName'),
+            item.get('category'),
+            item.get('amount'),
+            item.get('approvedAt'),
+            item.get('paymentType'),
+            item.get('installmentMonths'),
+            item.get('isInterestFreeInstallment'),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def serialize_transactions(queryset, user=None):
+    rows = [serialize_transaction(item) for item in queryset]
+    return dedupe_serialized_transactions(rows) if is_demo_seed_user(user) else rows
+
+
 def seed_public_transaction_id(user, source_id):
     return f'u{user.id}-{source_id}'
+
+
+def seed_public_transaction_ids(user):
+    return [seed_public_transaction_id(user, item['id']) for item in TRANSACTIONS]
 
 
 def cleanup_legacy_seed_transactions(user):
@@ -820,12 +850,15 @@ def ensure_transactions_seeded(user=None):
     # 실제 신규 가입자는 빈 거래로 시작 — 데모 거래는 데모/시연 계정에만 자동 시드
     if not is_demo_seed_user(user):
         return
+    seed_ids = seed_public_transaction_ids(user)
+    if Transaction.objects.filter(user=user, public_id__in=seed_ids).count() == len(seed_ids):
+        return
     cleanup_legacy_seed_transactions(user)
     existing_by_id = {
         item.public_id: item
         for item in Transaction.objects.filter(
             user=user,
-            public_id__in=[seed_public_transaction_id(user, item['id']) for item in TRANSACTIONS],
+            public_id__in=seed_ids,
         )
     }
     rows = []
@@ -1605,7 +1638,7 @@ def search_items(request):
         items.extend(card_items)
 
     if search_type in {'all', 'transaction'}:
-        tx_queryset = transaction_queryset(request)
+        tx_queryset = transaction_queryset(user=user)
         if query:
             tx_queryset = tx_queryset.filter(
                 Q(merchant_name__icontains=query)
@@ -1614,7 +1647,7 @@ def search_items(request):
                 | Q(source_text__icontains=query)
                 | Q(card_id__icontains=query)
             )
-        tx_rows = [serialize_transaction(tx) for tx in tx_queryset[: limit * 3]]
+        tx_rows = serialize_transactions(tx_queryset[: limit * 3], user=user)
         tx_items = clip_search_items(
             [build_transaction_search_item(tx, query) for tx in tx_rows],
             query,
@@ -1834,7 +1867,7 @@ def transaction_list(request):
         transactions = transactions.filter(card_id=str(card_id))
     if category:
         transactions = transactions.filter(category=category)
-    rows = [serialize_transaction(item) for item in transactions]
+    rows = serialize_transactions(transactions, user=user)
     return json_response({'count': len(rows), 'results': rows})
 
 
@@ -2020,7 +2053,7 @@ def analytics_monthly(request):
         count = max(1, min(int(request.GET.get('months', 5)), 12))
     except (TypeError, ValueError):
         count = 5
-    transaction_rows = [serialize_transaction(transaction) for transaction in transaction_queryset(user=user)]
+    transaction_rows = serialize_transactions(transaction_queryset(user=user), user=user)
     expense_months = sorted({
         _month_key_from_transaction(item)
         for item in transaction_rows
@@ -2103,7 +2136,7 @@ def spending_summary(request):
     user, error_response = require_request_user(request)
     if error_response:
         return error_response
-    transactions = [serialize_transaction(item) for item in transaction_queryset(user=user)]
+    transactions = serialize_transactions(transaction_queryset(user=user), user=user)
     requested_month = _valid_month_key(request.GET.get('month'))
     spending_trend = _build_spending_trend(
         transactions,
@@ -2286,7 +2319,7 @@ def analysis_record_list(request):
 
 def build_chat_context(request):
     user = get_effective_user(request)
-    transactions = [serialize_transaction(item) for item in transaction_queryset(request)]
+    transactions = serialize_transactions(transaction_queryset(request), user=user)
     spending_trend = _build_spending_trend(
         transactions,
         _parse_category_overrides(request),
@@ -3161,8 +3194,8 @@ def _is_general_benefit_label(label):
 
 
 def _build_spending_profile(request=None, adjusted_for_recommendation=False, recurring_overrides=None):
-    transactions = [serialize_transaction(item) for item in transaction_queryset(request)]
     user = get_effective_user(request) if request is not None else get_demo_user()
+    transactions = serialize_transactions(transaction_queryset(request, user=user), user=user)
     spending_trend = _build_spending_trend(
         transactions,
         recurring_overrides,

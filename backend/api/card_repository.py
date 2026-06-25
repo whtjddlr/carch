@@ -103,7 +103,7 @@ def image_filename_for(card_ad_id, local_path='', require_exists=True):
 
     candidates = []
     if local_path:
-        candidates.append(Path(local_path).name)
+        candidates.append(Path(str(local_path).replace('\\', '/')).name)
     candidates.extend([f'{card_ad_id}.png', f'{card_ad_id}.jpg', f'{card_ad_id}.jpeg', f'{card_ad_id}.gif'])
 
     for filename in candidates:

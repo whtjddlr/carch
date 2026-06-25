@@ -30,10 +30,18 @@ npm run preview  # 빌드 결과 미리보기
 
 ## API
 
-프론트는 기본적으로 `http://127.0.0.1:8000` 백엔드를 호출합니다. 다른 API 서버를 사용할 때는 `.env`에 아래 값을 설정하세요.
+개발 환경에서는 기본적으로 `http://127.0.0.1:8000` 백엔드를 호출합니다. Vercel 프로덕션 배포에서는 same-origin `/api/...`를 호출하고 `api/proxy.js` 프록시가 `BACKEND_URL`로 전달합니다.
 
 ```bash
+BACKEND_URL=http://127.0.0.1:8000
 VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+Vercel 프론트 프로젝트에서는 아래처럼 설정하면 브라우저가 프론트 도메인의 `/api`만 호출합니다.
+
+```bash
+BACKEND_URL=https://<backend-vercel-domain>
+VITE_API_BASE_URL=
 ```
 
 백엔드 없이 UI와 플로우만 검수할 때는 mock 모드를 사용합니다.
