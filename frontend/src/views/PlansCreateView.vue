@@ -8,7 +8,6 @@
         <h1>목표 지출 계획 만들기</h1>
       </div>
     </header>
-    <PlanStepIndicator :step="currentStep" />
 
     <div class="screen-scroll scrollbar-hide create-body">
       <PlanLoadingSkeleton
@@ -63,7 +62,7 @@
         </div>
         <div class="step-actions">
           <button class="outline-button" type="button" @click="currentStep = 0">이전</button>
-          <button class="primary-button" type="button" @click="submitStepTwo">추천 보기</button>
+          <button class="primary-button" type="button" @click="submitStepTwo">카드 추천 보기</button>
         </div>
       </template>
 
@@ -87,7 +86,6 @@
 
     <div v-if="showCancel" class="modal-scrim cancel-scrim" @click.self="showCancel = false">
       <div class="sheet cancel-sheet" role="dialog" aria-modal="true" aria-labelledby="cancel-title">
-        <div class="cancel-icon" aria-hidden="true" />
         <div class="cancel-copy">
           <span>작성 중인 계획</span>
           <h2 id="cancel-title">계획 작성을 취소할까요?</h2>
@@ -111,7 +109,6 @@ import PlanBudgetSummary from '@/components/plans/PlanBudgetSummary.vue'
 import PlanLoadingSkeleton from '@/components/plans/PlanLoadingSkeleton.vue'
 import PlanPromptForm from '@/components/plans/PlanPromptForm.vue'
 import PlanResultSplit from '@/components/plans/PlanResultSplit.vue'
-import PlanStepIndicator from '@/components/plans/PlanStepIndicator.vue'
 import PlanWarningAlert from '@/components/plans/PlanWarningAlert.vue'
 import { cards as mockCards, exampleChips, expenseModes, strategies } from '@/data/mockData'
 import { fetchCardRecommendationBundle } from '@/services/api'
@@ -502,15 +499,8 @@ const cancelCreate = () => {
   backdrop-filter: none;
 }
 
-.cancel-icon {
-  width: 46px;
-  height: 5px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #2c638f 0%, #8bb9ca 100%);
-}
-
 .cancel-copy {
-  margin-top: 16px;
+  margin-top: 4px;
 }
 
 .cancel-copy span {

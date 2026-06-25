@@ -1,5 +1,6 @@
 <template>
   <article class="plan-item">
+    <span class="pi-ico"><component :is="itemIcon" :size="16" /></span>
     <input
       class="pi-name"
       :value="item.name"
@@ -26,11 +27,38 @@
 </template>
 
 <script setup>
-import { Trash2 } from 'lucide-vue-next'
+import { computed } from 'vue'
+import {
+  Armchair, BookOpen, Bus, Camera, Dumbbell, Gift, Laptop, Package,
+  Plane, Shirt, ShoppingBasket, Smartphone, Trash2, UtensilsCrossed,
+} from 'lucide-vue-next'
 
 const emit = defineEmits(['update', 'remove'])
 const props = defineProps({
   item: { type: Object, required: true },
+})
+
+// 품목명·분야에 맞춘 아이콘 추정
+const ICON_RULES = [
+  [/노트북|랩탑|맥북|컴퓨터|모니터|태블릿|아이패드/, Laptop],
+  [/폰|휴대폰|스마트폰|아이폰|갤럭시|이어폰|충전|파우치|케이스|가전|전자/, Smartphone],
+  [/침대|매트리스|소파|가구|책상|의자|수납|선반|장롱/, Armchair],
+  [/재킷|자켓|정장|셔츠|코트|니트|바지|슬랙스|옷|의류/, Shirt],
+  [/구두|신발|운동화|스니커즈/, Shirt],
+  [/항공|비행기|여행|숙소|호텔|여권/, Plane],
+  [/사진|카메라|렌즈|촬영/, Camera],
+  [/교통|이동|버스|지하철|기차|ktx|택시/i, Bus],
+  [/식|음식|식비|외식|카페|맛집|선물세트/, UtensilsCrossed],
+  [/선물|기념일|꽃|케이크/, Gift],
+  [/책|교재|강의|학원|응시료|어학|교육|시험/, BookOpen],
+  [/헬스|운동|요가|필라테스|장비/, Dumbbell],
+  [/생활|용품|세제|마트|장보기/, ShoppingBasket],
+]
+
+const itemIcon = computed(() => {
+  const text = `${props.item?.name || ''} ${props.item?.category || ''}`
+  const hit = ICON_RULES.find(([re]) => re.test(text))
+  return hit ? hit[1] : Package
 })
 
 const patch = (field, value) => {
@@ -49,6 +77,17 @@ const patch = (field, value) => {
 
 .plan-item:last-child {
   border-bottom: 0;
+}
+
+.pi-ico {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(15, 95, 174, 0.1);
+  color: #0f5fae;
 }
 
 .pi-name {

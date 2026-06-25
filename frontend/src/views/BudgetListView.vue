@@ -112,24 +112,14 @@
       </section>
 
       <section class="plan-section">
-        <div class="section-head split">
-          <h2>지출 계획</h2>
-          <RouterLink to="/plans">계획 보기</RouterLink>
-        </div>
-        <div class="plan-mode-grid">
-          <RouterLink
-            v-for="mode in expenseModes"
-            :key="mode.id"
-            class="plan-mode"
-            :to="{ path: '/plans/new', query: { expenseMode: mode.id } }"
-          >
-            <span class="pm-icon"><component :is="modeIcon(mode.id)" :size="18" /></span>
-            <div>
-              <strong>{{ mode.label }}</strong>
-              <small>{{ mode.title }}</small>
-            </div>
-          </RouterLink>
-        </div>
+        <RouterLink class="plan-cta" to="/plans/new">
+          <span class="pc-icon"><PencilLine :size="20" /></span>
+          <div class="pc-text">
+            <strong>지출 계획 입력하기</strong>
+            <small>큰 지출을 어떤 카드로 결제할지 계획해요</small>
+          </div>
+          <ChevronRight :size="18" class="pc-go" />
+        </RouterLink>
       </section>
 
       <section v-if="pendingReviewCandidates.length" class="review-section">
@@ -234,21 +224,55 @@
 
       <section v-if="planSummaries.length" class="plan-reco-section">
         <div class="section-head split">
-          <h2>내 지출 계획 추천</h2>
-          <RouterLink to="/plans">전체</RouterLink>
+          <h2>내 지출 계획</h2>
         </div>
         <RouterLink
-          v-for="p in planSummaries"
+          v-for="p in visiblePlans"
           :key="p.id"
           :to="`/plans/${p.id}`"
-          class="plan-reco analysis-card app-card"
+          class="plan-reco"
         >
           <div class="pr-top">
             <strong>{{ p.title }}</strong>
-            <span>{{ krw(p.total) }}</span>
+            <div class="pr-meta">
+              <span class="pr-date"><CalendarClock :size="12" /> {{ p.dateLabel }}</span>
+              <span class="pr-total">{{ krw(p.total) }}</span>
+            </div>
           </div>
-          <p class="pr-line"><b>{{ p.card }}</b>{{ p.tail }}</p>
+          <ul v-if="p.items.length" class="pr-items">
+            <li v-for="(it, idx) in p.items" :key="idx" class="pr-item">
+              <span class="pr-thumb">
+                <img
+                  v-if="it.cardImage"
+                  :src="it.cardImage"
+                  :alt="it.card"
+                  :class="thumbOri[`${p.id}-${idx}`]"
+                  @load="onThumb($event, `${p.id}-${idx}`)"
+                />
+                <CreditCard v-else :size="14" />
+              </span>
+              <div class="pr-item-body">
+                <strong>{{ it.name }}</strong>
+                <small><b>{{ it.card }}</b>로 {{ krw(it.amount) }} 결제</small>
+              </div>
+              <em v-if="it.benefit" class="pr-benefit">+{{ krw(it.benefit) }}</em>
+            </li>
+          </ul>
+          <p v-else class="pr-line"><b>{{ p.card }}</b>{{ p.tail }}</p>
+          <div v-if="p.totalBenefit" class="pr-foot">
+            <span>예상 혜택</span>
+            <b>+{{ krw(p.totalBenefit) }}</b>
+          </div>
         </RouterLink>
+        <button
+          v-if="planSummaries.length > 2"
+          type="button"
+          class="pr-more"
+          @click="showAllPlans = !showAllPlans"
+        >
+          {{ showAllPlans ? '접기' : `더보기 (${planSummaries.length - 2})` }}
+          <ChevronDown :size="15" :class="{ flip: showAllPlans }" />
+        </button>
       </section>
 
     </div>
@@ -256,11 +280,11 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { CalendarClock, Check, ChevronDown, ChevronRight, CreditCard, Pencil, PiggyBank, Search, Sparkles, Zap } from 'lucide-vue-next'
+import { CalendarClock, Check, ChevronDown, ChevronRight, CreditCard, Pencil, PencilLine, PiggyBank, Search, Sparkles, Zap } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
-import { budgetCategories, cards as mockCards, expenseModes, krw } from '@/data/mockData'
+import { budgetCategories, cards as mockCards, expenseModes, krw, monthLabel } from '@/data/mockData'
 import { demoMonthSummary } from '@/data/monthlyAnalytics'
 import { fetchBudget, fetchCardRecommendationBundle, fetchMonthlySpending, fetchOwnedCards, fetchSpendingSummary, fetchTransactions, normalizeCard, saveBudget } from '@/services/api'
 import { getPurchasePlans } from '@/services/purchasePlans'
@@ -606,20 +630,60 @@ async function loadPurchasePlanSummaries() {
 }
 onMounted(loadPurchasePlanSummaries)
 
-const planSummaries = computed(() => (purchasePlanList.value || []).slice(0, 3).map((plan) => {
+// 카드 이름 → 카드 이미지 매핑
+const cardImageByName = computed(() => {
+  const map = {}
+  for (const c of mockCards) {
+    if (c?.name) map[c.name] = c.imageUrl
+  }
+  return map
+})
+
+// 카드 썸네일 방향(세로 이미지는 가로 썸네일에 맞춰 회전)
+const thumbOri = reactive({})
+function onThumb(event, key) {
+  const img = event.target
+  thumbOri[key] = img.naturalWidth > img.naturalHeight ? 'is-landscape' : 'is-portrait'
+}
+
+// 결제 예상 시기 라벨(시작·종료 월이 같으면 한 달만)
+function planDateLabel(plan) {
+  const start = plan.startMonth || ''
+  const end = plan.endMonth || start
+  if (!start) return '시기 미정'
+  if (!end || start === end) return monthLabel(start)
+  return `${monthLabel(start)} ~ ${monthLabel(end)}`
+}
+
+// 소비계획 하단 — 저장된 지출 계획을 항목별 카드 배정까지 상세히 표시
+const planSummaries = computed(() => (purchasePlanList.value || []).map((plan) => {
   const scs = plan.scenarios || []
   const sc = scs.find((s) => s.id === plan.selectedScenarioId) || scs[0]
-  const items = (sc?.monthlyPlan || []).flatMap((m) => m.items || [])
-  const card = sc?.cardSummary?.[0]?.cardName || items[0]?.card || ''
+  const rawItems = (sc?.monthlyPlan || []).flatMap((m) => m.items || [])
+  const items = rawItems.map((it) => ({
+    name: it.name,
+    amount: Number(it.amount || 0),
+    card: it.card || '',
+    cardImage: cardImageByName.value[it.card] || '',
+    benefit: Number(it.benefit || 0),
+  }))
+  const card = sc?.cardSummary?.[0]?.cardName || rawItems[0]?.card || ''
   const total = Number(plan.totalBudget || 0) || (plan.items || []).reduce((sum, i) => sum + Number(i.amount || 0), 0)
   return {
     id: plan.id,
     title: plan.title,
+    dateLabel: planDateLabel(plan),
     total,
+    items,
+    totalBenefit: items.reduce((sum, i) => sum + i.benefit, 0),
     card: card || '카드 추천',
     tail: card ? '로 결제하면 혜택을 챙길 수 있어요' : ' 확인이 필요해요',
   }
 }))
+
+// 기본 2개만 노출, 더보기로 나머지 인라인 펼침
+const showAllPlans = ref(false)
+const visiblePlans = computed(() => (showAllPlans.value ? planSummaries.value : planSummaries.value.slice(0, 2)))
 
 // 최근 5개월 예산(연한 트랙) + 사용(색상) 겹침 막대그래프
 const barChart = computed(() => {
@@ -1633,50 +1697,53 @@ h1 {
   margin-bottom: 24px;
 }
 
-.plan-mode-grid {
-  display: grid;
-  gap: 8px;
-}
-
-.plan-mode {
+.plan-cta {
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 1px solid rgba(36, 54, 79, 0.07);
-  border-radius: 14px;
-  padding: 13px 14px;
-  background: rgba(255, 255, 255, 0.72);
-  color: inherit;
+  border-radius: 16px;
+  padding: 15px 16px;
+  background: linear-gradient(135deg, #24364f 0%, #33507a 100%);
+  color: #fff;
   text-decoration: none;
-  box-shadow: 0 10px 22px rgba(36, 54, 79, 0.045);
+  box-shadow: 0 14px 26px rgba(36, 54, 79, 0.22);
 }
 
-.pm-icon {
+.pc-icon {
   display: inline-flex;
   flex-shrink: 0;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   align-items: center;
   justify-content: center;
   border-radius: 12px;
-  background: #fff;
-  color: #0f5fae;
-  box-shadow: 0 2px 8px rgba(36, 54, 79, 0.1);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
 }
 
-.plan-mode strong {
+.pc-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pc-text strong {
   display: block;
-  color: #20242a;
-  font-size: 13px;
-  font-weight: 900;
+  color: #fff;
+  font-size: 14.5px;
+  font-weight: 800;
 }
 
-.plan-mode small {
+.pc-text small {
   display: block;
   margin-top: 2px;
-  color: #6e6e73;
-  font-size: 11px;
-  font-weight: 700;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.pc-go {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .section-block {
@@ -2461,14 +2528,18 @@ h1 {
 
 .plan-reco {
   display: block;
-  padding: 14px 15px;
+  border: 1px solid rgba(36, 54, 79, 0.08);
+  border-radius: 18px;
+  padding: 16px 16px 14px;
+  background: #fff;
   color: inherit;
   text-decoration: none;
+  box-shadow: 0 12px 26px rgba(36, 54, 79, 0.06);
 }
 
 .pr-top {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
 }
@@ -2482,12 +2553,55 @@ h1 {
   white-space: nowrap;
 }
 
-.pr-top span {
+.pr-meta {
+  display: flex;
   flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.pr-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: rgba(15, 95, 174, 0.1);
+  color: #0f5fae;
+  font-size: 10.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.pr-total {
   color: #5f6b77;
   font-size: 13px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+}
+
+.pr-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  border: 1px solid rgba(36, 54, 79, 0.12);
+  border-radius: 12px;
+  padding: 11px;
+  background: #fff;
+  color: #4a5663;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+.pr-more svg {
+  transition: transform 180ms ease;
+}
+
+.pr-more svg.flip {
+  transform: rotate(180deg);
 }
 
 .pr-line {
@@ -2500,5 +2614,116 @@ h1 {
 .pr-line b {
   color: #0f5fae;
   font-weight: 900;
+}
+
+.pr-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid rgba(36, 54, 79, 0.08);
+  list-style: none;
+}
+
+.pr-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 4px 0;
+}
+
+.pr-thumb {
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 42px;
+  height: 27px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #e8edf2;
+  color: #8a9aad;
+  box-shadow: 0 2px 7px rgba(36, 54, 79, 0.18);
+}
+
+.pr-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pr-thumb img.is-portrait {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 27px;
+  height: 42px;
+  max-width: none;
+  transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.pr-item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pr-item-body strong {
+  display: block;
+  overflow: hidden;
+  color: #17202b;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pr-item-body small {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: #6e7885;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pr-item-body small b {
+  color: #0f5fae;
+  font-weight: 900;
+}
+
+.pr-benefit {
+  flex: 0 0 auto;
+  color: #15a34a;
+  font-size: 12.5px;
+  font-weight: 900;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.pr-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(36, 54, 79, 0.08);
+}
+
+.pr-foot span {
+  color: #6e7885;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pr-foot b {
+  color: #15a34a;
+  font-size: 14px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
 }
 </style>

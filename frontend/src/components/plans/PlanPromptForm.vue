@@ -220,17 +220,17 @@ const patchDate = (value) => {
   font-weight: 700;
 }
 
-/* 다음 버튼 — 딱딱한 네이비 대신 부드러운 블루 그라데이션 (전역 !important 이김) */
-.app-backdrop .phone-shell .prompt-form .primary-button {
-  margin-top: 4px;
-  min-height: 52px;
-  background: linear-gradient(135deg, #2f7be6 0%, #5aa0ff 100%) !important;
-  box-shadow: 0 14px 26px rgba(47, 123, 230, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
-  font-size: 14.5px;
+/* 예산 입력 ↔ 결제 시기 — 두 박스 높이·모양 통일 */
+.field-pair .form-field {
+  height: 54px;
+  border-radius: 14px;
 }
 
-.app-backdrop .phone-shell .prompt-form .primary-button:hover:not(:disabled) {
-  background: linear-gradient(135deg, #2670dd 0%, #4f97fb 100%) !important;
-  box-shadow: 0 16px 30px rgba(47, 123, 230, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.32) !important;
+.field-pair :deep(.calendar-trigger) {
+  min-height: 54px;
+  height: 54px;
+  border-radius: 14px;
+  /* 라벨·값·달력 아이콘을 박스 안에서 살짝 위로 */
+  padding: 6px 12px 13px;
 }
 </style>

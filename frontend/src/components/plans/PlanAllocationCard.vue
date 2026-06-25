@@ -1,104 +1,138 @@
 <template>
   <article class="allocation-card app-card">
-    <div class="allocation-head">
-      <h4>{{ item.name }}</h4>
-      <span class="badge-soft" :class="statusClass">{{ item.status }}</span>
+    <span class="ac-thumb">
+      <img
+        v-if="cardImage"
+        :src="cardImage"
+        :alt="item.card"
+        :class="ori"
+        @load="onThumb"
+      />
+      <CreditCard v-else :size="18" />
+    </span>
+    <div class="ac-body">
+      <div class="ac-line">
+        <strong>{{ item.name }}</strong>
+        <b class="ac-amount">{{ krw(item.amount) }}</b>
+      </div>
+      <div class="ac-line">
+        <span class="ac-card">{{ item.card }}</span>
+        <em class="ac-benefit">혜택 +{{ krw(item.benefit) }}</em>
+      </div>
     </div>
-    <p class="amount">{{ krw(item.amount) }}</p>
-    <div class="card-line">
-      <CreditCard :size="15" />
-      <span>{{ item.card }}</span>
-      <strong>예상 혜택 {{ krw(item.benefit) }}</strong>
-    </div>
-    <p class="note">{{ item.note }}</p>
   </article>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { CreditCard } from 'lucide-vue-next'
-import { krw } from '@/data/mockData'
+import { cards as mockCards, krw } from '@/data/mockData'
 
 const props = defineProps({
   item: { type: Object, required: true },
 })
 
-const statusClass = computed(() => ({
-  '구매 예정': 'primary',
-  '구매 완료': 'success',
-  '일정 변경': 'warning',
-  '예산 초과': 'danger',
-}[props.item.status] || 'primary'))
+const cardImage = computed(() => {
+  const found = mockCards.find((c) => c?.name === props.item.card)
+  return found?.imageUrl || ''
+})
+
+// 세로 카드 이미지는 가로 썸네일에 맞춰 회전
+const ori = ref('')
+function onThumb(event) {
+  const img = event.target
+  ori.value = img.naturalWidth > img.naturalHeight ? 'is-landscape' : 'is-portrait'
+}
 </script>
 
 <style scoped>
 .allocation-card {
-  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
 }
 
-.allocation-head {
+.ac-thumb {
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 48px;
+  height: 31px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: #e8edf2;
+  color: #8a9aad;
+  box-shadow: 0 2px 8px rgba(36, 54, 79, 0.18);
+}
+
+.ac-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ac-thumb img.is-portrait {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: 31px;
+  height: 48px;
+  max-width: none;
+  transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.ac-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ac-line {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   justify-content: space-between;
   gap: 10px;
 }
 
-h4 {
-  margin: 0;
+.ac-line + .ac-line {
+  margin-top: 4px;
+}
+
+.ac-line strong {
+  overflow: hidden;
   color: #17202b;
   font-size: 14px;
   font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.amount {
-  margin: 7px 0;
+.ac-amount {
+  flex: 0 0 auto;
   color: #17202b;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 900;
+  font-variant-numeric: tabular-nums;
 }
 
-.card-line {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #6e6e73;
+.ac-card {
+  overflow: hidden;
+  color: #6e7885;
   font-size: 12px;
   font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.card-line strong {
-  margin-left: auto;
-  color: #008c95;
-}
-
-.note {
-  margin: 10px 0 0;
-  border-radius: 10px;
-  padding: 10px;
-  background: #e7edf4;
-  color: #6e6e73;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.45;
-}
-
-.primary {
-  background: #e8f1ff;
-  color: #0f5fae;
-}
-
-.success {
-  background: #f0fdf4;
-  color: #16a34a;
-}
-
-.warning {
-  background: #fffaeb;
-  color: #b54708;
-}
-
-.danger {
-  background: #fef3f2;
-  color: #d92d20;
+.ac-benefit {
+  flex: 0 0 auto;
+  color: #15a34a;
+  font-size: 12.5px;
+  font-weight: 900;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
 }
 </style>

@@ -5,63 +5,41 @@
         <div class="top-line">
           <AppBackButton fallback="/plans" />
           <h1>{{ plan.title }}</h1>
-          <button class="icon-button" type="button" @click="askDelete = true">
+          <button class="icon-button delete-button" type="button" aria-label="계획 삭제" @click="askDelete = true">
             <Trash2 :size="16" />
           </button>
         </div>
         <div class="summary-panel">
-          <div class="title-row">
-            <strong>{{ plan.title }}</strong>
-            <span>{{ plan.type }}</span>
-            <span>{{ plan.status }}</span>
-          </div>
-          <p>{{ monthLabel(plan.startMonth) }} ~ {{ monthLabel(plan.endMonth) }} · {{ selectedScenario?.type || '시나리오 없음' }}</p>
+          <p><CalendarDays :size="13" /> {{ monthLabel(plan.startMonth) }}<template v-if="plan.endMonth && plan.endMonth !== plan.startMonth"> ~ {{ monthLabel(plan.endMonth) }}</template> · {{ selectedScenario?.type || '시나리오 없음' }}</p>
           <div class="summary-grid">
             <div>
-              <span>총예산</span>
+              <span><Wallet :size="13" /> 총예산</span>
               <b>{{ krw(plan.totalBudget) }}</b>
             </div>
             <div>
-              <span>구매 예정액</span>
+              <span><ShoppingBag :size="13" /> 구매 예정액</span>
               <b>{{ krw(selectedScenario?.totalAmount || 0) }}</b>
             </div>
             <div>
-              <span>전체 예상 혜택</span>
+              <span><Sparkles :size="13" /> 전체 예상 혜택</span>
               <b class="success">+{{ krw(selectedScenario?.totalBenefit || 0) }}</b>
             </div>
             <div>
-              <span>예산 잔액</span>
+              <span><PiggyBank :size="13" /> 예산 잔액</span>
               <b :class="{ danger: budgetDiff < 0 }">{{ budgetDiff < 0 ? '-' : '+' }}{{ krw(budgetDiff) }}</b>
             </div>
           </div>
           <div class="header-actions">
-            <button type="button" @click="openPlanWizard('recalculate')">
-              <RotateCcw :size="14" />
-              다시 계산
-            </button>
             <button type="button" @click="openPlanWizard('edit')">
               <Edit3 :size="14" />
-              수정
+              계획 수정
             </button>
           </div>
         </div>
       </header>
 
       <div class="screen-scroll scrollbar-hide detail-body">
-        <MonthlyPlanTimeline :months="selectedScenario?.monthlyPlan || []" />
-        <PlanCardUsageSummary :cards="selectedScenario?.cardSummary || []" />
-        <article v-if="selectedScenario?.aiExplanation" class="app-card ai-explain">
-          <div class="ai-title">
-            <Sparkles :size="16" />
-            <h2>이렇게 계획한 이유</h2>
-          </div>
-          <p>{{ selectedScenario.aiExplanation }}</p>
-          <AiRoleNotice text="AI는 계획을 이해하기 쉽게 설명하며, 혜택 금액과 카드 배정은 룰 기반 계산 결과입니다." />
-        </article>
-        <p class="disclaimer">
-          본 계획은 등록된 카드 혜택과 예상 구매 금액에 따른 시뮬레이션입니다.
-          실제 혜택은 카드사 정책, 결제 시점, 가맹점 및 이용 조건에 따라 달라질 수 있습니다.
-        </p>
+        <PlanByCard :scenario="selectedScenario" />
       </div>
 
       <div v-if="askDelete" class="modal-scrim" @click.self="askDelete = false">
@@ -90,11 +68,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Edit3, RotateCcw, Sparkles, Trash2 } from 'lucide-vue-next'
+import { CalendarDays, Edit3, PiggyBank, ShoppingBag, Sparkles, Trash2, Wallet } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
-import AiRoleNotice from '@/components/plans/AiRoleNotice.vue'
-import MonthlyPlanTimeline from '@/components/plans/MonthlyPlanTimeline.vue'
-import PlanCardUsageSummary from '@/components/plans/PlanCardUsageSummary.vue'
+import PlanByCard from '@/components/plans/PlanByCard.vue'
 import PlanEmptyState from '@/components/plans/PlanEmptyState.vue'
 import { krw, monthLabel } from '@/data/mockData'
 import { usePurchasePlan } from '@/composables/usePurchasePlan'
@@ -136,6 +112,8 @@ const deletePlan = async () => {
 
 <style scoped>
 .detail-header {
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
   padding: 22px 20px;
   color: #fff;
@@ -189,8 +167,11 @@ const deletePlan = async () => {
 }
 
 .summary-panel > p {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   margin: 10px 0 12px;
-  color: rgba(255, 255, 255, 0.68);
+  color: rgba(255, 255, 255, 0.78);
   font-size: 12px;
   font-weight: 700;
 }
@@ -207,19 +188,30 @@ const deletePlan = async () => {
   background: rgba(255, 255, 255, 0.12);
 }
 
-.summary-grid span {
-  display: block;
-  color: rgba(255, 255, 255, 0.62);
-  font-size: 10px;
-  font-weight: 700;
+.app-backdrop .phone-shell .detail-header .summary-grid span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #4a5663 !important;
+  font-size: 12.5px !important;
+  font-weight: 800 !important;
 }
 
-.summary-grid b {
+.app-backdrop .phone-shell .detail-header .summary-grid b {
   display: block;
-  margin-top: 3px;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 500;
+  margin-top: 6px;
+  color: #17202b !important;
+  font-size: 19px !important;
+  font-weight: 800 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-backdrop .phone-shell .detail-header .summary-grid .success {
+  color: #15a34a !important;
+}
+
+.app-backdrop .phone-shell .detail-header .summary-grid .danger {
+  color: #d92d20 !important;
 }
 
 .summary-grid .success {
@@ -232,22 +224,29 @@ const deletePlan = async () => {
 
 .header-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 14px;
 }
 
-.header-actions button {
+.app-backdrop .phone-shell .detail-header .header-actions button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  border-radius: 11px;
-  padding: 9px 10px;
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 900;
+  gap: 6px;
+  border: 1px solid rgba(15, 95, 174, 0.22) !important;
+  border-radius: 12px;
+  padding: 11px 10px;
+  background: rgba(15, 95, 174, 0.08) !important;
+  color: #0f5fae !important;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.app-backdrop .phone-shell .detail-header .delete-button {
+  border: 0 !important;
+  background: transparent !important;
+  color: #d92d20 !important;
 }
 
 .detail-body {

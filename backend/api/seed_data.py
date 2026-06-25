@@ -668,61 +668,6 @@ TRANSACTIONS.extend(
 
 PURCHASE_PLANS = [
     {
-        'title': '취업 준비 지출 계획',
-        'type': '취업 준비',
-        'expenseMode': 'planned-extra',
-        'totalBudget': 800000,
-        'startMonth': '2026-07',
-        'endMonth': '2026-08',
-        'status': '선택 완료',
-        'selectedScenarioId': 'sc1',
-        'progress': 100,
-        'items': [
-            {'id': 'i1', 'name': '정장 셔츠·슬랙스', 'category': '쇼핑', 'amount': 210000, 'targetMonth': '2026-07', 'required': True, 'flexible': False},
-            {'id': 'i2', 'name': '구두', 'category': '쇼핑', 'amount': 160000, 'targetMonth': '2026-07', 'required': True, 'flexible': True},
-            {'id': 'i3', 'name': '증명사진', 'category': '취업', 'amount': 50000, 'targetMonth': '2026-07', 'required': True, 'flexible': False},
-            {'id': 'i4', 'name': '어학 응시료', 'category': '교육', 'amount': 84000, 'targetMonth': '2026-08', 'required': True, 'flexible': False},
-            {'id': 'i5', 'name': '면접 교통비', 'category': '교통', 'amount': 90000, 'targetMonth': '2026-08', 'required': False, 'flexible': True},
-        ],
-        'scenarios': [
-            {
-                'id': 'sc1',
-                'type': '혜택 최대화',
-                'recommended': True,
-                'totalAmount': 594000,
-                'totalBenefit': 39520,
-                'budgetDiff': 206000,
-                'maxMonthlySpend': 420000,
-                'achievedCards': 2,
-                'reasons': ['식비와 카페는 LOCA LIKIT Eat로 집중', '쇼핑은 카드의정석2 SHOPPER, 이동과 기타 결제는 LOCA 100으로 분리'],
-                'warning': None,
-                'monthlyPlan': [
-                    {
-                        'month': '2026-07',
-                        'items': [
-                            {'name': '정장 셔츠·슬랙스', 'amount': 210000, 'card': '카드의정석2 SHOPPER', 'benefit': 21000, 'note': '온라인 쇼핑 혜택과 실적을 함께 반영합니다.', 'status': '구매 예정'},
-                            {'name': '구두', 'amount': 160000, 'card': '카드의정석2 SHOPPER', 'benefit': 16000, 'note': '쇼핑 지출을 한 카드에 모아 혜택 누락을 줄입니다.', 'status': '구매 예정'},
-                            {'name': '증명사진', 'amount': 50000, 'card': 'LOCA LIKIT Eat', 'benefit': 1500, 'note': '소액 오프라인 결제는 생활 카드로 묶어 관리합니다.', 'status': '예약 예정'},
-                        ],
-                    },
-                    {
-                        'month': '2026-08',
-                        'items': [
-                            {'name': '어학 응시료', 'amount': 84000, 'card': 'LOCA 100', 'benefit': 1260, 'note': '교육비는 기본 할인 카드에 배정해 지출 흐름을 안정적으로 관리합니다.', 'status': '결제 예정'},
-                            {'name': '면접 교통비', 'amount': 90000, 'card': 'LOCA 100', 'benefit': 900, 'note': '면접 동선이 늘어나는 달에는 교통비를 따로 추적합니다.', 'status': '사용 예정'},
-                        ],
-                    },
-                ],
-                'cardSummary': [
-                    {'cardName': 'LOCA LIKIT Eat', 'totalAmount': 50000, 'benefit': 1500, 'achieved': False, 'remainingLimit': 348500, 'itemCount': 1},
-                    {'cardName': '카드의정석2 SHOPPER', 'totalAmount': 370000, 'benefit': 37000, 'achieved': True, 'remainingLimit': 0, 'itemCount': 2},
-                    {'cardName': 'LOCA 100', 'totalAmount': 174000, 'benefit': 2160, 'achieved': False, 'remainingLimit': 573840, 'itemCount': 2},
-                ],
-                'aiExplanation': '취업 준비 지출은 쇼핑, 생활, 이동으로 나뉩니다. 쇼핑 결제는 SHOPPER에 모아 혜택을 선명하게 만들고, 식비·카페성 소액 결제는 LOCA LIKIT Eat, 이동과 기타 결제는 LOCA 100으로 정리하는 구성이 적합합니다.',
-            }
-        ],
-    },
-    {
         'title': '7월 면접 준비 쇼핑 계획',
         'type': '취업 준비',
         'expenseMode': 'planned-extra',

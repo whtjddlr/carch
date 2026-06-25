@@ -78,7 +78,7 @@
           </div>
         </button>
       </div>
-      <p class="rs-note">카드를 누르면 발급 안내로 이동해요. 이벤트 혜택은 카드사 조건에 따라 달라질 수 있어요.</p>
+      <p class="rs-note">카드를 누르면 발급 안내로 이동해요.<br>이벤트 혜택은 카드사 조건에 따라 달라질 수 있어요.</p>
     </section>
   </div>
 </template>
