@@ -1,8 +1,8 @@
 # CARCH 카치
 
-카치는 사용자의 결제내역, 보유 카드, 카드 혜택 조건, 소비계획을 함께 분석해서
+카치는 사용자의 결제내역, 보유 카드, 카드 혜택 조건, 소비계획을 함께 분석해
 “지금 가진 카드 중 무엇을 쓰면 좋은지”와 “새 카드를 발급할 가치가 있는지”를
-나누어 안내하는 카드 소비 코치 서비스입니다.
+분리해서 안내하는 카드 소비 코치 서비스입니다.
 
 ## 1. 팀원 정보 및 업무 분담
 
@@ -16,11 +16,11 @@
 
 ### 목표
 
-- 카드별 혜택 조건을 사람이 직접 비교하지 않아도 되도록 자동 분석한다.
-- 사용자의 실제 결제내역을 기반으로 보유 카드 사용 전략을 제안한다.
-- 소비 패턴상 유의미한 이득이 있을 때만 새 카드 발급 추천을 분리해서 제안한다.
-- 예산/지출계획과 카드 추천이 따로 놀지 않도록 하나의 흐름으로 연결한다.
-- 생성형 AI는 숫자를 새로 만들지 않고, 규칙 기반 계산 결과를 사용자가 이해하기 쉽게 설명한다.
+- 카드별 혜택 조건을 사용자가 직접 비교하지 않아도 되도록 자동 분석합니다.
+- 실제 결제내역을 기반으로 보유 카드 사용 전략을 제안합니다.
+- 소비 패턴상 유의미한 이득이 있을 때만 새 카드 발급 추천을 분리해서 제안합니다.
+- 예산, 지출계획, 카드 추천이 하나의 소비 관리 흐름으로 이어지도록 구성합니다.
+- 생성형 AI는 추천 결과를 임의로 만들지 않고, 계산된 결과를 사용자가 이해하기 쉽게 설명합니다.
 
 ### 구현 완료
 
@@ -33,17 +33,17 @@
 - 카치AI 채팅 UI 및 GMS 기반 응답
 - 커뮤니티 게시글/댓글/좋아요
 - Supabase 카드 카탈로그 연동 및 Supabase Storage 카드 이미지 연동
-- Vercel 배포 준비 설정 파일과 실행 문서
+- Vercel 배포
 
 ## 3. 기술 스택
 
 | 영역 | 사용 기술 |
 | --- | --- |
 | Frontend | Vue 3, Vite, Vue Router, lucide-vue-next |
-| Backend | Django 5, Django ORM, SQLite/Supabase Postgres 호환 구조 |
-| AI | SSAFY GMS OpenAI-compatible API, FastAPI AI proxy 선택 지원 |
+| Backend | Django 5, Django ORM |
+| AI | SSAFY GMS OpenAI-compatible API |
 | Data | Supabase Postgres, Supabase Storage, 카드 혜택 정규화 테이블 |
-| Deployment Ready | Vercel 설정 파일, Supabase 연동 문서 |
+| Deployment | Vercel |
 
 ## 4. 데이터베이스 모델링 / ERD
 
@@ -165,9 +165,8 @@ erDiagram
    - 보유 카드 대비 추가 이득이 있는 후보만 우선순위로 노출합니다.
 
 5. **AI 설명 레이어**
-   - 백엔드가 계산한 카드명, 금액, 조건, 추천 사유만 프롬프트에 전달합니다.
-   - AI는 없는 혜택, 없는 카드, 임의의 할인율을 만들 수 없도록 프롬프트에서 제한합니다.
-   - AI 응답 실패 시에도 규칙 기반 fallback 응답으로 시연이 유지됩니다.
+   - 백엔드가 계산한 카드명, 금액, 조건, 추천 사유를 바탕으로 사용자에게 자연어 설명을 제공합니다.
+   - 보유 카드 사용 추천과 새 카드 발급 추천을 명확히 구분해 안내합니다.
 
 ## 6. 핵심 기능
 
@@ -221,94 +220,6 @@ erDiagram
 - **카드 추천 설명**: 규칙 기반 추천 결과를 사용자가 이해하기 쉬운 문장으로 설명합니다.
 - **카치AI 상담**: 최근 결제내역, 보유 카드, 소비계획을 컨텍스트로 받아 짧고 실용적인 답변을 생성합니다.
 
-AI 연동은 `backend/api/ai_prompts.py`, `backend/api/ai_service.py`에 분리되어 있으며,
-GMS API 키가 없거나 응답이 실패해도 fallback 응답으로 기본 시연 흐름이 유지됩니다.
+## 8. 배포 URL
 
-## 8. 배포 및 데이터 구조
-
-### 현재 서비스 URL
-
-현재 제출 시점 기준 실제 공개 배포 URL은 없습니다.
-로컬 시연 및 Supabase 연동 시연을 기준으로 구성했습니다.
-
-### 배포 준비
-
-- Supabase 프로젝트에 카드 카탈로그와 남주현 데모 데이터를 적재했습니다.
-- 카드 이미지는 Supabase Storage `card-images` 버킷 기준으로 제공할 수 있습니다.
-- Vercel 배포 설정 파일을 `backend/vercel.json`, `frontend/vercel.json`에 추가했습니다.
-- 자세한 배포 절차는 [docs/SUPABASE_VERCEL_DEMO.md](docs/SUPABASE_VERCEL_DEMO.md)를 참고합니다.
-
-## 9. 실행 방법
-
-### Backend
-
-```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-Copy-Item .env.example .env
-python manage.py migrate
-python manage.py seed_demo
-python manage.py runserver 127.0.0.1:8000
-```
-
-### Frontend
-
-```powershell
-cd frontend
-npm install
-Copy-Item .env.example .env
-npm.cmd run dev
-```
-
-브라우저에서 아래 주소로 접속합니다.
-
-```txt
-http://127.0.0.1:5173
-```
-
-### 데모 계정
-
-```txt
-id: skawngus
-password: skawngus
-```
-
-관리자/데모 로그인 흐름에서도 남주현 시나리오가 재현되도록 구성했습니다.
-
-## 10. 실행 화면 캡처본
-
-실행 화면 캡처본은 `docs/screenshots/`에 저장합니다.
-
-| 화면 | 파일 |
-| --- | --- |
-| 카드 홈 | `docs/screenshots/cards.png` |
-| 소비 분석 | `docs/screenshots/analytics.png` |
-| 소비계획 | `docs/screenshots/budget.png` |
-| 카치AI | `docs/screenshots/chat.png` |
-
-## 11. 제출 산출물
-
-- `README.md`: 프로젝트 개요, 역할 분담, ERD, 알고리즘, 실행 방법
-- 완성된 소스코드: `backend/`, `frontend/`
-- 실행 화면 캡처본: `docs/screenshots/`
-- 이전 기획/설계 문서:
-  - [docs/SERVICE_SPEC.md](docs/SERVICE_SPEC.md)
-  - [docs/DATASET_SUMMARY.md](docs/DATASET_SUMMARY.md)
-  - [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md)
-  - [docs/LOCAL_COLLAB_SETUP.md](docs/LOCAL_COLLAB_SETUP.md)
-  - [docs/SUPABASE_VERCEL_DEMO.md](docs/SUPABASE_VERCEL_DEMO.md)
-
-## 12. 보안 및 제출 주의사항
-
-아래 파일과 값은 커밋하지 않습니다.
-
-- `.env`
-- `backend/db.sqlite3`
-- Supabase secret key
-- GMS API key
-- OAuth client secret
-- 원본 카드 데이터 번들 전체
-
-공유 저장소에는 실행 가능한 코드와 문서, 공개 가능한 정적 이미지와 예시 설정만 포함합니다.
+[https://carch-web.vercel.app](https://carch-web.vercel.app/community)
