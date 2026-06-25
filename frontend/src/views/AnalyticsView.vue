@@ -244,7 +244,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { BarChart3, ChevronDown, CreditCard, RefreshCw, Search, Sparkles } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { cards as mockCards, krw, transactions as mockTransactions } from '@/data/mockData'
-import { demoMonthCategories, demoMonthKeys, demoMonthSummary } from '@/data/monthlyAnalytics'
 import { fetchBudget, fetchCardRecommendationBundle, fetchMonthlySpending, fetchSpendingSummary } from '@/services/api'
 import { budgetRiskColor } from '@/utils/budgetRisk'
 
@@ -287,18 +286,18 @@ const isMonthMenuOpen = ref(false)
 // 소비계획에서 ?month=YYYY-MM 으로 넘어오면 그 달 분석을 보여준다
 function applyMonthFromRoute() {
   const month = String(route.query.month || '')
-  if (!/^\d{4}-\d{2}$/.test(month)) return
-  selectedMonth.value = month === LATEST_MONTH ? null : month
-  dialYear.value = Number(month.slice(0, 4))
-  dialMonth.value = Number(month.slice(5, 7))
+  const validMonth = /^\d{4}-\d{2}$/.test(month) ? month : LATEST_MONTH
+  selectedMonth.value = validMonth === LATEST_MONTH ? null : validMonth
+  dialYear.value = Number(validMonth.slice(0, 4))
+  dialMonth.value = Number(validMonth.slice(5, 7))
 }
-watch(() => route.query.month, applyMonthFromRoute)
+watch(() => route.query.month, async () => {
+  applyMonthFromRoute()
+  await Promise.all([loadSummary(), loadBudgetGoal(), loadMonthly()])
+})
 
 const safeSummary = computed(() => {
-  if (selectedMonth.value) {
-    return demoMonthSummary(selectedMonth.value) || buildMockSummary(selectedMonth.value)
-  }
-  return summary.value || (isLoading.value ? buildEmptySummary() : buildMockSummary())
+  return summary.value || buildEmptySummary(selectedMonth.value || LATEST_MONTH)
 })
 
 const periodMonthKey = computed(() => safeSummary.value.period?.currentMonth || LATEST_MONTH)
@@ -325,6 +324,10 @@ function applyDial(year, monthNum) {
   dialMonth.value = monthNum
   const key = `${year}-${String(monthNum).padStart(2, '0')}`
   selectedMonth.value = key === LATEST_MONTH ? null : key
+  const nextQuery = { ...route.query }
+  if (key === LATEST_MONTH) delete nextQuery.month
+  else nextQuery.month = key
+  router.replace({ path: route.path, query: nextQuery })
 }
 
 watch(isMonthMenuOpen, async (open) => {
@@ -492,30 +495,18 @@ const categoryCountLabel = computed(() => `${rawCategoryRows.value.length}개 �
 const topCategory = computed(() => rawCategoryRows.value[0] || null)
 
 // 직전 달 카테고리(증감 비교) — 데모 데이터에서 가져온다
-const previousMonthCategories = computed(() => {
-  const key = periodMonthKey.value
-  const keys = demoMonthKeys()
-  let prevKey = null
-  if (key === LATEST_MONTH) prevKey = '2026-05'
-  else {
-    const idx = keys.indexOf(key)
-    if (idx > 0) prevKey = keys[idx - 1]
-  }
-  return prevKey ? demoMonthCategories(prevKey) : null
-})
-
 const mostIncreasedCategory = computed(() => {
-  const prev = previousMonthCategories.value
-  if (!prev) return null
-  let best = null
-  rawCategoryRows.value.forEach((row) => {
-    const before = Number(prev[row.category] || 0)
-    const diff = Number(row.amount || 0) - before
-    if (before > 0 && diff > 0 && (!best || diff > best.diff)) {
-      best = { category: row.category, diff, pct: Math.round((diff / before) * 100) }
-    }
-  })
-  return best
+  const best = [...(spendingTrend.value?.categoryChanges || [])]
+    .filter((row) => Number(row.deltaFromPrevious || 0) > 0)
+    .sort((a, b) => Number(b.deltaFromPrevious || 0) - Number(a.deltaFromPrevious || 0))[0]
+  if (!best) return null
+  const previous = Number(best.previousAmount || 0)
+  const diff = Number(best.deltaFromPrevious || 0)
+  return {
+    category: best.category,
+    diff,
+    pct: previous > 0 ? Math.round((diff / previous) * 100) : null,
+  }
 })
 
 function shiftMonthKey(monthKey, diff) {
@@ -627,14 +618,7 @@ function onThumbLoad(key, event) {
 }
 
 const cardRows = computed(() => {
-  const insightRows = aiAnalysis.value?.cardInsights || []
-  const sourceRows = insightRows.length
-    ? insightRows.map((item) => ({
-      id: item.cardId || item.cardName,
-      ...resolveCardMeta(item.cardId, item.cardName),
-      amount: Number(item.amount || 0),
-    }))
-    : (safeSummary.value.byCard || []).map((item) => ({
+  const sourceRows = (safeSummary.value.byCard || []).map((item) => ({
       id: item.cardId,
       ...resolveCardMeta(item.cardId),
       amount: Number(item.amount || 0),
@@ -718,14 +702,14 @@ function buildMockSummary(monthKey = null) {
   }
 }
 
-function buildEmptySummary() {
+function buildEmptySummary(monthKey = LATEST_MONTH) {
   return {
     totalExpense: 0,
     totalIncome: 0,
     byCategory: [],
     byCard: [],
-    period: { currentMonth: '2026-06' },
-    spendingTrend: { currentMonth: '2026-06', total: {} },
+    period: { currentMonth: monthKey },
+    spendingTrend: { currentMonth: monthKey, previousMonth: shiftMonthKey(monthKey, -1), total: {} },
     aiAnalysis: null,
   }
 }
@@ -733,6 +717,7 @@ function buildEmptySummary() {
 function trendRequestOptions(extra = {}) {
   return {
     ...extra,
+    month: selectedMonth.value || '',
     recurringCategories: recurringOverrides.value,
   }
 }
@@ -747,9 +732,10 @@ async function loadSummary() {
     }
     recommendationBundle.value = await fetchCardRecommendationBundle(trendRequestOptions())
   } catch {
-    summary.value = buildMockSummary()
+    summary.value = buildEmptySummary(selectedMonth.value || LATEST_MONTH)
     recommendationBundle.value = null
     error.value = '저장된 소비 데이터를 기준으로 분석을 제공합니다.'
+    error.value = '분석 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
     isLoading.value = false
   }
@@ -838,9 +824,11 @@ const CURRENT_MONTH = '2026-06'
 const DEFAULT_BUDGET_GOAL = 1400000
 const budgetGoal = ref(null)
 const monthlySeries = ref(null)
+const activeBudgetMonth = computed(() => selectedMonth.value || periodMonthKey.value || CURRENT_MONTH)
 async function loadBudgetGoal() {
+  budgetGoal.value = null
   try {
-    const data = await fetchBudget(CURRENT_MONTH)
+    const data = await fetchBudget(activeBudgetMonth.value)
     if (data && data.totalGoal != null) budgetGoal.value = Number(data.totalGoal)
   } catch {
     // 백엔드 예산 없으면 기본값 사용
@@ -848,20 +836,20 @@ async function loadBudgetGoal() {
 }
 async function loadMonthly() {
   try {
-    const data = await fetchMonthlySpending(5)
+    const data = await fetchMonthlySpending(5, activeBudgetMonth.value)
     if (data && Array.isArray(data.months) && data.months.length) monthlySeries.value = data.months
   } catch {
     // 실패 시 데모 데이터로 폴백
   }
 }
 // 이번 달 사용액은 항상 현재 달 summary 기준(월 선택과 무관하게 막대 6월 고정)
-const currentMonthExpense = computed(() => Number(summary.value?.totalExpense ?? 0) || (demoMonthSummary(CURRENT_MONTH)?.totalExpense ?? 0))
+const currentMonthExpense = computed(() => Number(summary.value?.totalExpense ?? 0))
 const liveBudget = computed(() => {
   const series = monthlySeries.value
   let goal = budgetGoal.value
   if (goal == null && series && series.length) {
-    const june = series.find((m) => String(m.month) === CURRENT_MONTH)
-    if (june && june.budget != null) goal = Number(june.budget)
+    const active = series.find((m) => String(m.month) === activeBudgetMonth.value)
+    if (active && active.budget != null) goal = Number(active.budget)
   }
   const budget = goal != null ? goal : DEFAULT_BUDGET_GOAL
   const spent = currentMonthExpense.value
@@ -872,12 +860,12 @@ function shortKrw(value) {
   return krw(value)
 }
 const barChart = computed(() => {
-  const monthBudget = { '2026-02': 600000, '2026-03': 700000, '2026-04': 700000, '2026-05': 750000 }
+  const monthBudget = {}
   const series = monthlySeries.value
   const months = (series && series.length)
     ? series.map((m) => {
       const ym = String(m.month)
-      const isCurrent = ym === CURRENT_MONTH
+      const isCurrent = ym === activeBudgetMonth.value
       return {
         label: `${Number(ym.slice(5, 7))}월`,
         ym,
@@ -894,7 +882,7 @@ const barChart = computed(() => {
       { label: '6월', ym: '2026-06', current: true },
     ].map((m) => (m.current
       ? { ...m, budget: liveBudget.value.budget, spent: liveBudget.value.spent }
-      : { ...m, budget: monthBudget[m.ym] || 0, spent: demoMonthSummary(m.ym)?.totalExpense || 0 }))
+      : { ...m, budget: monthBudget[m.ym] || 0, spent: 0 }))
   const w = 320
   const h = 168
   const padTop = 28

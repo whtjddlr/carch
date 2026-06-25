@@ -13,9 +13,12 @@ const envNumber = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+const normalizeBaseUrl = (value) => String(value || '').trim().replace(/\/+$/, '')
+const defaultApiBaseUrl = import.meta.env.PROD ? '' : 'http://127.0.0.1:8000'
+
+export const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL || defaultApiBaseUrl)
 export const DEFAULT_API_TIMEOUT_MS = envNumber(import.meta.env.VITE_API_TIMEOUT_MS, 8000)
-export const AI_REQUEST_TIMEOUT_MS = envNumber(import.meta.env.VITE_AI_TIMEOUT_MS, 50000)
+export const AI_REQUEST_TIMEOUT_MS = envNumber(import.meta.env.VITE_AI_TIMEOUT_MS, 100000)
 export const USE_MOCK_API = ['true', '1', 'yes'].includes(String(import.meta.env.VITE_USE_MOCK_API || '').toLowerCase())
 export const DEV_AUTO_LOGIN_ENABLED = import.meta.env.DEV && !['false', '0', 'no'].includes(String(import.meta.env.VITE_DEV_AUTO_LOGIN || 'true').toLowerCase())
 
@@ -922,7 +925,7 @@ export async function fetchCardRecommendations() {
   return data.results || []
 }
 
-export async function fetchSpendingSummary({ ai = false, refresh = false, recurringCategories = [] } = {}) {
+export async function fetchSpendingSummary({ ai = false, refresh = false, recurringCategories = [], month = '' } = {}) {
   const params = applyCategoryOverrides({}, recurringCategories)
   if (USE_MOCK_API) {
     await delay(refresh ? 650 : 220)
@@ -942,27 +945,25 @@ export async function fetchSpendingSummary({ ai = false, refresh = false, recurr
   }
   if (ai) params.ai = 1
   if (refresh) params.refresh = 1
+  if (month) params.month = month
   const request = api.get('/api/analytics/spending-summary/', {
     params,
     timeout: ai && refresh ? AI_REQUEST_TIMEOUT_MS : DEFAULT_API_TIMEOUT_MS,
   })
     .then((response) => response.data)
-    .catch((error) => {
-      if (!isNetworkFallbackError(error)) throw error
-      console.warn('Spending summary API request failed. Falling back to local rows.', error)
-      return clone(buildMockSpendingSummary({ ai, refresh, recurringCategories }))
-    })
 
   if (ai || refresh) return request
-  return withTimedLocalFallback(request, () => clone(buildMockSpendingSummary({ ai, refresh, recurringCategories })))
+  return request
 }
 
-export async function fetchMonthlySpending(months = 5) {
+export async function fetchMonthlySpending(months = 5, anchor = '') {
   if (USE_MOCK_API) {
     await delay(80)
     return { months: [] }
   }
-  const response = await api.get('/api/analytics/monthly/', { params: { months } })
+  const params = { months }
+  if (anchor) params.anchor = anchor
+  const response = await api.get('/api/analytics/monthly/', { params })
   return response.data
 }
 

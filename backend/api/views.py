@@ -962,11 +962,16 @@ def _parse_category_overrides(request):
     }
 
 
-def _build_spending_trend(transactions, recurring_overrides=None, monthly_total_overrides=None):
+def _valid_month_key(value):
+    text = str(value or '').strip()
+    return text if re.match(r'^\d{4}-\d{2}$', text) else ''
+
+
+def _build_spending_trend(transactions, recurring_overrides=None, monthly_total_overrides=None, current_month=None):
     recurring_overrides = set(recurring_overrides or [])
     expenses = [item for item in transactions if _as_int(item.get('amount')) < 0]
     months = sorted({month for month in (_month_key_from_transaction(item) for item in expenses) if month})
-    current_month = months[-1] if months else timezone.localtime().strftime('%Y-%m')
+    current_month = _valid_month_key(current_month) or (months[-1] if months else timezone.localtime().strftime('%Y-%m'))
     previous_month = _shift_month(current_month, -1)
     baseline_months = [_shift_month(current_month, -index) for index in range(1, 7)]
 
@@ -2015,11 +2020,21 @@ def analytics_monthly(request):
         count = max(1, min(int(request.GET.get('months', 5)), 12))
     except (TypeError, ValueError):
         count = 5
-    months = _recent_months('2026-06', count)
+    transaction_rows = [serialize_transaction(transaction) for transaction in transaction_queryset(user=user)]
+    expense_months = sorted({
+        _month_key_from_transaction(item)
+        for item in transaction_rows
+        if item['amount'] < 0 and _month_key_from_transaction(item)
+    })
+    anchor_month = (
+        _valid_month_key(request.GET.get('anchor'))
+        or _valid_month_key(request.GET.get('month'))
+        or (expense_months[-1] if expense_months else timezone.localtime().strftime('%Y-%m'))
+    )
+    months = _recent_months(anchor_month, count)
 
     spent_by_month = defaultdict(int)
-    for transaction in transaction_queryset(user=user):
-        item = serialize_transaction(transaction)
+    for item in transaction_rows:
         if item['amount'] < 0:
             spent_by_month[_month_key_from_transaction(item)] += abs(item['amount'])
 
@@ -2089,10 +2104,12 @@ def spending_summary(request):
     if error_response:
         return error_response
     transactions = [serialize_transaction(item) for item in transaction_queryset(user=user)]
+    requested_month = _valid_month_key(request.GET.get('month'))
     spending_trend = _build_spending_trend(
         transactions,
         _parse_category_overrides(request),
         _monthly_total_overrides_for_user(user),
+        requested_month,
     )
     current_month = spending_trend['currentMonth']
     expense_rows = [
