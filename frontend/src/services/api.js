@@ -62,13 +62,14 @@ export async function loginAsDevAdmin() {
     return {
       ok: true,
       token: 'mock-dev-admin-token',
-      provider: 'dev-admin',
+      provider: 'demo',
       devAutoLogin: true,
+      demoLogin: true,
       user: {
         ...mockAuthUser,
-        name: 'CARCH 관리자',
-        email: 'admin@carch.local',
-        initials: 'C',
+        name: '남주현',
+        email: 'demo@carch.local',
+        initials: '남',
       },
     }
   }
@@ -763,6 +764,25 @@ export async function deleteOwnedCard(cardId) {
   }
 }
 
+export async function deleteTransaction(transactionId) {
+  if (!USE_MOCK_API) {
+    try {
+      const response = await api.delete(`/api/transactions/${transactionId}/`, { timeout: Math.min(DEFAULT_API_TIMEOUT_MS, 1800) })
+      return response.data
+    } catch (error) {
+      if (!isNetworkFallbackError(error)) throw error
+      console.warn('Delete transaction API request failed. Falling back to local rows.', error)
+      mockTransactions = mockTransactions.filter((tx) => String(tx.id) !== String(transactionId))
+      return { ok: true }
+    }
+  }
+  if (USE_MOCK_API) {
+    await delay(120)
+    mockTransactions = mockTransactions.filter((tx) => String(tx.id) !== String(transactionId))
+    return { ok: true }
+  }
+}
+
 export async function fetchCard(id) {
   if (USE_MOCK_API) {
     await delay()
@@ -1007,19 +1027,16 @@ export async function sendChatMessage(payload) {
       schemaVersion: 'chat-response-v2',
       messageType: isPlan ? 'purchase-plan' : (isNewCard || isOwnedUsage) ? 'card-recommendation' : 'spending-analysis',
       reply: isPlan
-        ? '소비계획을 입력하면 예정 지출을 이번 달 실적 준비와 다음 달 혜택 가능성에 연결해 판단합니다. 이미 쓰기로 한 금액 안에서만 카드 배분을 제안합니다.'
+        ? '예정된 지출은 먼저 소비계획에 담아두면 좋아요. 이미 쓸 금액 안에서 카드만 나눠볼게요.'
         : isNewCard
-          ? '새 카드 발급 추천은 보유 카드 사용 전략과 분리해서 봐야 합니다. 반복 지출 기준으로 월 순혜택이 더 커지는 카드만 후보로 보여드립니다.'
+          ? '새로 만든다면 반복 지출에 잘 맞는 카드부터 볼게요. 월 혜택이 확실한 후보만 추려드려요.'
           : isOwnedUsage
-            ? '보유 카드 사용 추천은 이번 달 받을 수 있는 혜택과 다음 달 실적 준비를 함께 봅니다. 새 카드 발급보다 먼저, 이미 가진 카드 안에서 어디에 쓸지 판단합니다.'
-            : '이번 달 지출은 카테고리별 반복성과 일시 지출을 나눠 분석합니다. 반복 지출은 카드 추천에 더 크게 반영하고, 일시 지출은 보수적으로 반영합니다.',
-      summaryChips: [
-        { label: '기준', value: '내 데이터', tone: 'navy' },
-        { label: '구분', value: isNewCard ? '새 카드 발급' : isPlan ? '계획 반영' : isOwnedUsage ? '보유 카드 사용' : '소비 분석', tone: 'teal' },
-      ],
-      quickReplies: ['보유 카드 사용 추천', '새 카드 발급 추천', '소비계획 반영하기'],
+            ? '이번 달은 가진 카드 안에서 먼저 정리해보는 게 좋아요. 혜택 받을 수 있는 결제부터 골라볼게요.'
+            : '이번 달 소비 흐름을 먼저 볼게요. 자주 나가는 항목부터 카드 쓰는 순서를 잡으면 좋아요.',
+      summaryChips: [],
+      quickReplies: ['보유 카드 개선', '맞춤 카드 추천'],
       actionButtons: [
-        { label: isPlan ? '소비계획 보기' : isNewCard ? '새 카드 추천 보기' : isOwnedUsage ? '보유 카드 추천 보기' : '소비 분석 보기', route: isPlan ? '/plans' : isNewCard ? '/recommendations/new' : isOwnedUsage ? '/recommendations/usage' : '/analytics', intent: 'open' },
+        { label: isPlan ? '소비계획 보기' : isNewCard ? '맞춤 카드 보기' : isOwnedUsage ? '추천 보기' : '분석 보기', route: isPlan ? '/plans' : isNewCard ? '/recommendations/new' : isOwnedUsage ? '/recommendations/usage' : '/analytics', intent: 'open' },
       ],
       relatedRoute: isPlan ? '/plans' : isNewCard ? '/recommendations/new' : isOwnedUsage ? '/recommendations/usage' : '/analytics',
       aiMode: 'mock',

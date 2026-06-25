@@ -2,6 +2,7 @@ import { API_BASE_URL, DEV_AUTO_LOGIN_ENABLED, api, loginAsDevAdmin, loginWithEm
 
 const AUTH_TOKEN_KEY = 'carch-auth-token'
 const AUTH_USER_KEY = 'carch-auth-user'
+const LEGACY_DEV_ADMIN_EMAIL = 'admin@carch.local'
 
 export const getAuthToken = () => localStorage.getItem(AUTH_TOKEN_KEY) || ''
 
@@ -27,6 +28,13 @@ export const clearAuthSession = () => {
   localStorage.removeItem(AUTH_TOKEN_KEY)
   localStorage.removeItem(AUTH_USER_KEY)
   localStorage.removeItem('carch-auth')
+}
+
+export const clearLegacyAdminSession = () => {
+  const storedUser = getStoredUser()
+  if (storedUser?.email === LEGACY_DEV_ADMIN_EMAIL) {
+    clearAuthSession()
+  }
 }
 
 export const hydrateAuthHeader = () => {
@@ -111,4 +119,5 @@ export const logout = async () => {
 export const oauthStartUrl = (provider, next = '/cards') =>
   `${API_BASE_URL}/api/auth/oauth/${provider}/start/?next=${encodeURIComponent(next)}`
 
+clearLegacyAdminSession()
 hydrateAuthHeader()

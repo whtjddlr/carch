@@ -16,6 +16,17 @@
       <div v-if="!isCardDetail">
         <h1>{{ pageTitle }}</h1>
       </div>
+      <button
+        v-if="isTransactionDetail && selectedTransaction"
+        type="button"
+        class="transaction-delete-button"
+        style="background: rgba(229, 72, 77, 0.1) !important; color: #e5484d !important; border: 1px solid rgba(229, 72, 77, 0.24) !important; box-shadow: none !important;"
+        :disabled="isDeletingTransaction"
+        aria-label="거래내역 삭제"
+        @click="deleteTransactionRow"
+      >
+        <Trash2 :size="18" />
+      </button>
     </header>
 
     <div class="screen-scroll scrollbar-hide utility-body">
@@ -149,45 +160,25 @@
             <b>{{ selectedTransaction.addr }}</b>
           </div>
         </div>
-        <div class="utility-actions">
-          <RouterLink class="outline-button" to="/transactions">목록으로</RouterLink>
-          <RouterLink class="primary-button" :to="planFromTransactionPath">목표 지출에 추가</RouterLink>
+        <div class="utility-actions transaction-actions">
+          <RouterLink class="primary-button transaction-list-button" to="/transactions">목록으로</RouterLink>
         </div>
       </article>
 
-      <form v-else-if="props.type === 'budgetNew'" class="app-card form-card" @submit.prevent="saveBudgetDraft">
-        <div class="form-preview">
-          <span :style="{ background: budgetForm.color }">
-            <component :is="budgetIconComponent" :size="20" />
-          </span>
-          <div>
-            <strong>{{ budgetForm.name || '새 예산' }}</strong>
-            <p>월 예산 {{ budgetForm.amount ? krw(budgetForm.amount) : '0원' }}</p>
-          </div>
+      <article v-else-if="props.type === 'transaction' && isTransactionLoading" class="app-card utility-card transaction-empty-card">
+        <Receipt :size="32" />
+        <h2>거래내역을 불러오는 중</h2>
+        <p>잠시만 기다려주세요.</p>
+      </article>
+
+      <article v-else-if="props.type === 'transaction'" class="app-card utility-card transaction-empty-card">
+        <Receipt :size="32" />
+        <h2>거래내역을 찾을 수 없어요</h2>
+        <p>삭제됐거나 더 이상 사용하지 않는 거래 링크입니다.</p>
+        <div class="utility-actions transaction-actions">
+          <RouterLink class="primary-button transaction-list-button" to="/transactions">목록으로</RouterLink>
         </div>
-        <label>
-          <span class="field-label">카테고리명</span>
-          <input v-model.trim="budgetForm.name" class="form-field" type="text" placeholder="예: 식비, 교통, 카페" />
-        </label>
-        <label>
-          <span class="field-label">월 예산 금액</span>
-          <input v-model.number="budgetForm.amount" class="form-field" type="number" min="0" placeholder="0" />
-        </label>
-        <div class="color-picker" aria-label="예산 색상 선택">
-          <button
-            v-for="color in budgetColors"
-            :key="color"
-            type="button"
-            :aria-label="`예산 색상 ${color}`"
-            :class="{ active: budgetForm.color === color }"
-            :style="{ background: color }"
-            @click="budgetForm.color = color"
-          />
-        </div>
-        <button class="primary-button w-100" type="submit" :disabled="!canSaveBudget">
-          {{ budgetSaved ? '저장 완료' : '예산 저장' }}
-        </button>
-      </form>
+      </article>
 
       <section v-else-if="props.type === 'report'" class="report-view">
         <div class="report-card-grid">
@@ -567,8 +558,7 @@ import {
   user,
 } from '@/data/mockData'
 import AppBackButton from '@/components/AppBackButton.vue'
-import { appendCustomBudgetCategory } from '@/services/budgetStorage'
-import { deleteOwnedCard, fetchCard, fetchOwnedCards, fetchSearchResults, fetchTransactions, normalizeCard } from '@/services/api'
+import { deleteOwnedCard, deleteTransaction, fetchCard, fetchOwnedCards, fetchSearchResults, fetchTransactions, normalizeCard } from '@/services/api'
 import { logout } from '@/services/auth'
 
 const props = defineProps({
@@ -582,7 +572,6 @@ const backFallback = computed(() => {
     card: '/cards',
     cardApply: '/cards',
     transaction: '/transactions',
-    budgetNew: '/budget',
     report: '/analytics',
     notifications: '/cards',
     settings: '/cards',
@@ -596,9 +585,9 @@ const backFallback = computed(() => {
 
 const apiCard = ref(null)
 const transactionRows = ref(mockTransactions)
+const isTransactionLoading = ref(props.type === 'transaction')
 const cardRows = ref(mockCards)
 const communityRows = ref(mockCommunityPosts)
-const budgetSaved = ref(false)
 const profileSaved = ref(false)
 const profileImageError = ref('')
 const isLoggingOut = ref(false)
@@ -854,26 +843,25 @@ const selectedTransaction = computed(() => {
   return transactionRows.value.find((tx) => String(tx.id) === String(route.params.id))
 })
 
+const isTransactionDetail = computed(() => props.type === 'transaction' && !!selectedTransaction.value)
+const isDeletingTransaction = ref(false)
+
+async function deleteTransactionRow() {
+  if (!selectedTransaction.value || isDeletingTransaction.value) return
+  if (!window.confirm('이 거래내역을 삭제할까요?')) return
+  isDeletingTransaction.value = true
+  try {
+    await deleteTransaction(selectedTransaction.value.id)
+    router.replace('/transactions')
+  } catch (error) {
+    isDeletingTransaction.value = false
+    window.alert('거래내역을 삭제하지 못했습니다.')
+  }
+}
+
 const transactionCardName = computed(() => {
   const card = cardRows.value.find((item) => String(item.id) === String(selectedTransaction.value?.cardId))
   return card?.name || '카드 정보 없음'
-})
-
-const planFromTransactionPath = computed(() => {
-  const tx = selectedTransaction.value
-  if (!tx) return '/plans/new'
-  const query = new URLSearchParams({
-    merchantName: tx.merchant,
-    category: tx.cat,
-    amount: String(Math.abs(tx.amt)),
-  })
-  return `/plans/new?${query.toString()}`
-})
-
-const budgetForm = reactive({
-  name: '',
-  amount: null,
-  color: '#0f5fae',
 })
 
 const PROFILE_SETTINGS_KEY = 'carch.profile.v1'
@@ -924,10 +912,6 @@ const displayProfile = computed(() => ({
   ...profileForm,
   initials: profileInitials.value,
 }))
-
-const budgetColors = ['#0f5fae', '#008c95', '#d92d20', '#24364f', '#c49a49', '#5f6b77']
-const canSaveBudget = computed(() => budgetForm.name.length > 0 && Number(budgetForm.amount) > 0)
-const budgetIconComponent = computed(() => Target)
 
 const applySteps = [
   { title: '카드 정보 확인', description: '연회비, 혜택 조건, 대표 혜택을 검토합니다.' },
@@ -1231,8 +1215,7 @@ const content = computed(() => {
   const map = {
     card: { title: '카드 상세', description: '카드별 사용 현황', body: `선택한 카드 ID: ${route.params.id}`, icon: CreditCard },
     cardApply: { title: '카드 신청', description: '신청 정보를 확인하세요.', body: '카드 목록에서 신청할 카드를 다시 선택해주세요.', icon: CreditCard },
-    transaction: { title: '거래 상세', description: '거래처와 결제 정보를 확인하세요.', body: `거래 ID: ${route.params.id}`, icon: BookOpen, planLink: true },
-    budgetNew: { title: '예산 추가', description: '새 예산 카테고리를 추가하세요.', body: '카테고리명과 월 예산을 입력하는 화면입니다.', icon: Target },
+    transaction: { title: '거래 상세', description: '거래처와 결제 정보를 확인하세요.', body: '거래내역을 확인하세요.', icon: Receipt },
     report: { title: '월간 보고서', description: '이번 달 소비 요약', body: '월간 리포트입니다.', icon: BookOpen },
     notifications: { title: '알림', description: '중요한 카드 알림', body: '결제 알림, 예산 경고, 추천 알림을 모아 보여줍니다.', icon: Bell },
     settings: { title: '설정', description: '계정과 앱 설정', body: '계정과 앱 설정 메뉴입니다.', icon: Settings },
@@ -1257,17 +1240,6 @@ const pageDescription = computed(() => {
   if (props.type === 'transaction' && selectedTransaction.value) return selectedTransaction.value.merchant
   return content.value.description
 })
-
-function saveBudgetDraft() {
-  if (!canSaveBudget.value) return
-  appendCustomBudgetCategory({
-    name: budgetForm.name,
-    amount: budgetForm.amount,
-    color: budgetForm.color,
-  })
-  budgetSaved.value = true
-  window.setTimeout(() => router.push('/budget'), 550)
-}
 
 function writeProfileSettings() {
   if (typeof window === 'undefined') return
@@ -1429,6 +1401,10 @@ onMounted(async () => {
     }
   } catch (error) {
     console.warn('상세 화면 API를 불러오지 못해 mock 데이터를 사용합니다.', error)
+  } finally {
+    if (props.type === 'transaction') {
+      isTransactionLoading.value = false
+    }
   }
 })
 </script>
@@ -1538,6 +1514,43 @@ onMounted(async () => {
   flex: 1;
   min-width: 132px;
   text-decoration: none;
+}
+
+.transaction-actions {
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.transaction-actions .transaction-list-button {
+  flex: 0 1 176px;
+  min-width: 176px;
+  border: 0 !important;
+  background: #24364f !important;
+  color: #fff !important;
+  box-shadow: 0 10px 22px rgba(36, 54, 79, 0.18) !important;
+}
+
+.transaction-delete-button {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  border: 1px solid rgba(229, 72, 77, 0.24) !important;
+  border-radius: 14px;
+  background: rgba(229, 72, 77, 0.1) !important;
+  color: #e5484d !important;
+  box-shadow: none !important;
+}
+
+.transaction-delete-button svg {
+  color: #e5484d !important;
+  stroke: #e5484d !important;
+}
+
+.transaction-delete-button:disabled {
+  opacity: 0.45;
 }
 
 .card-detail-card,

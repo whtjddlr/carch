@@ -20,8 +20,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             '--demo-password',
-            default=os.environ.get('DEMO_USER_PASSWORD', 'Carchdemo123!'),
-            help='Password to set for demo@carch.local. Use an empty value to keep the current password.',
+            default=os.environ.get('DEMO_USER_PASSWORD', 'skawngus'),
+            help='Password to set for the Nam Ju Hyun demo account. Use an empty value to keep the current password.',
         )
         parser.add_argument(
             '--skip-dev-admin',

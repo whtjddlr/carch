@@ -29,7 +29,7 @@ from .ai_service import (
     parse_transaction_with_ai,
     recommend_cards_with_ai,
 )
-from .card_repository import fetch_card, fetch_cards
+from .card_repository import fetch_card, fetch_cards, fetch_cards_by_ids
 from .models import AIAnalysisRecord, AuthSession, Budget, CommunityComment, CommunityPost, CommunityPostLike, OwnedCard, PurchasePlan, SocialAccount, Transaction
 from .seed_data import PURCHASE_PLANS, TRANSACTIONS
 
@@ -89,6 +89,8 @@ LEGACY_DEFAULT_OWNED_CARD_ID_SETS = [
 ]
 DEMO_USER_EMAIL = 'demo@carch.local'
 DEMO_USER_NAME = '남주현'
+DEMO_LOGIN_ID = getattr(settings, 'DEMO_LOGIN_ID', 'skawngus') or 'skawngus'
+DEMO_USER_PASSWORD = getattr(settings, 'DEMO_USER_PASSWORD', 'skawngus') or 'skawngus'
 
 
 def json_response(payload, status=200):
@@ -160,15 +162,29 @@ def get_request_user(request):
 def get_demo_user():
     User = get_user_model()
     user = User.objects.filter(email__iexact=DEMO_USER_EMAIL).first()
-    if user:
+    if not user:
+        user = User.objects.create_user(
+            username=DEMO_LOGIN_ID,
+            email=DEMO_USER_EMAIL,
+            first_name=DEMO_USER_NAME,
+            password=DEMO_USER_PASSWORD,
+        )
         return user
-    user = User.objects.create_user(
-        username=_unique_username('demo'),
-        email=DEMO_USER_EMAIL,
-        first_name=DEMO_USER_NAME,
-    )
-    user.set_unusable_password()
-    user.save(update_fields=['password'])
+
+    changed_fields = []
+    desired_username = DEMO_LOGIN_ID
+    username_available = not User.objects.filter(username__iexact=desired_username).exclude(pk=user.pk).exists()
+    if user.username != desired_username and username_available:
+        user.username = desired_username
+        changed_fields.append('username')
+    if user.first_name != DEMO_USER_NAME:
+        user.first_name = DEMO_USER_NAME
+        changed_fields.append('first_name')
+    if not user.has_usable_password() or not user.check_password(DEMO_USER_PASSWORD):
+        user.set_password(DEMO_USER_PASSWORD)
+        changed_fields.append('password')
+    if changed_fields:
+        user.save(update_fields=changed_fields)
     return user
 
 
@@ -258,6 +274,16 @@ def _find_user_by_email(email):
         return None
     User = get_user_model()
     return User.objects.filter(email__iexact=email).first()
+
+
+def _find_user_by_identifier(identifier):
+    value = str(identifier or '').strip()
+    if not value:
+        return None
+    if '@' in value:
+        return _find_user_by_email(value.lower())
+    User = get_user_model()
+    return User.objects.filter(username__iexact=value).first()
 
 
 def _unique_username(seed):
@@ -425,8 +451,9 @@ def auth_providers(request):
             'email': {'enabled': settings.EMAIL_AUTH_ENABLED},
             'devLogin': {
                 'enabled': bool(settings.DEBUG and settings.DEV_AUTO_LOGIN_ENABLED),
-                'email': settings.DEV_ADMIN_EMAIL,
-                'name': settings.DEV_ADMIN_NAME,
+                'email': DEMO_USER_EMAIL,
+                'loginId': DEMO_LOGIN_ID,
+                'name': DEMO_USER_NAME,
             },
             'providers': providers,
             'frontendUrl': settings.FRONTEND_URL,
@@ -441,10 +468,11 @@ def dev_login(request):
     if not (settings.DEBUG and settings.DEV_AUTO_LOGIN_ENABLED):
         return json_response({'detail': '개발용 자동 로그인이 비활성화되어 있습니다.'}, status=403)
 
-    user = get_dev_admin_user()
-    token, _ = _create_auth_session(user, 'dev-admin')
-    payload = _auth_payload(user, token, 'dev-admin')
+    user = get_demo_user()
+    token, _ = _create_auth_session(user, 'demo')
+    payload = _auth_payload(user, token, 'demo')
     payload['devAutoLogin'] = True
+    payload['demoLogin'] = True
     return json_response(payload)
 
 
@@ -490,14 +518,14 @@ def email_login(request):
     payload, error = parse_request_body(request)
     if error:
         return error
-    email = str(payload.get('email') or '').strip().lower()
+    identifier = str(payload.get('email') or payload.get('identifier') or payload.get('username') or '').strip()
     password = str(payload.get('password') or '')
-    user = _find_user_by_email(email)
+    user = _find_user_by_identifier(identifier)
     if not user:
-        return json_response({'detail': '이메일 또는 비밀번호를 확인해 주세요.'}, status=401)
+        return json_response({'detail': '아이디 또는 비밀번호를 확인해 주세요.'}, status=401)
     authenticated = authenticate(request, username=user.username, password=password)
     if not authenticated:
-        return json_response({'detail': '이메일 또는 비밀번호를 확인해 주세요.'}, status=401)
+        return json_response({'detail': '아이디 또는 비밀번호를 확인해 주세요.'}, status=401)
     token, _ = _create_auth_session(authenticated, 'email')
     return json_response(_auth_payload(authenticated, token, 'email'))
 
@@ -934,7 +962,7 @@ def _parse_category_overrides(request):
     }
 
 
-def _build_spending_trend(transactions, recurring_overrides=None):
+def _build_spending_trend(transactions, recurring_overrides=None, monthly_total_overrides=None):
     recurring_overrides = set(recurring_overrides or [])
     expenses = [item for item in transactions if _as_int(item.get('amount')) < 0]
     months = sorted({month for month in (_month_key_from_transaction(item) for item in expenses) if month})
@@ -952,6 +980,10 @@ def _build_spending_trend(transactions, recurring_overrides=None):
         category = item.get('category') or item.get('cat') or '기타'
         by_month_category[(month, category)] += amount
         by_month_total[month] += amount
+
+    for month, amount in (monthly_total_overrides or {}).items():
+        if month and month != current_month:
+            by_month_total[str(month)] = _as_int(amount)
 
     categories = sorted({category for _, category in by_month_category.keys()})
     category_changes = []
@@ -1801,11 +1833,17 @@ def transaction_list(request):
     return json_response({'count': len(rows), 'results': rows})
 
 
+@csrf_exempt
 def transaction_detail(request, transaction_id):
     user, error_response = require_request_user(request)
     if error_response:
         return error_response
     transaction = get_transaction_or_404(request, transaction_id)
+    if request.method == 'DELETE':
+        transaction.delete()
+        return json_response({'ok': True})
+    if request.method != 'GET':
+        return json_response({'detail': '지원하지 않는 요청입니다.'}, status=405)
     return json_response(serialize_transaction(transaction))
 
 
@@ -1934,7 +1972,8 @@ def parse_transaction(request):
     return json_response(parsed)
 
 
-# 데모/시연 계정 5개월 차트용 큐레이션 값(과거 달). 현재 달(2026-06)은 실제 거래 집계 사용.
+# 과거에는 데모/시연 계정의 5개월 차트용 큐레이션 값을 덮어썼지만,
+# Supabase 기준 검증에서는 실제 거래 집계만 사용한다.
 DEMO_MONTHLY_TOTALS = {
     '2026-02': 614900,
     '2026-03': 667900,
@@ -1948,6 +1987,10 @@ DEMO_MONTHLY_BUDGETS = {
     '2026-05': 750000,
     '2026-06': 1400000,
 }
+
+
+def _monthly_total_overrides_for_user(user):
+    return None
 
 
 def _recent_months(anchor, count):
@@ -1964,7 +2007,7 @@ def _recent_months(anchor, count):
 
 @csrf_exempt
 def analytics_monthly(request):
-    """사용자별 최근 N개월 지출(실제 거래 집계) + 월 예산. 데모 계정은 과거 달을 큐레이션 값으로 보강."""
+    """사용자별 최근 N개월 지출(실제 거래 집계) + 월 예산."""
     user, error_response = require_request_user(request)
     if error_response:
         return error_response
@@ -1989,9 +2032,6 @@ def analytics_monthly(request):
     result = []
     for month in months:
         spent = spent_by_month.get(month, 0)
-        # 데모 계정은 과거 달을 큐레이션 값으로 고정(시연 차트 일관). 현재 달(2026-06)은 실제 거래 사용.
-        if demo and month in DEMO_MONTHLY_TOTALS:
-            spent = DEMO_MONTHLY_TOTALS[month]
         budget = budget_by_month.get(month)
         if budget is None and demo:
             budget = DEMO_MONTHLY_BUDGETS.get(month)
@@ -2049,7 +2089,11 @@ def spending_summary(request):
     if error_response:
         return error_response
     transactions = [serialize_transaction(item) for item in transaction_queryset(user=user)]
-    spending_trend = _build_spending_trend(transactions, _parse_category_overrides(request))
+    spending_trend = _build_spending_trend(
+        transactions,
+        _parse_category_overrides(request),
+        _monthly_total_overrides_for_user(user),
+    )
     current_month = spending_trend['currentMonth']
     expense_rows = [
         item
@@ -2083,12 +2127,7 @@ def spending_summary(request):
 
     include_ai = request.GET.get('ai') in {'1', 'true', 'yes'}
     refresh_ai = request.GET.get('refresh') in {'1', 'true', 'yes'} or request.GET.get('force') in {'1', 'true', 'yes'}
-    cards = []
-    for card_id in by_card.keys():
-        if str(card_id).isdigit():
-            card = fetch_card(int(card_id), request)
-            if card:
-                cards.append(card)
+    cards = fetch_cards_by_ids(by_card.keys(), request, include_benefits=False)
     input_summary = {
         'totalExpense': summary['totalExpense'],
         'totalIncome': summary['totalIncome'],
@@ -2231,7 +2270,11 @@ def analysis_record_list(request):
 def build_chat_context(request):
     user = get_effective_user(request)
     transactions = [serialize_transaction(item) for item in transaction_queryset(request)]
-    spending_trend = _build_spending_trend(transactions, _parse_category_overrides(request))
+    spending_trend = _build_spending_trend(
+        transactions,
+        _parse_category_overrides(request),
+        _monthly_total_overrides_for_user(user),
+    )
     current_month = spending_trend['currentMonth']
     current_transactions = [
         item for item in transactions if _month_key_from_transaction(item) == current_month
@@ -2258,13 +2301,8 @@ def build_chat_context(request):
         'spendingTrend': spending_trend,
     }
 
-    cards = []
     card_ids = [*by_card.keys(), '10106', '10612', '10029']
-    for raw_id in dict.fromkeys(str(card_id) for card_id in card_ids):
-        if raw_id.isdigit():
-            card = fetch_card(int(raw_id), request)
-            if card:
-                cards.append(card)
+    cards = fetch_cards_by_ids(card_ids, request, include_benefits=True)
 
     profile = _build_spending_profile(
         request,
@@ -2304,8 +2342,7 @@ def build_chat_context(request):
 
     candidate_cards = []
     current_monthly_gross = _as_int(baseline.get('expectedMonthlyBenefit'))
-    for card in fetch_cards(request, limit=30, active_only=True):
-        detailed = fetch_card(int(card['cardAdId']), request) or card
+    for detailed in fetch_cards(request, limit=30, active_only=True, include_benefits=True):
         if str(detailed.get('cardAdId')) in owned_ids:
             continue
         value = _estimate_card_value(
@@ -2389,6 +2426,23 @@ def build_chat_context(request):
     }
 
 
+def append_chat_follow_up(reply, message_type):
+    text = str(reply or '').strip()
+    if not text:
+        return text
+    if '?' in text or '까요' in text or '나요' in text:
+        return text
+
+    follow_up_by_type = {
+        'card-recommendation': '다른 카드도 같이 비교해볼까요?',
+        'purchase-plan': '이 계획에 맞춰 카드도 같이 나눠볼까요?',
+        'transaction-help': '이 결제도 카드 추천에 반영해볼까요?',
+        'spending-analysis': '어느 항목을 더 자세히 볼까요?',
+    }
+    follow_up = follow_up_by_type.get(message_type, '더 궁금한 건 없으신가요?')
+    return f'{text}\n{follow_up}'
+
+
 def fallback_chat_response(message, context):
     summary = context.get('summary') or {}
     top_category = max(summary.get('byCategory') or [], key=lambda item: item['amount'], default={'category': '기타', 'amount': 0})
@@ -2406,92 +2460,89 @@ def fallback_chat_response(message, context):
     asks_usage = any(term in text for term in ['보유', '가지고', '어떤 카드', '어디에 써', '분배', '실적', '이번 달'])
     asks_plan = any(term in text for term in ['계획', '구매', '예정', '여행', '노트북', '큰 지출'])
 
+    def action_label(route):
+        return {
+            '/analytics': '분석 보기',
+            '/plans': '계획 보기',
+            '/plans/new': '계획 만들기',
+            '/recommendations/new': '맞춤 카드 보기',
+            '/recommendations/usage': '추천 보기',
+            '/transactions/new': '내역 추가',
+        }.get(route, '자세히 보기')
+
     if asks_plan:
         if plan:
             reply = (
-                f"최근 소비계획은 '{plan.get('title')}'이며 예산은 {_krw(plan.get('totalBudget'))}입니다. "
-                f"예정 지출은 보유 카드의 다음 달 조건 준비와 함께 보는 편이 좋습니다. "
-                "계획 화면에서 품목별 금액을 확인한 뒤 카드 사용 추천으로 이어가시기 바랍니다."
+                f"'{plan.get('title')}' 계획은 {_krw(plan.get('totalBudget'))} 기준으로 보면 돼요.\n"
+                "이미 쓸 예정인 금액 안에서 카드만 나눠 쓰는 방향이 좋아요."
             )
         else:
             reply = (
-                "아직 저장된 소비계획이 없습니다. 여행, 노트북, 기념일처럼 예정된 큰 지출을 입력하면 "
-                "이번 달 실적 준비와 다음 달 혜택 가능성을 함께 비교할 수 있습니다."
+                "아직 저장된 소비계획이 없어요.\n"
+                "큰 지출이 정해졌다면 먼저 계획으로 남겨두면 좋아요."
             )
         route = '/plans/new'
         message_type = 'purchase-plan'
-        quick_replies = ['소비계획 만들기', '보유 카드 사용 추천', '새 카드 발급 추천']
-        chips = [
-            {'label': '계획 반영', 'value': '가능' if plan else '입력 필요', 'tone': 'gold'},
-            {'label': '추천 기준', 'value': profile.get('recommendationTopCategory') or top_category['category'], 'tone': 'teal'},
-        ]
+        quick_replies = ['보유 카드 개선', '맞춤 카드 추천']
+        chips = []
     elif asks_new_card:
         if best_new:
             delta = _as_int(best_new.get('monthlyDelta'))
+            categories = ', '.join(best_new.get('matchedCategories') or []) or top_category['category']
             reply = (
-                f"새 카드 발급 관점에서는 {best_new.get('cardName')} 후보가 먼저 보입니다. "
-                f"{', '.join(best_new.get('matchedCategories') or []) or top_category['category']} 소비와 맞고, "
-                f"현재 보유 카드 대비 월 {_krw(max(delta, 0))} 수준의 개선 여지가 있습니다. "
-                "다만 발급 추천은 보유 카드 사용 전략과 별도로 확인해야 합니다."
+                f"새로 만든다면 {best_new.get('cardName')}부터 볼 만해요.\n"
+                f"{categories} 지출이랑 맞고, 월 {_krw(max(delta, 0))} 정도 더 아낄 여지가 있어요."
             )
         else:
             reply = (
-                "현재 데이터만으로는 새 카드 발급 이득이 뚜렷하지 않습니다. "
-                "먼저 보유 카드 안에서 실적과 혜택 한도에 맞춰 결제 방향을 조정하는 편이 안전합니다."
+                "지금은 새 카드 이득이 크게 보이지 않아요.\n"
+                "먼저 가진 카드 안에서 쓰는 순서를 정리하는 게 좋아요."
             )
         route = '/recommendations/new'
         message_type = 'card-recommendation'
-        quick_replies = ['새 카드 추천 보기', '보유 카드와 비교', '소비 패턴 분석']
-        chips = [
-            {'label': '추천 구분', 'value': '새 카드 발급', 'tone': 'navy'},
-            {'label': '후보', 'value': best_new.get('cardName') or '검토 필요', 'tone': 'teal'},
-        ]
+        quick_replies = ['보유 카드도 비교', '연회비도 볼래']
+        chips = []
     elif asks_usage or '추천' in text or '카드' in text:
         if best_owned:
             card_name = best_owned.get('cardName') or '보유 카드'
             category = best_owned.get('category') or profile.get('recommendationTopCategory') or top_category['category']
             remaining = _as_int(best_owned.get('remainingCurrentSpend'))
             if remaining > 0:
-                detail = f"다음 달 혜택 조건까지 {_krw(remaining)}이 남아 있어 실적 준비 여부를 같이 봐야 합니다."
+                detail = f"혜택 조건까지 {_krw(remaining)} 정도 남았어요."
             else:
-                detail = "현재 조건에서는 바로 혜택을 기대할 수 있는 카드로 보입니다."
+                detail = "지금 조건이면 바로 혜택을 기대할 수 있어요."
             reply = (
-                f"보유 카드 사용 관점에서는 {category} 지출에 {card_name}을 먼저 검토하는 것이 좋습니다. "
-                f"{detail} 새 카드 발급 추천과는 별도로, 이미 가진 카드 안에서 어디에 쓸지 판단한 결과입니다."
+                f"{category} 지출은 {card_name}부터 쓰는 게 좋아요.\n"
+                f"{detail}"
             )
         else:
             reply = (
-                "보유 카드 사용 전략을 계산하려면 보유 카드와 거래내역이 더 필요합니다. "
-                "카드를 추가하면 이번 달 혜택 가능성과 다음 달 실적 준비를 나눠 안내할 수 있습니다."
+                "아직 보유 카드 정보가 부족해요.\n"
+                "카드를 추가하면 어디에 쓰면 좋을지 바로 나눠볼게요."
             )
         route = '/recommendations/usage'
         message_type = 'card-recommendation'
-        quick_replies = ['보유 카드 사용 추천', '새 카드 발급 추천', '소비계획 반영하기']
-        chips = [
-            {'label': '추천 구분', 'value': '보유 카드 사용', 'tone': 'teal'},
-            {'label': '기준', 'value': profile.get('recommendationTopCategory') or top_category['category'], 'tone': 'navy'},
-        ]
+        quick_replies = ['다른 카드도 비교', '새 카드도 볼래']
+        chips = []
     elif '결제' in text or '내역' in text or '추가' in text:
-        reply = '결제내역을 입력하면 가맹점, 금액, 카테고리를 정리합니다. 저장 전 내용을 확인한 뒤 반영할 수 있습니다.'
+        reply = '결제내역을 추가하면 카치가 카테고리와 카드 흐름까지 같이 정리해줄게요.'
         route = '/transactions/new'
         message_type = 'transaction-help'
-        quick_replies = ['결제내역 추가', '최근 거래 보기', '카테고리 분석']
-        chips = [{'label': '입력', 'value': '결제내역', 'tone': 'blue'}]
+        quick_replies = ['이번 달 소비 봐줘', '카드 추천해줘']
+        chips = []
     else:
         recurring = profile.get('recurringCategories') or []
         recurring_text = ', '.join(recurring[:2]) if recurring else top_category['category']
         reply = (
-            f"이번 달 총지출은 {_krw(summary.get('totalExpense'))}이고, 가장 큰 항목은 {top_category['category']}입니다. "
-            f"반복 소비로 볼 만한 항목은 {recurring_text}이며, 카드 추천에는 일시 지출보다 반복 지출을 더 크게 반영합니다. "
-            "보유 카드 사용 추천과 새 카드 발급 추천을 나눠 확인하시기 바랍니다."
+            f"이번 달은 {top_category['category']} 지출이 가장 커요.\n"
+            f"{recurring_text}처럼 자주 나가는 항목부터 카드 쓰는 순서를 잡아보면 좋아요."
         )
         route = '/analytics'
         message_type = 'spending-analysis'
-        quick_replies = ['소비 분석 보기', '보유 카드 사용 추천', '새 카드 발급 추천']
-        chips = [
-            {'label': '상위 지출', 'value': str(top_category['category']), 'tone': 'teal'},
-            {'label': '거래 수', 'value': f"{profile.get('expenseTransactionCount') or 0}건", 'tone': 'gray'},
-        ]
+        quick_replies = ['보유 카드 개선', '맞춤 카드 추천']
+        chips = []
+
+    reply = append_chat_follow_up(reply, message_type)
 
     return {
         'schemaVersion': 'chat-response-v2',
@@ -2499,7 +2550,7 @@ def fallback_chat_response(message, context):
         'reply': reply,
         'summaryChips': chips,
         'quickReplies': quick_replies,
-        'actionButtons': [{'label': '관련 화면 보기', 'route': route, 'intent': 'navigation'}],
+        'actionButtons': [],
         'relatedRoute': route,
         'aiMode': 'mock',
         'confidence': 0.55,
@@ -3094,7 +3145,12 @@ def _is_general_benefit_label(label):
 
 def _build_spending_profile(request=None, adjusted_for_recommendation=False, recurring_overrides=None):
     transactions = [serialize_transaction(item) for item in transaction_queryset(request)]
-    spending_trend = _build_spending_trend(transactions, recurring_overrides)
+    user = get_effective_user(request) if request is not None else get_demo_user()
+    spending_trend = _build_spending_trend(
+        transactions,
+        recurring_overrides,
+        _monthly_total_overrides_for_user(user),
+    )
     current_month = spending_trend['currentMonth']
     previous_month = spending_trend['previousMonth']
     expenses = [
@@ -3375,7 +3431,61 @@ def _benefit_rule_quality(card):
     }
 
 
-def _benefit_rate_for_category(card, category, payment_context=None):
+def _parse_korean_krw_amount(text):
+    text = str(text or '').replace(',', '').strip()
+    match = re.search(r'(?:(\d+)\s*만)?\s*(?:(\d+)\s*천)?\s*원', text)
+    if match:
+        return _as_int(match.group(1)) * 10000 + _as_int(match.group(2)) * 1000
+    match = re.search(r'(\d+)\s*원', text)
+    return _as_int(match.group(1)) if match else 0
+
+
+def _amounts_from_korean_text(text):
+    return [
+        _parse_korean_krw_amount(match.group(0))
+        for match in re.finditer(r'(?:\d+\s*만\s*)?(?:\d+\s*천\s*)?원|\d+\s*원', str(text or ''))
+    ]
+
+
+def _monthly_limit_from_condition_lines(item, benefit_eligibility_spend=None):
+    if item.get('monthlyBenefitLimitKrw'):
+        return _as_int(item.get('monthlyBenefitLimitKrw')) or None
+
+    spend = _as_int(benefit_eligibility_spend)
+    lines = item.get('conditionLines') or item.get('condition_lines') or []
+    if isinstance(lines, str):
+        lines = [lines]
+
+    fallback = None
+    for line in lines:
+        text = str(line or '')
+        if '한도' not in text:
+            continue
+
+        min_match = re.search(r'(\d+)\s*만원\s*이상', text)
+        max_match = re.search(r'(\d+)\s*만원\s*미만', text)
+        min_spend = _as_int(min_match.group(1)) * 10000 if min_match else 0
+        max_spend = _as_int(max_match.group(1)) * 10000 if max_match else None
+        has_tier = bool(min_match)
+        if has_tier and spend and (spend < min_spend or (max_spend is not None and spend >= max_spend)):
+            continue
+
+        limit_text = text.split(':', 1)[1] if ':' in text else text
+        # Prefer the per-area cap before "/" over the integrated total cap.
+        segment = limit_text.split('/', 1)[0]
+        amounts = _amounts_from_korean_text(segment) or _amounts_from_korean_text(limit_text)
+        if not amounts:
+            continue
+
+        limit = amounts[-1]
+        if has_tier and spend:
+            return limit
+        fallback = fallback or limit
+
+    return fallback
+
+
+def _benefit_rate_for_category(card, category, payment_context=None, benefit_eligibility_spend=None):
     keywords = [keyword.lower() for keyword in _category_keywords(category)]
     benefit_items = card.get('benefitItems') or []
     best_rate = 0.0
@@ -3401,7 +3511,7 @@ def _benefit_rate_for_category(card, category, payment_context=None):
             rate = float(rate or 0)
         except (TypeError, ValueError):
             rate = 0
-        limit = item.get('monthlyBenefitLimitKrw')
+        limit = _monthly_limit_from_condition_lines(item, benefit_eligibility_spend)
         label_text = item.get('label') or item.get('scope') or ''
         if any(keyword in label for keyword in keywords) and rate > best_rate:
             best_rate = rate
@@ -3445,8 +3555,13 @@ def _benefit_rate_for_category(card, category, payment_context=None):
     return 0.0, None, '해당 카테고리 혜택 없음'
 
 
-def _estimate_raw_category_benefit(card, category, amount, payment_context=None):
-    rate, limit, label = _benefit_rate_for_category(card, category, payment_context=payment_context)
+def _estimate_raw_category_benefit(card, category, amount, payment_context=None, benefit_eligibility_spend=None):
+    rate, limit, label = _benefit_rate_for_category(
+        card,
+        category,
+        payment_context=payment_context,
+        benefit_eligibility_spend=benefit_eligibility_spend,
+    )
     estimated = round(_as_int(amount) * rate / 100)
     if limit is not None:
         estimated = min(estimated, limit)
@@ -3530,7 +3645,13 @@ def _estimate_card_value(
         category = row.get('category')
         payment_context = _payment_context_from_mapping(row)
         raw = _apply_monthly_limit(
-            _estimate_raw_category_benefit(card, category, amount, payment_context=payment_context),
+            _estimate_raw_category_benefit(
+                card,
+                category,
+                amount,
+                payment_context=payment_context,
+                benefit_eligibility_spend=benefit_eligibility_spend,
+            ),
             limit_usage,
         )
         potential_estimated = raw['estimatedBenefit']
@@ -3549,6 +3670,9 @@ def _estimate_card_value(
                 'estimatedBenefit': estimated,
                 'potentialBenefit': potential_estimated,
                 'benefitLabel': raw['benefitLabel'],
+                'monthlyBenefitLimitKrw': raw.get('limit'),
+                'monthlyLimitKrw': raw.get('limit'),
+                'limitRemainingAfter': raw.get('limitRemainingAfter'),
                 'paymentType': payment_context['paymentType'],
                 'installmentMonths': payment_context['installmentMonths'],
                 'isInterestFreeInstallment': payment_context['isInterestFreeInstallment'],
@@ -3650,7 +3774,13 @@ def _estimate_category_benefit(
     eligible = not min_spend or evaluation_spend >= min_spend
     payment_context = _payment_context_from_mapping(payment_context)
     raw = _apply_monthly_limit(
-        _estimate_raw_category_benefit(card, category, amount, payment_context=payment_context),
+        _estimate_raw_category_benefit(
+            card,
+            category,
+            amount,
+            payment_context=payment_context,
+            benefit_eligibility_spend=evaluation_spend,
+        ),
         limit_usage,
     )
     rule_confidence = _benefit_rule_quality(card)['confidence']
@@ -4312,7 +4442,7 @@ def card_recommendations(request):
     current_monthly_net = _as_int(baseline.get('monthlyNetBenefit'))
     current_monthly_gross = _as_int(baseline.get('expectedMonthlyBenefit'))
 
-    candidates = fetch_cards(request, limit=36, active_only=True)
+    candidates = fetch_cards(request, limit=36, active_only=True, include_benefits=True)
     candidate_ids = {str(card.get('cardAdId')) for card in candidates}
     for preferred_card_id in PREFERRED_RECOMMENDATION_CARD_IDS:
         if preferred_card_id in owned_ids or preferred_card_id in candidate_ids:
@@ -4322,8 +4452,7 @@ def card_recommendations(request):
             candidates.append(preferred_card)
             candidate_ids.add(preferred_card_id)
     ranked = []
-    for card in candidates:
-        detailed = fetch_card(int(card['cardAdId']), request) or card
+    for detailed in candidates:
         is_owned = str(detailed.get('cardAdId')) in owned_ids
         if is_owned:
             continue

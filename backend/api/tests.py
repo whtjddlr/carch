@@ -407,28 +407,47 @@ class AuthApiTests(TestCase):
         self.assertEqual(login.status_code, 200)
         self.assertIn('token', login.json())
 
-    @override_settings(
-        DEBUG=True,
-        DEV_AUTO_LOGIN_ENABLED=True,
-        DEV_ADMIN_EMAIL='admin@carch.test',
-        DEV_ADMIN_PASSWORD='Carchadmin123!',
-        DEV_ADMIN_NAME='테스트 관리자',
-    )
-    def test_dev_login_creates_admin_session(self):
+    def test_username_login_returns_token(self):
+        self.client.post(
+            '/api/auth/email/signup/',
+            data=json.dumps(
+                {
+                    'email': 'idlogin@carch.test',
+                    'password': 'Carchpass123!',
+                    'name': '아이디 로그인',
+                }
+            ),
+            content_type='application/json',
+        )
+
+        login = self.client.post(
+            '/api/auth/email/login/',
+            data=json.dumps({'email': 'idlogin', 'password': 'Carchpass123!'}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(login.status_code, 200)
+        self.assertIn('token', login.json())
+
+    @override_settings(DEBUG=True, DEV_AUTO_LOGIN_ENABLED=True)
+    def test_dev_login_creates_demo_session(self):
         response = self.client.post('/api/auth/dev-login/')
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload['devAutoLogin'])
-        self.assertEqual(payload['provider'], 'dev-admin')
+        self.assertTrue(payload['demoLogin'])
+        self.assertEqual(payload['provider'], 'demo')
         self.assertIn('token', payload)
-        self.assertEqual(payload['user']['email'], 'admin@carch.test')
+        self.assertEqual(payload['user']['email'], 'demo@carch.local')
+        self.assertEqual(payload['user']['name'], '남주현')
 
         User = get_user_model()
-        user = User.objects.get(email='admin@carch.test')
-        self.assertTrue(user.is_staff)
-        self.assertTrue(user.is_superuser)
-        self.assertTrue(user.check_password('Carchadmin123!'))
+        user = User.objects.get(email='demo@carch.local')
+        self.assertEqual(user.username, 'skawngus')
+        self.assertFalse(user.is_staff)
+        self.assertFalse(user.is_superuser)
+        self.assertTrue(user.check_password('skawngus'))
 
         me = self.client.get('/api/auth/me/', HTTP_AUTHORIZATION=f"Bearer {payload['token']}")
         self.assertEqual(me.status_code, 200)

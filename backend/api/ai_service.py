@@ -512,9 +512,7 @@ def normalize_chat_response(parsed):
     if not reply:
         return None
 
-    quick_replies = normalize_string_list(parsed.get('quickReplies') or parsed.get('quick_replies'))[:4]
-    if not quick_replies:
-        quick_replies = ['이번 달 소비 분석해줘', '카드 추천해줘', '결제내역 추가할래']
+    quick_replies = normalize_string_list(parsed.get('quickReplies') or parsed.get('quick_replies'))[:2]
 
     return {
         'schemaVersion': str(parsed.get('schemaVersion') or 'chat-response-v2'),

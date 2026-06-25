@@ -177,9 +177,8 @@
       </section>
 
       <section class="section-block budget-trend-section">
-        <div class="section-head split">
+        <div class="section-head">
           <h2>나의 예산</h2>
-          <RouterLink to="/budget/new">예산 추가</RouterLink>
         </div>
 
         <div class="app-card trend-card">
@@ -519,27 +518,46 @@ const mostIncreasedCategory = computed(() => {
   return best
 })
 
-// 상단(hero)에는 "지난달보다 +N%" 증감만 남기고, 카테고리명 문구는 아래 목록 제목으로 분리한다
-const topCategoryDelta = computed(() => {
-  const top = topCategory.value
-  const prev = previousMonthCategories.value
-  if (!top || !prev) return null
-  const before = Number(prev[top.category] || 0)
-  if (before <= 0) return null
-  const diff = Number(top.amount || 0) - before
-  const pct = Math.round((diff / before) * 100)
+function shiftMonthKey(monthKey, diff) {
+  const [year, month] = String(monthKey || LATEST_MONTH).split('-').map(Number)
+  const date = new Date(year, month - 1 + diff, 1)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function shortMonthLabel(monthKey) {
+  const month = Number(String(monthKey || '').slice(5, 7))
+  return month ? `${month}월` : '지난달'
+}
+
+const totalMonthComparison = computed(() => {
+  const total = spendingTrend.value?.total || {}
+  const current = Number(total.current ?? totalExpense.value ?? 0)
+  const previousMonth = spendingTrend.value?.previousMonth || shiftMonthKey(periodMonthKey.value, -1)
+  const seriesPrevious = Array.isArray(monthlySeries.value)
+    ? monthlySeries.value.find((item) => String(item.month) === previousMonth)
+    : null
+  const previous = Number(seriesPrevious?.spent ?? total.previous ?? 0)
+  const delta = current - previous
+  return { current, previous, previousMonth, delta }
+})
+
+// 상단(hero)은 전체 소비 금액의 전월 대비 증감만 보여준다.
+const totalMonthDelta = computed(() => {
+  const { previous, delta } = totalMonthComparison.value
+  if (!previous || !delta) return null
+  const pct = Math.round((Math.abs(delta) / previous) * 100)
   if (!pct) return null
-  return { pct: Math.abs(pct), up: diff > 0 }
+  return { pct, up: delta > 0 }
 })
 
 const heroInsight = computed(() => {
-  const d = topCategoryDelta.value
+  const d = totalMonthDelta.value
   if (!d) return ''
   return `지난달보다 ${d.up ? '+' : '-'}${d.pct}% ${d.up ? '↑' : '↓'}`
 })
 
 const heroInsightColor = computed(() => {
-  const d = topCategoryDelta.value
+  const d = totalMonthDelta.value
   if (!d) return '#0f5fae'
   return d.up ? '#d2624a' : '#0c8f6e'
 })
@@ -560,12 +578,13 @@ const pendingReviewCandidates = computed(() => reviewCandidates.value)
 
 const metricCards = computed(() => {
   const total = spendingTrend.value?.total || {}
+  const monthComparison = totalMonthComparison.value
   return [
     {
-      label: '전월 대비',
-      value: signedKrw(total.deltaFromPrevious),
-      caption: '지난달과 비교',
-      tone: Number(total.deltaFromPrevious || 0) > 0 ? 'warning' : 'good',
+      label: '전체 전월 대비',
+      value: signedKrw(monthComparison.delta),
+      caption: `${shortMonthLabel(monthComparison.previousMonth)} 사용액 기준`,
+      tone: Number(monthComparison.delta || 0) > 0 ? 'warning' : 'good',
     },
     {
       label: '평소 대비',

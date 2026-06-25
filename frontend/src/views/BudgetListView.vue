@@ -980,23 +980,56 @@ function categoryIcon(name) {
 }
 
 function recoBenefitRows(reco) {
-  const items = reco?.benefitItems || []
   const rows = []
   const seen = new Set()
+  const formatRate = (value) => {
+    const rate = Number(value || 0)
+    return rate > 0 ? `최대 ${Number(rate.toFixed(1))}% 할인` : ''
+  }
+  const formatLimit = (value) => {
+    const limit = Number(value || 0)
+    return limit > 0 ? `월 최대 ${krw(limit)}` : ''
+  }
+
+  const breakdown = reco?.economics?.categoryBreakdown || reco?.spendingFit?.categoryBreakdown || []
+  breakdown.forEach((item, index) => {
+    const category = String(item.category || '').trim()
+    if (!category) return
+    const benefit = Number(item.estimatedBenefit || item.potentialBenefit || 0)
+    if (benefit <= 0) return
+    const { label, icon } = classifyRecoField(category)
+    if (seen.has(label)) return
+    seen.add(label)
+    const rateLabel = formatRate(item.rate ?? item.ratePercent ?? item.rate_percent)
+    const cap = item.monthlyBenefitLimitKrw ?? item.monthly_benefit_limit_krw ?? item.monthlyLimitKrw ?? item.monthly_limit_krw ?? 0
+    rows.push({
+      id: `breakdown-${category}-${index}`,
+      field: label,
+      icon,
+      value: rateLabel || item.benefitLabel || '혜택 확인',
+      cap: formatLimit(cap),
+    })
+  })
+
+  const items = reco?.benefitItems || reco?.benefit_items || reco?.benefits || reco?.highlights || []
   items.forEach((item, index) => {
+    const textItem = typeof item === 'string' ? item : ''
+    const percentMatch = textItem.match(/(\d+(?:\.\d+)?)\s*%/)
+    if (textItem && !percentMatch) return
     const rate = Number(item.ratePercent ?? item.rate_percent ?? 0)
     const amount = Number(item.amountKrw ?? item.amount_krw ?? 0)
-    const raw = String(item.scope || item.label || (item.categories || [])[0] || '')
+    const raw = String(textItem || item.scope || item.label || item.title || item.field || (item.categories || [])[0] || '')
     const { label, icon } = classifyRecoField(raw)
     if (seen.has(label)) return
     seen.add(label)
-    const cap = Number(item.monthlyBenefitLimitKrw ?? item.monthly_benefit_limit_krw ?? 0)
+    const cap = item.monthlyBenefitLimitKrw ?? item.monthly_benefit_limit_krw ?? item.monthlyLimitKrw ?? item.monthly_limit_krw ?? 0
+    const rateLabel = formatRate(rate) || (percentMatch ? formatRate(percentMatch[1]) : '')
     rows.push({
       id: item.id || item.benefitId || `${label}-${index}`,
       field: label,
       icon,
-      value: rate > 0 ? `최대 ${Number(rate.toFixed(1))}% 할인` : (amount > 0 ? `${krw(amount)} 할인` : '혜택 확인'),
-      cap: cap > 0 ? `월 최대 ${krw(cap)}` : '',
+      value: rateLabel || (amount > 0 ? `${krw(amount)} 할인` : (textItem || '혜택 확인')),
+      cap: formatLimit(cap),
     })
   })
   return rows.slice(0, 3)
@@ -1046,7 +1079,42 @@ function toggleExpand(category) {
 
 const pendingReviewCandidates = computed(() => {
   const trend = spendingSummary.value?.spendingTrend
-  return trend?.reviewCandidates || trend?.oneTimeCandidates || []
+  const picked = []
+  const seen = new Set()
+  const addCandidate = (item, fallback = {}) => {
+    const category = String(item?.category || fallback.category || '').trim()
+    if (!category || seen.has(category)) return
+    seen.add(category)
+    picked.push({
+      ...fallback,
+      ...item,
+      category,
+      currentAmount: Number(item?.currentAmount ?? fallback.currentAmount ?? 0),
+      previousAmount: Number(item?.previousAmount ?? fallback.previousAmount ?? 0),
+      changeRateFromBaseline: Number(item?.changeRateFromBaseline ?? fallback.changeRateFromBaseline ?? 0),
+    })
+  }
+
+  ;(trend?.reviewCandidates || []).forEach(addCandidate)
+  ;(trend?.oneTimeCandidates || []).forEach(addCandidate)
+
+  const trendByCategory = new Map((trend?.categoryChanges || []).map((item) => [item.category, item]))
+  const currentCategoryRows = Object.entries(txByCategory.value)
+    .map(([category, items]) => {
+      const trendRow = trendByCategory.get(category) || {}
+      const currentAmount = items.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+      return {
+        category,
+        currentAmount,
+        previousAmount: Number(trendRow.previousAmount || 0),
+        changeRateFromBaseline: Number(trendRow.changeRateFromBaseline || 0),
+      }
+    })
+    .filter((item) => item.currentAmount > 0)
+    .sort((a, b) => b.currentAmount - a.currentAmount)
+
+  currentCategoryRows.forEach((item) => addCandidate(item))
+  return picked.slice(0, 5)
 })
 
 // 지난달보다 얼마나 늘었는지 짧은 라벨

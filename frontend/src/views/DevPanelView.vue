@@ -59,14 +59,13 @@ const groups = [
     items: [
       { label: '거래 전체보기', path: '/transactions' },
       { label: '결제 추가', path: '/transactions/new' },
-      { label: '거래 상세', path: '/transactions/t1' },
+      { label: '거래 상세(목록에서 선택)', path: '/transactions' },
     ],
   },
   {
     title: '소비계획',
     items: [
       { label: '소비계획 홈', path: '/budget' },
-      { label: '예산 추가', path: '/budget/new' },
       { label: '예산 상세', path: '/budget/current' },
     ],
   },

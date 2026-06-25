@@ -17,8 +17,14 @@
         <input v-model.trim="form.name" class="form-field" type="text" autocomplete="name" placeholder="남주현" />
       </label>
       <label>
-        <span>이메일</span>
-        <input v-model.trim="form.email" class="form-field" type="email" autocomplete="email" placeholder="name@carch.kr" />
+        <span>{{ isSignup ? '이메일' : '아이디' }}</span>
+        <input
+          v-model.trim="form.email"
+          class="form-field"
+          :type="isSignup ? 'email' : 'text'"
+          :autocomplete="isSignup ? 'email' : 'username'"
+          :placeholder="isSignup ? 'name@carch.kr' : 'skawngus'"
+        />
       </label>
       <label>
         <span>비밀번호</span>
@@ -42,9 +48,9 @@
         class="dev-login-button"
         type="button"
         :disabled="loading"
-        @click="submitDevAdmin"
+        @click="submitDemoLogin"
       >
-        관리자 계정으로 바로 로그인
+        남주현 데모 계정으로 시작하기
       </button>
 
       <div class="auth-divider"><span>또는</span></div>
@@ -82,7 +88,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchAuthProviders, USE_MOCK_API } from '@/services/api'
-import { completeOAuthLogin, devAdminLogin, emailLogin, emailSignup, isDevAutoLoginEnabled, oauthStartUrl } from '@/services/auth'
+import { completeOAuthLogin, emailLogin, emailSignup, isDevAutoLoginEnabled, oauthStartUrl } from '@/services/auth'
 
 const props = defineProps({
   mode: { type: String, default: 'login' },
@@ -136,14 +142,14 @@ const submitEmail = async () => {
   }
 }
 
-const submitDevAdmin = async () => {
+const submitDemoLogin = async () => {
   loading.value = true
   message.value = ''
   try {
-    await devAdminLogin()
+    await emailLogin({ email: 'skawngus', password: 'skawngus' })
     router.replace(nextPath.value.startsWith('/') ? nextPath.value : '/cards')
   } catch (error) {
-    message.value = error?.response?.data?.detail || '관리자 자동 로그인을 완료하지 못했습니다.'
+    message.value = error?.response?.data?.detail || '데모 로그인을 완료하지 못했습니다.'
     messageTone.value = 'danger'
   } finally {
     loading.value = false

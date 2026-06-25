@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 
+import dj_database_url
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -103,12 +105,22 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=int(os.environ.get('DATABASE_CONN_MAX_AGE', '60')),
+            ssl_require=env_bool('DATABASE_SSL_REQUIRE', True),
+        )
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -157,6 +169,11 @@ if DATA_BUNDLE_DIR is None:
 
 CARD_MASTER_DB = Path(os.environ.get('CARD_MASTER_DB') or (DATA_BUNDLE_DIR / 'card_master_api.sqlite'))
 CARD_IMAGE_DIR = Path(os.environ.get('CARD_IMAGE_DIR') or (DATA_BUNDLE_DIR / 'card_images'))
+CARD_CATALOG_SOURCE = os.environ.get('CARD_CATALOG_SOURCE', 'sqlite').strip().lower()
+CARD_IMAGE_BASE_URL = os.environ.get('CARD_IMAGE_BASE_URL', '').rstrip('/')
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '').rstrip('/')
+SUPABASE_PUBLISHABLE_KEY = os.environ.get('SUPABASE_PUBLISHABLE_KEY', '')
+SUPABASE_SECRET_KEY = os.environ.get('SUPABASE_SECRET_KEY', '')
 
 AI_MODE = os.environ.get('AI_MODE', 'mock').lower()
 GMS_API_KEY = os.environ.get('GMS_API_KEY') or os.environ.get('OPENAI_API_KEY') or ''
@@ -191,6 +208,8 @@ DEV_AUTO_LOGIN_ENABLED = env_bool('DEV_AUTO_LOGIN_ENABLED', DEBUG)
 DEV_ADMIN_EMAIL = os.environ.get('DEV_ADMIN_EMAIL', 'admin@carch.local').strip().lower()
 DEV_ADMIN_PASSWORD = os.environ.get('DEV_ADMIN_PASSWORD', 'Carchadmin123!')
 DEV_ADMIN_NAME = os.environ.get('DEV_ADMIN_NAME', 'CARCH 관리자')
+DEMO_LOGIN_ID = os.environ.get('DEMO_LOGIN_ID', 'skawngus').strip()
+DEMO_USER_PASSWORD = os.environ.get('DEMO_USER_PASSWORD', 'skawngus')
 KAKAO_CLIENT_ID = os.environ.get('KAKAO_REST_API_KEY') or os.environ.get('KAKAO_CLIENT_ID') or ''
 KAKAO_CLIENT_SECRET = os.environ.get('KAKAO_CLIENT_SECRET', '')
 KAKAO_REDIRECT_URI = os.environ.get('KAKAO_REDIRECT_URI', '').strip()

@@ -1,8 +1,11 @@
 import json
 import sqlite3
+import urllib.parse
 from pathlib import Path
 
+import requests
 from django.conf import settings
+from django.db import connection as django_connection
 
 
 CURATED_CARD_COPY = {
@@ -34,6 +37,14 @@ CURATED_BENEFIT_EXCLUDED_SCOPES = {
 PREFERRED_CARD_IMAGES = {
 }
 
+BENEFIT_SELECT_COLUMNS = (
+    'card_ad_id,benefit_id,benefit_type,scope_name,benefit_value,benefit_unit,rate_percent,amount_krw,'
+    'required_previous_month_spend_krw,min_payment_amount_krw,monthly_benefit_limit_krw,'
+    'yearly_benefit_limit_krw,categories_json,normalized_categories_json,target_merchants_json,'
+    'channel_flags_json,condition_lines_json,exclusion_keywords_json,quality_score,'
+    'needs_manual_review,has_shared_monthly_limit,calculation_status,is_auto_usable,source_rule_ids_json'
+)
+
 
 def connect_card_db():
     connection = sqlite3.connect(settings.CARD_MASTER_DB)
@@ -41,9 +52,53 @@ def connect_card_db():
     return connection
 
 
-def image_filename_for(card_ad_id, local_path=''):
+def use_postgres_catalog():
+    return getattr(settings, 'CARD_CATALOG_SOURCE', 'sqlite') == 'postgres'
+
+
+def use_supabase_catalog():
+    return getattr(settings, 'CARD_CATALOG_SOURCE', 'sqlite') == 'supabase'
+
+
+def supabase_catalog_get(table, params):
+    supabase_url = getattr(settings, 'SUPABASE_URL', '').rstrip('/')
+    supabase_key = getattr(settings, 'SUPABASE_SECRET_KEY', '') or getattr(settings, 'SUPABASE_PUBLISHABLE_KEY', '')
+    if not supabase_url or not supabase_key:
+        raise RuntimeError('SUPABASE_URL and SUPABASE_SECRET_KEY are required for Supabase card catalog reads.')
+
+    response = requests.get(
+        f'{supabase_url}/rest/v1/{table}',
+        params=params,
+        headers={
+            'apikey': supabase_key,
+            'Authorization': f'Bearer {supabase_key}',
+        },
+        timeout=20,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def card_catalog_query(sql, params=()):
+    if use_postgres_catalog():
+        postgres_sql = sql.replace('?', '%s')
+        with django_connection.cursor() as cursor:
+            cursor.execute(postgres_sql, params)
+            columns = [column[0] for column in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    with connect_card_db() as connection:
+        return connection.execute(sql, params).fetchall()
+
+
+def card_catalog_one(sql, params=()):
+    rows = card_catalog_query(sql, params)
+    return rows[0] if rows else None
+
+
+def image_filename_for(card_ad_id, local_path='', require_exists=True):
     preferred = PREFERRED_CARD_IMAGES.get(int(card_ad_id or 0))
-    if preferred and (settings.CARD_IMAGE_DIR / preferred).exists():
+    if preferred and (not require_exists or (settings.CARD_IMAGE_DIR / preferred).exists()):
         return preferred
 
     candidates = []
@@ -52,15 +107,18 @@ def image_filename_for(card_ad_id, local_path=''):
     candidates.extend([f'{card_ad_id}.png', f'{card_ad_id}.jpg', f'{card_ad_id}.jpeg', f'{card_ad_id}.gif'])
 
     for filename in candidates:
-        if filename and (settings.CARD_IMAGE_DIR / filename).exists():
+        if filename and (not require_exists or (settings.CARD_IMAGE_DIR / filename).exists()):
             return filename
     return None
 
 
 def card_image_url(request, card_ad_id, local_path=''):
-    filename = image_filename_for(card_ad_id, local_path)
+    base_url = getattr(settings, 'CARD_IMAGE_BASE_URL', '')
+    filename = image_filename_for(card_ad_id, local_path, require_exists=not base_url)
     if not filename:
         return ''
+    if base_url:
+        return f'{base_url}/{urllib.parse.quote(filename)}'
     return request.build_absolute_uri(f'/api/card-images/{filename}')
 
 
@@ -184,39 +242,7 @@ def benefit_data_status(benefits):
     }
 
 
-def list_benefits(card_ad_id, limit=5):
-    limit_clause = ''
-    params = [card_ad_id]
-    if limit is not None:
-        limit_clause = 'limit ?'
-        params.append(limit)
-
-    with connect_card_db() as connection:
-        rows = connection.execute(
-            f'''
-            select benefit_id, benefit_type, scope_name, benefit_value, benefit_unit, rate_percent, amount_krw,
-                   required_previous_month_spend_krw, min_payment_amount_krw,
-                   monthly_benefit_limit_krw, yearly_benefit_limit_krw,
-                   categories_json, normalized_categories_json, target_merchants_json,
-                   channel_flags_json, condition_lines_json, exclusion_keywords_json,
-                   quality_score, needs_manual_review, has_shared_monthly_limit,
-                   calculation_status, is_auto_usable, source_rule_ids_json
-            from card_benefits
-            where card_ad_id = ?
-            order by
-              case when is_auto_usable = 1 then 0 else 1 end,
-              case benefit_type
-                when 'discount_rate' then 0
-                when 'point_rate' then 1
-                when 'discount' then 2
-                else 3
-              end,
-              scope_name
-            {limit_clause}
-            ''',
-            params,
-        ).fetchall()
-
+def serialize_benefit_rows(rows, limit=None):
     benefits = []
     seen = set()
     for row in rows:
@@ -253,22 +279,101 @@ def list_benefits(card_ad_id, limit=5):
         }
         benefit.update(benefit_payment_rules(benefit))
         benefits.append(mark_benefit_review_state(benefit))
+        if limit is not None and len(benefits) >= limit:
+            break
     return benefits
 
 
-def serialize_card(row, request, include_benefits=False):
+def list_benefits(card_ad_id, limit=5):
+    if use_supabase_catalog():
+        rest_params = {
+            'select': BENEFIT_SELECT_COLUMNS,
+            'card_ad_id': f'eq.{card_ad_id}',
+            'order': 'is_auto_usable.desc,benefit_type.asc,scope_name.asc',
+        }
+        if limit is not None:
+            rest_params['limit'] = str(limit)
+        rows = supabase_catalog_get('card_benefits', rest_params)
+    else:
+        limit_clause = ''
+        params = [card_ad_id]
+        if limit is not None:
+            limit_clause = 'limit ?'
+            params.append(limit)
+
+        rows = card_catalog_query(
+            f'''
+                select {BENEFIT_SELECT_COLUMNS.replace(',', ', ')}
+                from card_benefits
+                where card_ad_id = ?
+                order by
+                  case when is_auto_usable = 1 then 0 else 1 end,
+                  case benefit_type
+                    when 'discount_rate' then 0
+                    when 'point_rate' then 1
+                    when 'discount' then 2
+                    else 3
+                  end,
+                  scope_name
+                {limit_clause}
+                ''',
+            params,
+        )
+
+    return serialize_benefit_rows(rows, limit)
+
+
+def list_benefits_bulk(card_ad_ids):
+    ids = [str(card_id) for card_id in dict.fromkeys(card_ad_ids) if str(card_id).isdigit()]
+    if not ids:
+        return {}
+    if use_supabase_catalog():
+        rows = supabase_catalog_get('card_benefits', {
+            'select': BENEFIT_SELECT_COLUMNS,
+            'card_ad_id': f'in.({",".join(ids)})',
+            'order': 'card_ad_id.asc,is_auto_usable.desc,benefit_type.asc,scope_name.asc',
+        })
+    else:
+        placeholders = ','.join('?' for _ in ids)
+        rows = card_catalog_query(
+            f'''
+                select {BENEFIT_SELECT_COLUMNS.replace(',', ', ')}
+                from card_benefits
+                where card_ad_id in ({placeholders})
+                order by
+                  card_ad_id,
+                  case when is_auto_usable = 1 then 0 else 1 end,
+                  case benefit_type
+                    when 'discount_rate' then 0
+                    when 'point_rate' then 1
+                    when 'discount' then 2
+                    else 3
+                  end,
+                  scope_name
+            ''',
+            ids,
+        )
+    grouped = {}
+    for row in rows:
+        grouped.setdefault(str(row['card_ad_id']), []).append(row)
+    return {card_id: serialize_benefit_rows(items) for card_id, items in grouped.items()}
+
+
+def serialize_card(row, request, include_benefits=False, preloaded_benefits=None):
     card_ad_id = row['card_ad_id']
     excluded_scopes = CURATED_BENEFIT_EXCLUDED_SCOPES.get(card_ad_id, set())
-    benefits = [
-        benefit
-        for benefit in list_benefits(card_ad_id, 6 if include_benefits else 3)
-        if benefit.get('scope') not in excluded_scopes
-    ]
-    status_benefits = [
-        benefit
-        for benefit in (list_benefits(card_ad_id, None) if include_benefits else benefits)
-        if benefit.get('scope') not in excluded_scopes
-    ]
+    if preloaded_benefits is not None:
+        all_benefits = [benefit for benefit in preloaded_benefits if benefit.get('scope') not in excluded_scopes]
+    elif include_benefits:
+        all_benefits = [
+            benefit
+            for benefit in list_benefits(card_ad_id, None)
+            if benefit.get('scope') not in excluded_scopes
+        ]
+    else:
+        all_benefits = []
+    benefits = all_benefits[:6 if include_benefits else 3]
+    status_benefits = all_benefits
     status = benefit_data_status(status_benefits)
     if card_ad_id in CURATED_VERIFIED_CARD_IDS and status_benefits:
         status = {
@@ -318,7 +423,36 @@ def serialize_card(row, request, include_benefits=False):
     }
 
 
-def fetch_cards(request, limit=30, search='', issuer='', active_only=False):
+def fetch_cards(request, limit=30, search='', issuer='', active_only=False, include_benefits=False):
+    if use_supabase_catalog():
+        rest_params = {
+            'select': '*',
+            'card_image_status': 'eq.downloaded',
+            'order': 'issue_status.asc,card_ad_id.desc',
+            'limit': str(limit),
+        }
+        if search:
+            safe_keyword = str(search).replace('*', '').replace(',', ' ')
+            rest_params['or'] = (
+                f'(card_name.ilike.*{safe_keyword}*,issuer_name.ilike.*{safe_keyword}*,'
+                f'title_description.ilike.*{safe_keyword}*)'
+            )
+        if issuer:
+            rest_params['issuer_name'] = f'ilike.*{issuer}*'
+        if active_only:
+            rest_params['issue_status'] = 'eq.active'
+        rows = supabase_catalog_get('cards', rest_params)
+        benefit_map = list_benefits_bulk([row['card_ad_id'] for row in rows]) if include_benefits else {}
+        return [
+            serialize_card(
+                row,
+                request,
+                include_benefits=include_benefits,
+                preloaded_benefits=benefit_map.get(str(row['card_ad_id'])),
+            )
+            for row in rows
+        ]
+
     clauses = ['card_image_status = ?']
     params = ['downloaded']
     if search:
@@ -333,9 +467,8 @@ def fetch_cards(request, limit=30, search='', issuer='', active_only=False):
 
     where_sql = ' and '.join(clauses)
     params.append(limit)
-    with connect_card_db() as connection:
-        rows = connection.execute(
-            f'''
+    rows = card_catalog_query(
+        f'''
             select *
             from cards
             where {where_sql}
@@ -344,14 +477,60 @@ def fetch_cards(request, limit=30, search='', issuer='', active_only=False):
               card_ad_id desc
             limit ?
             ''',
-            params,
-        ).fetchall()
-    return [serialize_card(row, request) for row in rows]
+        params,
+    )
+    benefit_map = list_benefits_bulk([row['card_ad_id'] for row in rows]) if include_benefits else {}
+    return [
+        serialize_card(
+            row,
+            request,
+            include_benefits=include_benefits,
+            preloaded_benefits=benefit_map.get(str(row['card_ad_id'])),
+        )
+        for row in rows
+    ]
+
+
+def fetch_cards_by_ids(card_ad_ids, request, include_benefits=True):
+    ids = [str(card_id) for card_id in dict.fromkeys(card_ad_ids) if str(card_id).isdigit()]
+    if not ids:
+        return []
+    if use_supabase_catalog():
+        rows = supabase_catalog_get('cards', {
+            'select': '*',
+            'card_ad_id': f'in.({",".join(ids)})',
+        })
+    else:
+        placeholders = ','.join('?' for _ in ids)
+        rows = card_catalog_query(f'select * from cards where card_ad_id in ({placeholders})', ids)
+    benefit_map = list_benefits_bulk(ids) if include_benefits else {}
+    cards = [
+        serialize_card(
+            row,
+            request,
+            include_benefits=include_benefits,
+            preloaded_benefits=benefit_map.get(str(row['card_ad_id'])),
+        )
+        for row in rows
+    ]
+    order = {card_id: index for index, card_id in enumerate(ids)}
+    cards.sort(key=lambda card: order.get(str(card.get('cardAdId')), len(order)))
+    return cards
 
 
 def fetch_card(card_ad_id, request):
-    with connect_card_db() as connection:
-        row = connection.execute('select * from cards where card_ad_id = ?', (card_ad_id,)).fetchone()
+    if use_supabase_catalog():
+        rows = supabase_catalog_get('cards', {
+            'select': '*',
+            'card_ad_id': f'eq.{card_ad_id}',
+            'limit': '1',
+        })
+        row = rows[0] if rows else None
+        if not row:
+            return None
+        return serialize_card(row, request, include_benefits=True)
+
+    row = card_catalog_one('select * from cards where card_ad_id = ?', (card_ad_id,))
     if not row:
         return None
     return serialize_card(row, request, include_benefits=True)

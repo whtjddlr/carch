@@ -273,23 +273,6 @@ def normalize_proxy_chat_result(result: dict[str, Any], message: str) -> dict[st
         elif inferred_route in {'/plans', '/plans/new'}:
             result['messageType'] = 'purchase-plan'
 
-    actions = result.get('actionButtons')
-    if inferred_route and isinstance(actions, list):
-        has_route = any(isinstance(action, dict) and action.get('route') == inferred_route for action in actions)
-        if not has_route:
-            label_by_route = {
-                '/recommendations/usage': '보유 카드 사용 추천',
-                '/recommendations/new': '새 카드 추천 보기',
-                '/analytics': '소비 분석 보기',
-                '/plans': '소비계획 보기',
-                '/plans/new': '소비계획 추가',
-            }
-            actions.insert(0, {
-                'label': label_by_route.get(inferred_route, '관련 화면 보기'),
-                'route': inferred_route,
-                'intent': 'open-related',
-            })
-            result['actionButtons'] = actions[:3]
     return result
 
 

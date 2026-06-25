@@ -430,19 +430,38 @@ function compactBenefitLabel(value) {
     .trim()
 }
 
+function formatPercent(value) {
+  const amount = Number(value || 0)
+  if (!Number.isFinite(amount) || amount <= 0) return ''
+  return Number.isInteger(amount) ? String(amount) : amount.toFixed(1).replace(/\.0$/, '')
+}
+
+function benefitRateText(item = {}) {
+  const directRate = formatPercent(item.rate || item.ratePercent || item.benefitRate || item.benefit_rate)
+  if (directRate) return `${directRate}%`
+
+  const labelMatch = String(item.benefitLabel || item.title || '').match(/(\d+(?:\.\d+)?)\s*%/)
+  return labelMatch ? `${labelMatch[1]}%` : ''
+}
+
 function homeGuideBenefitText(item = {}, label = '') {
-  const estimatedBenefit = Number(item.estimatedBenefit || 0)
-  const potentialBenefit = Number(item.potentialBenefit || 0)
-  const remaining = Number(item.remainingCurrentSpend || 0)
-  const maxBenefit = Number(item.limit || item.monthlyCap || 0)
-  const displayBenefit = maxBenefit || estimatedBenefit || potentialBenefit
+  const scope = compactBenefitLabel(item.benefitLabel || item.title || label) || label || '혜택'
+  const rate = benefitRateText(item)
+  const monthlyLimit = Number(
+    item.limit
+    || item.monthlyBenefitLimitKrw
+    || item.monthlyLimitKrw
+    || item.monthlyCap
+    || 0,
+  )
 
-  if (item.eligibleForBenefit && displayBenefit > 0) return `이번 달 최대 ${krw(displayBenefit)} 절약`
-  if (item.nextMonthEligible && displayBenefit > 0) return `다음 달 최대 ${krw(displayBenefit)} 절약`
-  if (remaining > 0 && displayBenefit > 0) return `조건 충족 시 최대 ${krw(displayBenefit)} 절약`
+  if (rate && monthlyLimit > 0) return `${scope} 최대 ${rate} 할인 · 월 최대 ${krw(monthlyLimit)}`
+  if (rate) return `${scope} 최대 ${rate} 할인`
+  if (monthlyLimit > 0) return `${scope} 월 최대 ${krw(monthlyLimit)}`
 
-  const benefitLabel = compactBenefitLabel(item.benefitLabel || item.title || '')
-  return benefitLabel ? `${benefitLabel} 혜택` : `${label}에 쓰기 좋은 카드`
+  const benefitLabel = String(item.benefitLabel || item.title || '').replace(/\s+/g, ' ').trim()
+  if (benefitLabel) return benefitLabel
+  return `${label}에 쓰기 좋은 카드`
 }
 
 function buildCategoryGuideFromOwnedGuide(item, index) {
