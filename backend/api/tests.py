@@ -511,7 +511,7 @@ class AuthApiTests(TestCase):
         self.assertEqual(anonymous.status_code, 401)
         self.assertEqual(invalid.status_code, 401)
 
-    def test_seed_transactions_are_added_even_after_user_created_transaction(self):
+    def test_regular_user_created_transaction_does_not_trigger_demo_seed(self):
         token = self.signup_user('seed-after-create@carch.test', 'Seed')
 
         self.client.post(
@@ -533,13 +533,26 @@ class AuthApiTests(TestCase):
         rows = self.client.get('/api/transactions/', HTTP_AUTHORIZATION=f'Bearer {token}').json()['results']
         summary = self.client.get('/api/analytics/spending-summary/', HTTP_AUTHORIZATION=f'Bearer {token}').json()
 
-        self.assertGreater(len(rows), 1)
-        self.assertGreater(summary['totalExpense'], 12000)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['id'], 'first-user-tx')
+        self.assertEqual(summary['totalExpense'], 12000)
 
     def test_owned_cards_are_scoped_by_user(self):
         token_a = self.signup_user('card-a@carch.test', 'A')
         token_b = self.signup_user('card-b@carch.test', 'B')
 
+        self.client.post(
+            '/api/owned-cards/',
+            data=json.dumps({'cardId': '10029'}),
+            content_type='application/json',
+            HTTP_AUTHORIZATION=f'Bearer {token_a}',
+        )
+        self.client.post(
+            '/api/owned-cards/',
+            data=json.dumps({'cardId': '10029'}),
+            content_type='application/json',
+            HTTP_AUTHORIZATION=f'Bearer {token_b}',
+        )
         self.client.delete('/api/owned-cards/10029/', HTTP_AUTHORIZATION=f'Bearer {token_a}')
 
         a_cards = self.client.get('/api/owned-cards/', HTTP_AUTHORIZATION=f'Bearer {token_a}').json()['results']
@@ -550,17 +563,23 @@ class AuthApiTests(TestCase):
 
     def test_card_search_includes_full_catalog_beyond_owned_cards(self):
         token = self.signup_user('search-cards@carch.test', 'Search')
+        self.client.post(
+            '/api/owned-cards/',
+            data=json.dumps({'cardId': '10029'}),
+            content_type='application/json',
+            HTTP_AUTHORIZATION=f'Bearer {token}',
+        )
 
         response = self.client.get(
-            '/api/search/?type=card&limit=50',
+            '/api/search/?type=card&q=LOCA&limit=50',
             HTTP_AUTHORIZATION=f'Bearer {token}',
         )
 
         self.assertEqual(response.status_code, 200)
         rows = response.json()['results']
         self.assertGreater(len(rows), 3)
-        self.assertTrue(any(row['type'] == 'card' and row.get('badge') == '보유중' for row in rows))
-        self.assertTrue(any(row['type'] == 'card' and row['path'].startswith('/cards/apply/') and not row.get('badge') for row in rows))
+        self.assertTrue(any(row['type'] == 'card' and row.get('meta', {}).get('owned') for row in rows))
+        self.assertTrue(any(row['type'] == 'card' and row['path'].startswith('/cards/apply/') and not row.get('meta', {}).get('owned') for row in rows))
         self.assertFalse(any(row['type'] == 'card' and row.get('badge') == '비교 카드' for row in rows))
 
     def test_community_post_creation_requires_auth(self):
