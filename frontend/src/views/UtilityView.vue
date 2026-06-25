@@ -180,83 +180,6 @@
         </div>
       </article>
 
-      <section v-else-if="props.type === 'report'" class="report-view">
-        <div class="report-card-grid">
-          <article class="app-card report-overview-card report-recommend-card">
-            <span class="report-kicker">추천 카드</span>
-            <small>Carch 추천</small>
-            <strong>이번 달 점검할 지출</strong>
-            <b>{{ krw(reportFocusAmount) }}</b>
-            <div class="report-card-art">
-              <img v-if="reportFocusCard?.imageUrl" :src="reportFocusCard.imageUrl" :alt="reportFocusCard.name" />
-              <WalletCards v-else :size="42" />
-            </div>
-            <p>{{ reportFocusCopy }}</p>
-            <RouterLink class="report-mini-button" to="/recommendations/new">추천 내역 보기</RouterLink>
-          </article>
-
-          <article class="app-card report-overview-card report-spending-card">
-            <span class="report-kicker">소비 요약 카드</span>
-            <small>이번 달 소비 요약</small>
-            <strong>{{ krw(reportTotalSpent) }}</strong>
-            <em>{{ budgetUsePercent }}% 예산 사용</em>
-            <div class="report-donut-panel">
-              <div class="report-donut" :style="{ background: reportDonutBackground }">
-                <span>최다</span>
-                <b>{{ topCategory?.cat || '-' }}</b>
-              </div>
-              <ul class="report-donut-legend">
-                <li v-for="item in reportLegendCategories" :key="item.cat">
-                  <i :style="{ background: item.color }"></i>
-                  <span>{{ item.cat }}</span>
-                  <b>{{ krw(item.amount) }}</b>
-                </li>
-              </ul>
-            </div>
-            <RouterLink class="report-mini-button" to="/analytics">상세 분석 보기</RouterLink>
-          </article>
-
-          <article class="app-card report-overview-card report-planner-card">
-            <div class="report-card-title-row">
-              <span class="report-kicker">캘린더 / 플래너 카드</span>
-              <RouterLink to="/budget" aria-label="예산 플래너 보기">
-                <ChevronRight :size="16" />
-              </RouterLink>
-            </div>
-            <strong>{{ reportPeriodLabel }}</strong>
-            <div class="report-calendar" aria-label="이번 달 지출 캘린더">
-              <span v-for="day in reportWeekdays" :key="day" class="report-weekday">{{ day }}</span>
-              <span
-                v-for="day in reportCalendarDays"
-                :key="day.key"
-                class="report-day"
-                :class="{ empty: day.empty, active: day.active, latest: day.latest }"
-              >
-                {{ day.label }}
-              </span>
-            </div>
-            <div class="report-plan-chip" :class="{ warning: reportPlannerWarning }">
-              <span>{{ reportLatestDayLabel }} 기준</span>
-              <b>{{ reportPlannerText }}</b>
-            </div>
-          </article>
-        </div>
-
-        <section class="app-card report-section">
-          <h2>카테고리별 지출</h2>
-          <div v-for="item in reportCategories" :key="item.cat" class="report-row">
-            <div>
-              <span>{{ item.cat }}</span>
-              <b>{{ krw(item.amount) }}</b>
-            </div>
-            <div class="report-track">
-              <i :style="{ width: `${item.percent}%`, background: item.color }" />
-            </div>
-          </div>
-        </section>
-        <RouterLink class="primary-button w-100" to="/analytics">AI 분석 보기</RouterLink>
-      </section>
-
       <section v-else-if="props.type === 'notifications'" class="notification-view">
         <button class="muted-button mark-read-button" type="button" @click="markAllNotificationsRead">
           모두 읽음 처리
@@ -528,10 +451,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Bell,
-  BookOpen,
   CalendarDays,
   CheckCircle2,
-  ChevronRight,
   CreditCard,
   Edit3,
   LogOut,
@@ -572,7 +493,6 @@ const backFallback = computed(() => {
     card: '/cards',
     cardApply: '/cards',
     transaction: '/transactions',
-    report: '/analytics',
     notifications: '/cards',
     settings: '/cards',
     notificationSettings: '/settings',
@@ -919,128 +839,6 @@ const applySteps = [
   { title: '신청 제출', description: '심사 결과와 발급 상태를 알림으로 확인합니다.' },
 ]
 
-const reportPalette = ['#0f5fae', '#008c95', '#d92d20', '#24364f', '#c49a49', '#8a9aad']
-
-function reportCategoryColor(cat, index) {
-  const budgetCategory = budgetCategories.find((category) => category.name === cat)
-  return budgetCategory?.color || reportPalette[index % reportPalette.length]
-}
-
-const reportExpenseRows = computed(() => transactionRows.value.filter((tx) => Number(tx.amt) < 0))
-const reportTotalSpent = computed(() => reportExpenseRows.value.reduce((sum, tx) => sum + Math.abs(Number(tx.amt) || 0), 0))
-const reportCategories = computed(() => {
-  const map = new Map()
-  reportExpenseRows.value.forEach((tx) => {
-    const key = tx.cat || '기타'
-    map.set(key, (map.get(key) || 0) + Math.abs(Number(tx.amt) || 0))
-  })
-  return [...map.entries()]
-    .map(([cat, amount], index) => ({
-      cat,
-      amount,
-      percent: reportTotalSpent.value ? Math.round((amount / reportTotalSpent.value) * 100) : 0,
-      color: reportCategoryColor(cat, index),
-    }))
-    .sort((a, b) => b.amount - a.amount)
-})
-const topCategory = computed(() => reportCategories.value[0])
-const reportLegendCategories = computed(() => reportCategories.value.slice(0, 4))
-const reportMetrics = computed(() => [
-  { label: '거래 건수', value: `${reportExpenseRows.value.length}건` },
-  { label: '평균 결제', value: krw(Math.round(reportTotalSpent.value / Math.max(reportExpenseRows.value.length, 1))) },
-  { label: '예산 사용률', value: `${budgetUsePercent.value}%` },
-])
-
-const budgetUsePercent = computed(() => {
-  const totalBudget = budgetCategories.reduce((sum, category) => sum + category.budget, 0)
-  return Math.min(Math.round((reportTotalSpent.value / totalBudget) * 100), 100)
-})
-
-const reportFocusAmount = computed(() => topCategory.value?.amount || 0)
-const reportFocusCard = computed(() => {
-  const amountsByCard = new Map()
-  reportExpenseRows.value.forEach((tx) => {
-    const id = String(tx.cardId || '')
-    amountsByCard.set(id, (amountsByCard.get(id) || 0) + Math.abs(Number(tx.amt) || 0))
-  })
-  const [cardId] = [...amountsByCard.entries()].sort((a, b) => b[1] - a[1])[0] || []
-  return cardRows.value.find((card) => String(card.id) === String(cardId)) || cardRows.value[0]
-})
-const reportFocusCopy = computed(() => {
-  if (!topCategory.value) return '이번 달 카드 사용 내역을 먼저 확인해보세요.'
-  return `${topCategory.value.cat} 지출이 가장 큽니다. ${reportFocusCard.value?.name || '보유 카드'} 기준으로 혜택을 점검하세요.`
-})
-const reportDonutBackground = computed(() => {
-  const total = reportTotalSpent.value
-  if (!total || !reportCategories.value.length) return '#e7edf4'
-  let start = 0
-  const segments = reportCategories.value.map((item) => {
-    const end = start + (item.amount / total) * 100
-    const segment = `${item.color} ${start}% ${end}%`
-    start = end
-    return segment
-  })
-  return `conic-gradient(${segments.join(', ')})`
-})
-
-const reportPeriod = computed(() => {
-  const latest = [...reportExpenseRows.value].sort((a, b) => String(b.date).localeCompare(String(a.date)))[0]
-  const date = latest?.date ? new Date(`${latest.date}T00:00:00`) : new Date()
-  return {
-    year: date.getFullYear(),
-    monthIndex: date.getMonth(),
-    month: date.getMonth() + 1,
-  }
-})
-const reportPeriodLabel = computed(() => `${reportPeriod.value.year}.${String(reportPeriod.value.month).padStart(2, '0')}`)
-const reportWeekdays = ['일', '월', '화', '수', '목', '금', '토']
-const reportLatestDay = computed(() => {
-  const latest = [...reportExpenseRows.value].sort((a, b) => String(b.date).localeCompare(String(a.date)))[0]
-  if (!latest?.date) return null
-  return new Date(`${latest.date}T00:00:00`).getDate()
-})
-const reportLatestDayLabel = computed(() => {
-  if (!reportLatestDay.value) return `${reportPeriod.value.month}월`
-  return `${reportPeriod.value.month}월 ${reportLatestDay.value}일`
-})
-const reportCalendarDays = computed(() => {
-  const { year, monthIndex } = reportPeriod.value
-  const leadingDays = new Date(year, monthIndex, 1).getDay()
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
-  const activeDays = new Set(
-    reportExpenseRows.value
-      .filter((tx) => {
-        const date = new Date(`${tx.date}T00:00:00`)
-        return date.getFullYear() === year && date.getMonth() === monthIndex
-      })
-      .map((tx) => new Date(`${tx.date}T00:00:00`).getDate()),
-  )
-  return [
-    ...Array.from({ length: leadingDays }, (_, index) => ({ key: `empty-${index}`, label: '', empty: true })),
-    ...Array.from({ length: daysInMonth }, (_, index) => {
-      const label = index + 1
-      return {
-        key: `day-${label}`,
-        label,
-        empty: false,
-        active: activeDays.has(label),
-        latest: label === reportLatestDay.value,
-      }
-    }),
-  ]
-})
-const reportPlannerInfo = computed(() => {
-  const category = topCategory.value
-  if (!category) return { text: '이번 달 지출 내역을 확인하세요.', warning: false }
-  const budgetCategory = budgetCategories.find((item) => item.name === category.cat)
-  if (!budgetCategory) return { text: `${category.cat} 지출 ${krw(category.amount)} 확인`, warning: false }
-  const remaining = budgetCategory.budget - category.amount
-  if (remaining >= 0) return { text: `${category.cat} 예산 ${krw(remaining)} 남음`, warning: false }
-  return { text: `${category.cat} 예산 ${krw(Math.abs(remaining))} 초과`, warning: true }
-})
-const reportPlannerText = computed(() => reportPlannerInfo.value.text)
-const reportPlannerWarning = computed(() => reportPlannerInfo.value.warning)
-
 const firstTransactionPath = computed(() => {
   const id = transactionRows.value[0]?.id || mockTransactions[0]?.id || 't1'
   return `/transactions/${id}`
@@ -1216,7 +1014,6 @@ const content = computed(() => {
     card: { title: '카드 상세', description: '카드별 사용 현황', body: `선택한 카드 ID: ${route.params.id}`, icon: CreditCard },
     cardApply: { title: '카드 신청', description: '신청 정보를 확인하세요.', body: '카드 목록에서 신청할 카드를 다시 선택해주세요.', icon: CreditCard },
     transaction: { title: '거래 상세', description: '거래처와 결제 정보를 확인하세요.', body: '거래내역을 확인하세요.', icon: Receipt },
-    report: { title: '월간 보고서', description: '이번 달 소비 요약', body: '월간 리포트입니다.', icon: BookOpen },
     notifications: { title: '알림', description: '중요한 카드 알림', body: '결제 알림, 예산 경고, 추천 알림을 모아 보여줍니다.', icon: Bell },
     settings: { title: '설정', description: '계정과 앱 설정', body: '계정과 앱 설정 메뉴입니다.', icon: Settings },
     notificationSettings: { title: '알림 설정', description: '받을 알림을 선택하세요.', body: '알림 수신 범위를 조정합니다.', icon: Bell },
@@ -1224,7 +1021,7 @@ const content = computed(() => {
     security: { title: '보안', description: '로그인과 개인정보 보호 설정', body: '보안 설정을 확인하세요.', icon: ShieldCheck },
     search: { title: '검색', description: '거래와 카드를 검색하세요.', body: '검색어를 입력하세요.', icon: Search },
   }
-  return map[props.type] || { title: 'CARCH', description: '경로 확인', body: '이동 경로를 다시 확인해주세요.', icon: BookOpen }
+  return map[props.type] || { title: 'CARCH', description: '경로 확인', body: '이동 경로를 다시 확인해주세요.', icon: CreditCard }
 })
 
 const pageTitle = computed(() => {
@@ -1391,7 +1188,7 @@ onMounted(async () => {
       }
     }
 
-    if (props.type === 'transaction' || props.type === 'report' || props.type === 'notifications') {
+    if (props.type === 'transaction' || props.type === 'notifications') {
       const [transactions, ownedCards] = await Promise.all([
         fetchTransactions(),
         fetchOwnedCards(),
