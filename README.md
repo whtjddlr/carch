@@ -41,7 +41,7 @@
 | --- | --- |
 | Frontend | Vue 3, Vite, Vue Router, lucide-vue-next |
 | Backend | Django 5, Django ORM |
-| AI | SSAFY GMS OpenAI-compatible API |
+| AI | GPT-4o mini, SSAFY GMS OpenAI-compatible API |
 | Data | Supabase Postgres, Supabase Storage, 카드 혜택 정규화 테이블 |
 | Deployment | Vercel |
 
