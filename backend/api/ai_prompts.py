@@ -308,6 +308,9 @@ def build_chat_prompt(message, history, context):
     compact_context = {
         'today': context.get('today'),
         'summary': context.get('summary') or {},
+        'profile': context.get('profile') or {},
+        'recommendationContext': context.get('recommendationContext') or {},
+        'purchasePlans': (context.get('purchasePlans') or [])[:3],
         'cards': compact_cards,
         'transactions': compact_transactions,
         'communityPosts': (context.get('communityPosts') or [])[:3],
@@ -328,15 +331,23 @@ Available app data JSON:
 Rules:
 - Reply in Korean with 2 to 5 short sentences.
 - Use the user's transaction/category/card data when relevant.
+- Treat recommendationContext.ownedUsageGuides and routingSuggestions as owned-card usage advice.
+- Treat recommendationContext.newCardCandidates as new-card issuance advice.
+- Do not mix the two: if the user asks "which card should I use" or "how should I split spending", answer with owned-card usage first.
+- If the user asks "what card should I issue" or "new card", answer with new-card issuance candidates.
+- If purchasePlans are present, connect the future plan to this month's performance preparation and next-month benefit eligibility.
+- Explain that planned spending should be allocated only if the user already intends to spend it; do not encourage extra spending to fill card performance.
 - If the user asks for an app action, set relatedRoute and include an actionButton.
 - Do not invent exact card benefits, limits, or transaction facts outside the supplied JSON.
 - Use concise, refined Korean. Avoid casual endings such as "해줘", "좋아요", "예상돼요" in assistant copy.
 - Do not expose implementation words such as mock, fallback, DB, cache, candidate, or confidence.
 - messageType must be one of general, spending-analysis, card-recommendation, transaction-help, purchase-plan, navigation.
+- Any answer routed to /recommendations/usage or /recommendations/new must use messageType "card-recommendation".
 - tone must be one of navy, teal, blue, gray, gold, danger.
 - actionButtons[].route must be one of /cards, /transactions, /transactions/new, /budget, /recommendations/new, /recommendations/usage, /analytics, /community, /plans, /plans/new.
 - Use /recommendations/usage when the user asks which owned card to use, how to split payments, performance preparation, or current spending strategy.
 - Use /recommendations/new only when the user asks for a new card to issue or compare with cards they do not own.
+- Use /plans or /plans/new when the user's question is mainly about future purchase plans.
 - quickReplies should be 2 to 4 short Korean follow-up buttons.
 
 Return this exact JSON shape:

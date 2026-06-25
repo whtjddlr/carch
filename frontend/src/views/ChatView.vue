@@ -3,23 +3,24 @@
     <header class="chat-header blue-gradient">
       <AppBackButton fallback="/cards" />
       <div>
-        <h1>AI 카드 상담</h1>
+        <span class="eyebrow">데이터 기반 소비 코치</span>
+        <h1>카치에게 물어보기</h1>
       </div>
     </header>
 
     <div ref="scrollRef" class="screen-scroll scrollbar-hide chat-body">
       <section v-if="messages.length === 1" class="chat-starter-panel">
-        <span>바로 시작하기</span>
-        <strong>지금 데이터로 물어볼 수 있는 것</strong>
+        <span>지금 데이터로 바로 판단</span>
+        <strong>보유 카드 사용과 새 카드 발급을 나눠 답해드려요.</strong>
         <div class="starter-grid">
-          <button type="button" :disabled="isSending" @click="sendMessage('이번 달 소비 분석해줘')">
-            소비 분석
+          <button type="button" :disabled="isSending" @click="sendMessage('이번 달은 보유 카드 중 어디에 쓰는 게 좋아?')">
+            보유 카드
           </button>
-          <button type="button" :disabled="isSending" @click="sendMessage('나한테 맞는 카드 추천해줘')">
-            카드 추천
+          <button type="button" :disabled="isSending" @click="sendMessage('새로 발급받을 만한 카드는 따로 있어?')">
+            새 카드
           </button>
-          <button type="button" :disabled="isSending" @click="sendMessage('큰 지출 계획 세우고 싶어')">
-            지출 계획
+          <button type="button" :disabled="isSending" @click="sendMessage('소비계획이 있으면 카드 추천이 어떻게 바뀌어?')">
+            계획 반영
           </button>
         </div>
       </section>
@@ -54,6 +55,9 @@
               {{ reply }}
             </button>
           </div>
+          <small v-if="message.role === 'assistant' && message.aiMode" class="message-meta">
+            {{ aiModeLabel(message.aiMode) }}
+          </small>
         </div>
       </div>
 
@@ -72,7 +76,7 @@
         type="text"
         aria-label="AI에게 질문 입력"
         autocomplete="off"
-        placeholder="카드, 소비, 구매 계획을 질문하세요"
+        placeholder="예: 이번 달 식비는 어떤 카드로 쓸까?"
         :disabled="isSending"
       />
       <button type="submit" :disabled="isSending || !draft.trim()" aria-label="전송">
@@ -88,14 +92,19 @@ import { ArrowRight, SendHorizontal } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { sendChatMessage } from '@/services/api'
 
-const starterReplies = ['소비 분석 보기', '카드 추천 보기', '목표 지출 계획']
+const starterReplies = ['보유 카드 사용 추천', '새 카드 발급 추천', '소비계획 반영하기']
 const messages = ref([
   {
     id: 'assistant-welcome',
     role: 'assistant',
-    content: '안녕하세요. 최근 결제내역과 카드 데이터를 기준으로 소비 분석, 카드 추천, 구매 계획을 같이 도와드릴게요.',
+    content: '최근 결제내역, 보유 카드, 소비계획을 함께 보고 답합니다. 보유 카드 사용 전략과 새 카드 발급 추천은 구분해서 안내할게요.',
     quickReplies: starterReplies,
     relatedRoute: '',
+    summaryChips: [
+      { label: '응답 기준', value: '내 데이터', tone: 'teal' },
+      { label: '추천 구분', value: '사용/발급', tone: 'navy' },
+    ],
+    aiMode: 'local',
   },
 ])
 const draft = ref('')
@@ -117,6 +126,15 @@ function scrollToBottom() {
       scrollRef.value.scrollTop = scrollRef.value.scrollHeight
     }
   })
+}
+
+function aiModeLabel(mode) {
+  if (mode === 'gms_proxy') return 'FastAPI proxy가 LLM 응답을 검증한 결과'
+  if (mode === 'guardrail_blocked') return 'FastAPI Guardrail이 차단한 요청'
+  if (mode === 'gms') return 'LLM이 계산 결과를 해석한 응답'
+  if (mode === 'rule_fallback') return '검증된 계산 결과로 보정한 응답'
+  if (mode === 'mock') return '저장된 데이터 기반 기본 응답'
+  return '앱 데이터 기반 응답'
 }
 
 async function sendMessage(text = draft.value) {
@@ -155,7 +173,7 @@ async function sendMessage(text = draft.value) {
         summaryChips: [{ label: '응답 기준', value: '저장된 데이터', tone: 'gray' }],
         actionButtons: [{ label: '소비 분석 보기', route: '/analytics' }],
         messageType: 'general',
-        aiMode: 'mock',
+        aiMode: 'rule_fallback',
       }),
     )
   } finally {
@@ -327,8 +345,20 @@ async function sendMessage(text = draft.value) {
   color: #008c95;
 }
 
+.message-chips .tone-navy strong {
+  color: #17202b;
+}
+
+.message-chips .tone-blue strong {
+  color: #0f5fae;
+}
+
 .message-chips .tone-gold strong {
   color: #a66f00;
+}
+
+.message-chips .tone-danger strong {
+  color: #dc2626;
 }
 
 .message-actions a {
@@ -361,6 +391,15 @@ async function sendMessage(text = draft.value) {
 
 .quick-replies button:disabled {
   color: #8a9aad;
+}
+
+.message-meta {
+  display: block;
+  margin-top: 9px;
+  color: #8a96a5;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.3;
 }
 
 .typing {

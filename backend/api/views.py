@@ -2178,8 +2178,8 @@ def fallback_spending_analysis(summary):
         'actionButtons': [
             {'label': '카드 추천 보기', 'route': '/recommendations/new', 'intent': 'recommendation'},
         ],
-        'aiMode': 'mock',
-        'confidence': 0.55,
+        'aiMode': 'rule_fallback',
+        'confidence': 0.68,
     }
 
 
@@ -2208,6 +2208,7 @@ def analysis_record_list(request):
 
 
 def build_chat_context(request):
+    user = get_effective_user(request)
     transactions = [serialize_transaction(item) for item in transaction_queryset(request)]
     spending_trend = _build_spending_trend(transactions, _parse_category_overrides(request))
     current_month = spending_trend['currentMonth']
@@ -2244,6 +2245,86 @@ def build_chat_context(request):
             if card:
                 cards.append(card)
 
+    profile = _build_spending_profile(
+        request,
+        adjusted_for_recommendation=True,
+        recurring_overrides=_parse_category_overrides(request),
+    )
+    owned_ids = {str(item.card_id) for item in owned_card_queryset(request)}
+    current_card_spend = _profile_card_spend_map(profile, 'currentByCard')
+    previous_card_spend = _profile_card_spend_map(profile, 'previousByCard')
+    owned_values = []
+    owned_cards_by_id = {}
+    for card_id in owned_ids:
+        if not card_id.isdigit():
+            continue
+        card = fetch_card(int(card_id), request)
+        if not card:
+            continue
+        normalized_card_id = str(_card_id(card))
+        owned_cards_by_id[normalized_card_id] = card
+        owned_values.append(
+            {
+                'card': card,
+                **_estimate_card_value(
+                    card,
+                    profile,
+                    owned=True,
+                    evaluation_spend=previous_card_spend.get(normalized_card_id, 0),
+                    benefit_eligibility_spend=previous_card_spend.get(normalized_card_id, 0),
+                    performance_spend=current_card_spend.get(normalized_card_id, 0),
+                ),
+            }
+        )
+
+    baseline = _estimate_current_portfolio_value(profile, owned_cards_by_id, owned_ids)
+    owned_category_guides = _build_owned_category_guides(profile, owned_values, owned_ids)[:5]
+    routing_suggestions = _build_routing_suggestions(profile, owned_values, [], owned_ids)[:5]
+
+    candidate_cards = []
+    current_monthly_gross = _as_int(baseline.get('expectedMonthlyBenefit'))
+    for card in fetch_cards(request, limit=30, active_only=True):
+        detailed = fetch_card(int(card['cardAdId']), request) or card
+        if str(detailed.get('cardAdId')) in owned_ids:
+            continue
+        value = _estimate_card_value(
+            detailed,
+            profile,
+            owned=False,
+            evaluation_spend=_as_int(profile.get('totalExpense')),
+            benefit_eligibility_spend=_as_int(profile.get('totalExpense')),
+            performance_spend=0,
+        )
+        monthly_delta = value['expectedMonthlyBenefit'] - value['monthlyAnnualFee'] - current_monthly_gross
+        candidate_cards.append(
+            {
+                'cardId': _card_id(detailed),
+                'cardName': _card_name(detailed),
+                'issuer': _issuer_name(detailed),
+                'matchedCategories': value.get('matchedCategories') or [],
+                'expectedMonthlyBenefit': value.get('expectedMonthlyBenefit'),
+                'monthlyDelta': monthly_delta,
+                'previousMonthMinSpend': value.get('previousMonthMinSpend'),
+                'remainingCondition': value.get('remainingSpendForBenefit'),
+                'confidence': value.get('benefitRuleConfidence'),
+                'reason': _recommendation_reason(detailed, value, profile, monthly_delta),
+            }
+        )
+    candidate_cards.sort(
+        key=lambda item: (
+            _as_int(item.get('monthlyDelta')) > 0,
+            _as_int(item.get('monthlyDelta')),
+            _as_int(item.get('expectedMonthlyBenefit')),
+        ),
+        reverse=True,
+    )
+
+    ensure_purchase_plans_seeded(user)
+    purchase_plans = [
+        serialize_purchase_plan(plan)
+        for plan in PurchasePlan.objects.filter(user=user)[:3]
+    ]
+
     ensure_community_seeded()
     community_posts = [
         {
@@ -2260,6 +2341,29 @@ def build_chat_context(request):
         'summary': summary,
         'transactions': current_transactions,
         'cards': cards[:6],
+        'profile': {
+            'dataSource': profile.get('dataSource'),
+            'transactionCount': profile.get('transactionCount'),
+            'expenseTransactionCount': profile.get('expenseTransactionCount'),
+            'activeMonthCount': profile.get('activeMonthCount'),
+            'styleTags': profile.get('styleTags') or [],
+            'topCategory': profile.get('topCategory'),
+            'recommendationTopCategory': profile.get('recommendationTopCategory'),
+            'recurringCategories': profile.get('recurringCategories') or [],
+            'oneTimeCategories': profile.get('oneTimeCategories') or [],
+        },
+        'recommendationContext': {
+            'baseline': {
+                'cardId': baseline.get('cardId'),
+                'cardName': baseline.get('cardName'),
+                'expectedMonthlyBenefit': _as_int(baseline.get('expectedMonthlyBenefit')),
+                'monthlyNetBenefit': _as_int(baseline.get('monthlyNetBenefit')),
+            },
+            'ownedUsageGuides': owned_category_guides,
+            'routingSuggestions': routing_suggestions,
+            'newCardCandidates': candidate_cards[:5],
+        },
+        'purchasePlans': purchase_plans,
         'communityPosts': community_posts,
     }
 
@@ -2268,31 +2372,105 @@ def fallback_chat_response(message, context):
     summary = context.get('summary') or {}
     top_category = max(summary.get('byCategory') or [], key=lambda item: item['amount'], default={'category': '기타', 'amount': 0})
     text = str(message or '')
+    recommendation_context = context.get('recommendationContext') or {}
+    owned_guides = recommendation_context.get('ownedUsageGuides') or []
+    new_cards = recommendation_context.get('newCardCandidates') or []
+    purchase_plans = context.get('purchasePlans') or []
+    profile = context.get('profile') or {}
+    best_owned = owned_guides[0] if owned_guides else {}
+    best_new = new_cards[0] if new_cards else {}
+    plan = purchase_plans[0] if purchase_plans else {}
 
-    if '추천' in text or '카드' in text:
-        reply = '현재 소비 흐름과 전월 실적 조건을 함께 반영해 비교할 수 있습니다. 추천 화면에서 보유 카드와 비교 카드를 함께 확인하시기 바랍니다.'
+    asks_new_card = any(term in text for term in ['발급', '새 카드', '새카드', '비교 카드'])
+    asks_usage = any(term in text for term in ['보유', '가지고', '어떤 카드', '어디에 써', '분배', '실적', '이번 달'])
+    asks_plan = any(term in text for term in ['계획', '구매', '예정', '여행', '노트북', '큰 지출'])
+
+    if asks_plan:
+        if plan:
+            reply = (
+                f"최근 소비계획은 '{plan.get('title')}'이며 예산은 {_krw(plan.get('totalBudget'))}입니다. "
+                f"예정 지출은 보유 카드의 다음 달 조건 준비와 함께 보는 편이 좋습니다. "
+                "계획 화면에서 품목별 금액을 확인한 뒤 카드 사용 추천으로 이어가시기 바랍니다."
+            )
+        else:
+            reply = (
+                "아직 저장된 소비계획이 없습니다. 여행, 노트북, 기념일처럼 예정된 큰 지출을 입력하면 "
+                "이번 달 실적 준비와 다음 달 혜택 가능성을 함께 비교할 수 있습니다."
+            )
+        route = '/plans/new'
+        message_type = 'purchase-plan'
+        quick_replies = ['소비계획 만들기', '보유 카드 사용 추천', '새 카드 발급 추천']
+        chips = [
+            {'label': '계획 반영', 'value': '가능' if plan else '입력 필요', 'tone': 'gold'},
+            {'label': '추천 기준', 'value': profile.get('recommendationTopCategory') or top_category['category'], 'tone': 'teal'},
+        ]
+    elif asks_new_card:
+        if best_new:
+            delta = _as_int(best_new.get('monthlyDelta'))
+            reply = (
+                f"새 카드 발급 관점에서는 {best_new.get('cardName')} 후보가 먼저 보입니다. "
+                f"{', '.join(best_new.get('matchedCategories') or []) or top_category['category']} 소비와 맞고, "
+                f"현재 보유 카드 대비 월 {_krw(max(delta, 0))} 수준의 개선 여지가 있습니다. "
+                "다만 발급 추천은 보유 카드 사용 전략과 별도로 확인해야 합니다."
+            )
+        else:
+            reply = (
+                "현재 데이터만으로는 새 카드 발급 이득이 뚜렷하지 않습니다. "
+                "먼저 보유 카드 안에서 실적과 혜택 한도에 맞춰 결제 방향을 조정하는 편이 안전합니다."
+            )
         route = '/recommendations/new'
         message_type = 'card-recommendation'
-        quick_replies = ['카드 추천 보기', '전월 실적 확인', '소비 분석 보기']
-        chips = [{'label': '기준', 'value': '소비 흐름', 'tone': 'teal'}]
+        quick_replies = ['새 카드 추천 보기', '보유 카드와 비교', '소비 패턴 분석']
+        chips = [
+            {'label': '추천 구분', 'value': '새 카드 발급', 'tone': 'navy'},
+            {'label': '후보', 'value': best_new.get('cardName') or '검토 필요', 'tone': 'teal'},
+        ]
+    elif asks_usage or '추천' in text or '카드' in text:
+        if best_owned:
+            card_name = best_owned.get('cardName') or '보유 카드'
+            category = best_owned.get('category') or profile.get('recommendationTopCategory') or top_category['category']
+            remaining = _as_int(best_owned.get('remainingCurrentSpend'))
+            if remaining > 0:
+                detail = f"다음 달 혜택 조건까지 {_krw(remaining)}이 남아 있어 실적 준비 여부를 같이 봐야 합니다."
+            else:
+                detail = "현재 조건에서는 바로 혜택을 기대할 수 있는 카드로 보입니다."
+            reply = (
+                f"보유 카드 사용 관점에서는 {category} 지출에 {card_name}을 먼저 검토하는 것이 좋습니다. "
+                f"{detail} 새 카드 발급 추천과는 별도로, 이미 가진 카드 안에서 어디에 쓸지 판단한 결과입니다."
+            )
+        else:
+            reply = (
+                "보유 카드 사용 전략을 계산하려면 보유 카드와 거래내역이 더 필요합니다. "
+                "카드를 추가하면 이번 달 혜택 가능성과 다음 달 실적 준비를 나눠 안내할 수 있습니다."
+            )
+        route = '/recommendations/usage'
+        message_type = 'card-recommendation'
+        quick_replies = ['보유 카드 사용 추천', '새 카드 발급 추천', '소비계획 반영하기']
+        chips = [
+            {'label': '추천 구분', 'value': '보유 카드 사용', 'tone': 'teal'},
+            {'label': '기준', 'value': profile.get('recommendationTopCategory') or top_category['category'], 'tone': 'navy'},
+        ]
     elif '결제' in text or '내역' in text or '추가' in text:
         reply = '결제내역을 입력하면 가맹점, 금액, 카테고리를 정리합니다. 저장 전 내용을 확인한 뒤 반영할 수 있습니다.'
         route = '/transactions/new'
         message_type = 'transaction-help'
         quick_replies = ['결제내역 추가', '최근 거래 보기', '카테고리 분석']
         chips = [{'label': '입력', 'value': '결제내역', 'tone': 'blue'}]
-    elif '계획' in text or '구매' in text:
-        reply = '예정된 큰 지출은 목적과 시점을 먼저 나눈 뒤 카드 혜택 조건에 맞춰 배치하는 것이 유리합니다. 월별 계획으로 정리해 드릴 수 있습니다.'
-        route = '/plans/new'
-        message_type = 'purchase-plan'
-        quick_replies = ['목표 지출 만들기', '예시 보기', '카드 추천 보기']
-        chips = [{'label': '계획', 'value': '목표 지출', 'tone': 'gold'}]
     else:
-        reply = f"현재 데이터에서는 {top_category['category']} 지출이 가장 큽니다. 상위 지출과 카드 혜택 조건을 함께 확인하시기 바랍니다."
+        recurring = profile.get('recurringCategories') or []
+        recurring_text = ', '.join(recurring[:2]) if recurring else top_category['category']
+        reply = (
+            f"이번 달 총지출은 {_krw(summary.get('totalExpense'))}이고, 가장 큰 항목은 {top_category['category']}입니다. "
+            f"반복 소비로 볼 만한 항목은 {recurring_text}이며, 카드 추천에는 일시 지출보다 반복 지출을 더 크게 반영합니다. "
+            "보유 카드 사용 추천과 새 카드 발급 추천을 나눠 확인하시기 바랍니다."
+        )
         route = '/analytics'
         message_type = 'spending-analysis'
-        quick_replies = ['소비 분석 보기', '카드 추천 보기', '결제내역 추가']
-        chips = [{'label': '우선 확인', 'value': str(top_category['category']), 'tone': 'teal'}]
+        quick_replies = ['소비 분석 보기', '보유 카드 사용 추천', '새 카드 발급 추천']
+        chips = [
+            {'label': '상위 지출', 'value': str(top_category['category']), 'tone': 'teal'},
+            {'label': '거래 수', 'value': f"{profile.get('expenseTransactionCount') or 0}건", 'tone': 'gray'},
+        ]
 
     return {
         'schemaVersion': 'chat-response-v2',
@@ -2305,6 +2483,21 @@ def fallback_chat_response(message, context):
         'aiMode': 'mock',
         'confidence': 0.55,
     }
+
+
+def normalize_chat_response_for_route(response):
+    if not isinstance(response, dict):
+        return response
+    route = response.get('relatedRoute') or ''
+    if route in {'/recommendations/usage', '/recommendations/new'}:
+        response['messageType'] = 'card-recommendation'
+    elif route in {'/plans', '/plans/new'}:
+        response['messageType'] = 'purchase-plan'
+    elif route in {'/transactions', '/transactions/new'}:
+        response['messageType'] = 'transaction-help'
+    elif route == '/analytics':
+        response['messageType'] = response.get('messageType') or 'spending-analysis'
+    return response
 
 
 @csrf_exempt
@@ -2328,7 +2521,9 @@ def chat_message(request):
         history = []
 
     context = build_chat_context(request)
-    ai_response = chat_with_ai(message, history, context) or fallback_chat_response(message, context)
+    ai_response = normalize_chat_response_for_route(
+        chat_with_ai(message, history, context) or fallback_chat_response(message, context)
+    )
     record = save_analysis_record(
         'chat',
         message[:80],

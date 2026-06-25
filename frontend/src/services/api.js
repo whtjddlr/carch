@@ -1000,25 +1000,28 @@ export async function sendChatMessage(payload) {
   if (USE_MOCK_API) {
     await delay(500)
     const message = String(payload?.message || '')
-    const isRecommend = /추천|카드/.test(message)
-    const isPlan = /계획|큰 지출|예산|여행|취업/.test(message)
+    const isNewCard = /발급|새 카드|새카드|비교 카드/.test(message)
+    const isOwnedUsage = /보유|어디에|분배|실적|이번 달|카드/.test(message) && !isNewCard
+    const isPlan = /계획|큰 지출|예산|여행|취업|노트북|예정/.test(message)
     return {
       schemaVersion: 'chat-response-v2',
-      messageType: isPlan ? 'purchase-plan' : isRecommend ? 'card-recommendation' : 'spending-analysis',
+      messageType: isPlan ? 'purchase-plan' : (isNewCard || isOwnedUsage) ? 'card-recommendation' : 'spending-analysis',
       reply: isPlan
-        ? '예정된 지출은 목적과 시점을 나누면 관리가 쉬워집니다. 소비계획에서 예산 안 지출과 별도 예정 지출을 구분해볼 수 있습니다.'
-        : isRecommend
-          ? '최근 6개월 흐름을 기준으로 반복 지출을 분리했습니다. 식비와 쇼핑 결제 카드를 조정하면 월 9,624원의 순혜택 개선이 예상됩니다.'
-          : '이번 달 지출은 506,050원입니다. 쇼핑과 교육 지출이 평소보다 높아 일시적인 지출과 반복 지출을 나누어 비교했습니다.',
+        ? '소비계획을 입력하면 예정 지출을 이번 달 실적 준비와 다음 달 혜택 가능성에 연결해 판단합니다. 이미 쓰기로 한 금액 안에서만 카드 배분을 제안합니다.'
+        : isNewCard
+          ? '새 카드 발급 추천은 보유 카드 사용 전략과 분리해서 봐야 합니다. 반복 지출 기준으로 월 순혜택이 더 커지는 카드만 후보로 보여드립니다.'
+          : isOwnedUsage
+            ? '보유 카드 사용 추천은 이번 달 받을 수 있는 혜택과 다음 달 실적 준비를 함께 봅니다. 새 카드 발급보다 먼저, 이미 가진 카드 안에서 어디에 쓸지 판단합니다.'
+            : '이번 달 지출은 카테고리별 반복성과 일시 지출을 나눠 분석합니다. 반복 지출은 카드 추천에 더 크게 반영하고, 일시 지출은 보수적으로 반영합니다.',
       summaryChips: [
-        { label: '기준', value: '최근 6개월', tone: 'navy' },
-        { label: '다음으로', value: isPlan ? '소비계획' : '혜택 비교', tone: 'teal' },
+        { label: '기준', value: '내 데이터', tone: 'navy' },
+        { label: '구분', value: isNewCard ? '새 카드 발급' : isPlan ? '계획 반영' : isOwnedUsage ? '보유 카드 사용' : '소비 분석', tone: 'teal' },
       ],
-      quickReplies: ['소비 분석 보기', '카드 추천 보기', '소비계획 만들기'],
+      quickReplies: ['보유 카드 사용 추천', '새 카드 발급 추천', '소비계획 반영하기'],
       actionButtons: [
-        { label: isPlan ? '소비계획 보기' : isRecommend ? '카드 추천 보기' : '소비 분석 보기', route: isPlan ? '/plans' : isRecommend ? '/recommendations/new' : '/analytics', intent: 'open' },
+        { label: isPlan ? '소비계획 보기' : isNewCard ? '새 카드 추천 보기' : isOwnedUsage ? '보유 카드 추천 보기' : '소비 분석 보기', route: isPlan ? '/plans' : isNewCard ? '/recommendations/new' : isOwnedUsage ? '/recommendations/usage' : '/analytics', intent: 'open' },
       ],
-      relatedRoute: isPlan ? '/plans' : isRecommend ? '/recommendations/new' : '/analytics',
+      relatedRoute: isPlan ? '/plans' : isNewCard ? '/recommendations/new' : isOwnedUsage ? '/recommendations/usage' : '/analytics',
       aiMode: 'mock',
       confidence: 0.82,
       analysisRecordId: 'mock-chat-analysis',

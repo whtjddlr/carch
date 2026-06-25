@@ -80,8 +80,10 @@ ALLOWED_RECOMMENDATION_REASON_CODES = {
 
 
 def get_ai_status():
+    proxy_enabled = bool(getattr(settings, 'AI_PROXY_ENABLED', False) and getattr(settings, 'AI_PROXY_URL', ''))
+    gms_configured = bool(settings.GMS_API_KEY) and settings.AI_MODE in OPENAI_COMPATIBLE_MODES
     return {
-        'configured': bool(settings.GMS_API_KEY) and settings.AI_MODE in OPENAI_COMPATIBLE_MODES,
+        'configured': gms_configured or proxy_enabled,
         'mode': settings.AI_MODE,
         'provider': 'gms-openai-compatible',
         'model': settings.GMS_MODEL,
@@ -90,6 +92,8 @@ def get_ai_status():
         'timeoutSeconds': settings.GMS_TIMEOUT_SECONDS,
         'maxOutputTokens': settings.GMS_MAX_OUTPUT_TOKENS,
         'keyLoaded': bool(settings.GMS_API_KEY),
+        'proxyEnabled': proxy_enabled,
+        'proxyUrl': getattr(settings, 'AI_PROXY_URL', ''),
     }
 
 
@@ -104,8 +108,7 @@ def parse_transaction_with_ai(raw_text):
         categories=CATEGORY_ICONS.keys(),
     )
     try:
-        payload = request_gms_json(prompt, ai_prompts.TRANSACTION_DEVELOPER_PROMPT)
-        parsed = extract_json_object(extract_output_text(payload))
+        parsed = request_ai_json(prompt, ai_prompts.TRANSACTION_DEVELOPER_PROMPT, 'transaction-parse')
         if not parsed:
             return None
         return normalize_transaction(parsed, raw_text)
@@ -123,8 +126,7 @@ def parse_purchase_plan_with_ai(payload):
         today=timezone.localtime().date().isoformat(),
     )
     try:
-        response_payload = request_gms_json(prompt, ai_prompts.PURCHASE_PLAN_DEVELOPER_PROMPT)
-        parsed = extract_json_object(extract_output_text(response_payload))
+        parsed = request_ai_json(prompt, ai_prompts.PURCHASE_PLAN_DEVELOPER_PROMPT, 'purchase-plan-parse')
         if not parsed:
             return None
         return normalize_purchase_plan(parsed, payload)
@@ -138,8 +140,7 @@ def analyze_spending_with_ai(summary, transactions, cards):
 
     prompt = ai_prompts.build_spending_analysis_prompt(summary, transactions, cards)
     try:
-        response_payload = request_gms_json(prompt, ai_prompts.SPENDING_ANALYSIS_DEVELOPER_PROMPT)
-        parsed = extract_json_object(extract_output_text(response_payload))
+        parsed = request_ai_json(prompt, ai_prompts.SPENDING_ANALYSIS_DEVELOPER_PROMPT, 'spending-analysis')
         if not parsed:
             return None
         return normalize_spending_analysis(parsed)
@@ -149,16 +150,79 @@ def analyze_spending_with_ai(summary, transactions, cards):
 
 def chat_with_ai(message, history, context):
     message = str(message or '').strip()
-    if not message or not get_ai_status()['configured']:
+    if not message:
         return None
 
-    prompt = ai_prompts.build_chat_prompt(message, history, context)
+    # Chat LLM serving intentionally goes through the FastAPI proxy so the
+    # required Guardrail -> GMS -> score flow is demonstrable as one API layer.
+    return request_ai_proxy_chat(message, history, context)
+
+
+def request_ai_proxy_chat(message, history, context):
+    proxy_url = str(getattr(settings, 'AI_PROXY_URL', '') or '').rstrip('/')
+    if not getattr(settings, 'AI_PROXY_ENABLED', False) or not proxy_url:
+        return None
+
     try:
-        response_payload = request_gms_json(prompt, ai_prompts.CHAT_DEVELOPER_PROMPT)
-        parsed = extract_json_object(extract_output_text(response_payload))
-        if not parsed:
+        response = requests.post(
+            f'{proxy_url}/api/ai/proxy/chat',
+            json={
+                'message': message,
+                'history': history if isinstance(history, list) else [],
+                'context': context if isinstance(context, dict) else {},
+            },
+            timeout=getattr(settings, 'AI_PROXY_TIMEOUT_SECONDS', 20),
+        )
+        response.raise_for_status()
+        payload = response.json()
+        parsed = payload.get('result')
+        if not isinstance(parsed, dict):
             return None
-        return normalize_chat_response(parsed)
+        normalized = normalize_chat_response(parsed)
+        if not normalized:
+            return None
+        normalized['aiMode'] = payload.get('aiMode') or 'gms_proxy'
+        normalized['proxy'] = {
+            'guardrail': payload.get('guardrail') or {},
+            'score': payload.get('score') or {},
+            'allowed': bool(payload.get('allowed')),
+        }
+        return normalized
+    except (OSError, ValueError, requests.RequestException):
+        return None
+
+
+def request_ai_json(prompt, developer_prompt, task):
+    proxy_result = request_ai_proxy_json(prompt, developer_prompt, task)
+    if proxy_result is not None:
+        return proxy_result
+
+    if getattr(settings, 'AI_PROXY_ENABLED', False):
+        return None
+
+    payload = request_gms_json(prompt, developer_prompt)
+    return extract_json_object(extract_output_text(payload))
+
+
+def request_ai_proxy_json(prompt, developer_prompt, task):
+    proxy_url = str(getattr(settings, 'AI_PROXY_URL', '') or '').rstrip('/')
+    if not getattr(settings, 'AI_PROXY_ENABLED', False) or not proxy_url:
+        return None
+
+    try:
+        response = requests.post(
+            f'{proxy_url}/api/ai/proxy/json',
+            json={
+                'task': task,
+                'prompt': prompt,
+                'developerPrompt': developer_prompt,
+            },
+            timeout=getattr(settings, 'AI_PROXY_TIMEOUT_SECONDS', 20),
+        )
+        response.raise_for_status()
+        payload = response.json()
+        result = payload.get('result')
+        return result if isinstance(result, dict) else None
     except (OSError, ValueError, requests.RequestException):
         return None
 
@@ -169,8 +233,7 @@ def recommend_cards_with_ai(context):
 
     prompt = ai_prompts.build_card_recommendation_prompt(context)
     try:
-        response_payload = request_gms_json(prompt, ai_prompts.CARD_RECOMMENDATION_DEVELOPER_PROMPT)
-        parsed = extract_json_object(extract_output_text(response_payload))
+        parsed = request_ai_json(prompt, ai_prompts.CARD_RECOMMENDATION_DEVELOPER_PROMPT, 'card-recommendation')
         if not parsed:
             return None
         return normalize_card_recommendation_decision(parsed, context)

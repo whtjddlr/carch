@@ -168,6 +168,9 @@ GMS_MODEL = os.environ.get('GMS_MODEL') or os.environ.get('OPENAI_MODEL') or 'gp
 GMS_FALLBACK_MODEL = os.environ.get('GMS_FALLBACK_MODEL', 'gpt-5.4-mini')
 GMS_TIMEOUT_SECONDS = int(os.environ.get('GMS_TIMEOUT_SECONDS', '45'))
 GMS_MAX_OUTPUT_TOKENS = int(os.environ.get('GMS_MAX_OUTPUT_TOKENS', '3000'))
+AI_PROXY_URL = os.environ.get('AI_PROXY_URL', '').rstrip('/')
+AI_PROXY_ENABLED = env_bool('AI_PROXY_ENABLED', bool(AI_PROXY_URL))
+AI_PROXY_TIMEOUT_SECONDS = int(os.environ.get('AI_PROXY_TIMEOUT_SECONDS', '20'))
 
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5175').rstrip('/')
 BACKEND_URL = os.environ.get('BACKEND_URL', 'http://127.0.0.1:8000').rstrip('/')
