@@ -36,8 +36,19 @@ export function usePurchasePlan() {
 
   const loadPlans = async () => {
     if (didLoad) return
-    plans.value = await getPurchasePlans()
-    didLoad = true
+    try {
+      plans.value = await getPurchasePlans()
+      didLoad = true
+    } catch (requestError) {
+      // 부팅 중 인증 준비 전 일시적 실패 — 잠깐 후 1회 재시도(라우트는 죽지 않음)
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 450))
+        plans.value = await getPurchasePlans()
+        didLoad = true
+      } catch (retryError) {
+        error.value = retryError?.message || requestError?.message || ''
+      }
+    }
   }
 
   const refreshPlans = async () => {
