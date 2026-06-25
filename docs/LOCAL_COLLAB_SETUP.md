@@ -47,9 +47,17 @@ Local reset flow:
 ```powershell
 cd backend
 python manage.py migrate
+python manage.py seed_demo
 ```
 
-The app seeds demo cards, transactions, plans, and community data from source-controlled files during API use.
+The app can seed demo cards, transactions, plans, and community data from source-controlled files.
+For presentation setup on another computer, prefer the explicit command:
+
+```powershell
+python manage.py seed_demo --strict-card-bundle
+```
+
+See [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) for the full presentation checklist.
 
 ## Card Data And Images
 
