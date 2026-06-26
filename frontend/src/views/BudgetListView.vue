@@ -85,8 +85,8 @@
                 <span class="flag" :class="c.thisMonthOk ? 'on' : 'off'">
                   이번달 할인 {{ c.thisMonthOk ? '✓' : '✗' }}
                 </span>
-                <span class="flag" :class="c.nextMonthOk ? 'on' : 'wait'">
-                  {{ c.nextMonthOk ? '실적 충족 ✓' : `실적 ${c.nextPct}%` }}
+                <span class="flag" :class="(c.noPerf || c.nextMonthOk) ? 'on' : 'wait'">
+                  {{ c.noPerf ? '전월실적 없음' : c.nextMonthOk ? '실적 충족 ✓' : `실적 ${c.nextPct}%` }}
                 </span>
               </div>
             </div>
@@ -498,7 +498,6 @@ const ownedEligibilityMap = computed(() => {
     if (!(id in map)) {
       map[id] = {
         thisMonthOk: Boolean(g.eligibleForBenefit),
-        nextMonthOk: Boolean(g.eligibleForBenefit || g.nextMonthEligible),
       }
     }
   }
@@ -517,7 +516,9 @@ const cardUsageList = computed(() => walletCards.value.map((card) => {
   // 추천 번들에 잡힌 카드는 백엔드 산출 자격을 그대로 쓰고, 없으면 기존 실적 계산으로 폴백.
   const elig = ownedEligibilityMap.value[String(card.id)]
   const thisMonthOk = elig ? elig.thisMonthOk : (noPerf || prevSpend >= minSpend)
-  const nextMonthOk = elig ? elig.nextMonthOk : (noPerf || curSpend >= minSpend)
+  // 카드 현황의 다음 달 실적 상태는 추천 번들의 예측값이 아니라
+  // 실제 이번 달 누적 사용액으로만 판단해야 한다.
+  const nextMonthOk = noPerf || curSpend >= minSpend
   // 할인 한도(월 최대)는 카드 metadata, 받은 할인은 이번 달 사용액 × 혜택률을 한도 내에서 계산.
   // 혜택률/한도 정보가 없으면(예: 신규 사용자 카드) metadata 값으로 폴백(보통 0).
   const rawDiscountLimit = Number(card.discountLimit || 0)
