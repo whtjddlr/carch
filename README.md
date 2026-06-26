@@ -55,18 +55,19 @@
 CARCH의 추천은 생성형 AI가 임의로 만들지 않습니다. **검증 가능한 룰 엔진**이 혜택·실적·점수를 결정론적으로 계산하고, AI는 입력 해석과 결과 설명이라는 **양 끝단**만 담당합니다.
 
 ```mermaid
+%%{init: {'flowchart': {'padding': 14, 'nodeSpacing': 55, 'rankSpacing': 55}}}%%
 flowchart TD
-    U["🧑 사용자 · Vue 3 SPA<br/>자연어 · 결제 상황 · 소비계획"]
-    AIin["FastAPI AI 프록시 · GPT-4o-mini<br/>① 입력: 자연어 → JSON 구조화"]
-    RE["⚙️ Django 룰 엔진 (계산)<br/>전월 실적 · 월 한도 · 제외 조건 필터<br/>즉시 혜택 + 실적 기여 − 기회비용 → 추천 점수<br/>보유 카드 최적화 / 신규 카드 순가치"]
-    AIout["FastAPI AI 프록시 · GPT-4o-mini<br/>② 출력: 확정된 값만 받아 자연어 설명"]
-    DB[("🗄️ Supabase PostgreSQL + Storage<br/>카드 혜택 카탈로그 (정규화 규칙 스키마)")]
+    U["사용자 · Vue 3 SPA"]
+    AIin["AI 프록시 · FastAPI<br/>① 자연어 → JSON 구조화"]
+    RE["Django 룰 엔진 · 계산<br/>실적 · 한도 · 제외 필터<br/>혜택 + 실적 − 기회비용<br/>= 추천 점수"]
+    AIout["AI 프록시 · FastAPI<br/>② 확정값 → 자연어 설명"]
+    DB[("Supabase PostgreSQL<br/>카드 혜택 카탈로그")]
 
-    U --> AIin
-    AIin -->|구조화된 입력| RE
-    RE -->|확정된 수치| AIout
-    AIout -->|자연어 설명| U
-    DB -->|검증된 카드 규칙| RE
+    U -->|"자연어 입력"| AIin
+    AIin -->|"구조화 입력"| RE
+    RE -->|"확정 수치"| AIout
+    AIout -->|"자연어 설명"| U
+    DB -->|"카드 규칙"| RE
 ```
 
 > **AI는 양 끝(입력 해석 · 출력 설명), 계산은 가운데 룰 엔진** — 돈과 직결된 값은 AI가 만들지 않습니다.
