@@ -349,17 +349,13 @@ const savePlan = async () => {
   const id = await saveSelectedPlan()
   if (id) {
     resetWizard()
-    router.push(`/plans/${id}`)
+    router.push('/cards')
   }
 }
 
 const cancelCreate = () => {
   resetWizard()
-  if (window.history.state?.back) {
-    router.back()
-  } else {
-    router.push('/plans')
-  }
+  router.push('/cards')
 }
 </script>
 
