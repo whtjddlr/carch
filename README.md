@@ -297,7 +297,7 @@ erDiagram
 
 ## 🔗 링크
 
-- **배포(Live)**: https://carch-web.vercel.app
+- **배포(Live)**: https://carch-demo.vercel.app/demo
 - **서비스 명세**: [docs/SERVICE_SPEC.md](docs/SERVICE_SPEC.md)
 - **데모 런북**: [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md)
 - **데이터셋 요약**: [docs/DATASET_SUMMARY.md](docs/DATASET_SUMMARY.md)
