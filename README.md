@@ -26,7 +26,7 @@
 | **핵심 가치** | 결제 **전** 의사결정 · 보유 카드 **최적화** · 근거 있는 추천 |
 | **차별점** | 신규 카드 발급 권유(X) → **보유 카드 최적 사용(O)** / 사후 통계(X) → **결제 전 설계(O)** |
 | **AI 역할** | 계산·순위는 **룰 엔진**이, 해석·설명은 **생성형 AI**가 — 돈과 직결된 값은 AI가 만들지 않음 |
-| **배포** | [carch-web.vercel.app](https://carch-web.vercel.app) (멀티유저, 회원가입 시 개인 지갑 생성) |
+| **배포** | [[carch-web.vercel.app](https://carch-web.vercel.app)](https://carch-demo.vercel.app/demo) (멀티유저, 회원가입 시 개인 지갑 생성) |
 
 ---
 
@@ -297,7 +297,7 @@ erDiagram
 
 ## 🔗 링크
 
-- **배포(Live)**: https://carch-demo.vercel.app/demo
+- **배포(Live)**: [https://carch-demo.vercel.app/demo](https://carch-demo.vercel.app/demo)
 - **서비스 명세**: [docs/SERVICE_SPEC.md](docs/SERVICE_SPEC.md)
 - **데모 런북**: [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md)
 - **데이터셋 요약**: [docs/DATASET_SUMMARY.md](docs/DATASET_SUMMARY.md)
