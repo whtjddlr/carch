@@ -243,9 +243,12 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { BarChart3, ChevronDown, CreditCard, RefreshCw, Search, Sparkles } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
-import { cards as mockCards, krw, transactions as mockTransactions } from '@/data/mockData'
-import { fetchBudget, fetchCardRecommendationBundle, fetchMonthlySpending, fetchOwnedCards, fetchSpendingSummary, normalizeCard } from '@/services/api'
+import { cards as mockCards, krw } from '@/data/mockData'
+import { fetchBudget, fetchCardRecommendationBundle, fetchMonthlySpending, fetchOwnedCards, fetchSpendingSummary, IS_DEMO_CHANNEL, normalizeCard } from '@/services/api'
 import { budgetRiskColor } from '@/utils/budgetRisk'
+
+// 서비스 채널에서는 데모(남주현) 카드 데이터를 노출하지 않는다.
+const demoCards = IS_DEMO_CHANNEL ? mockCards : []
 
 const colors = ['#0f5fae', '#008c95', '#24364f', '#c49a49', '#8a9aad', '#5f6b77']
 const summary = ref(null)
@@ -608,7 +611,7 @@ const cardLookup = computed(() => {
     if (card.cardAdId != null) map.set(String(card.cardAdId), normalized)
     if (card.card_ad_id != null) map.set(String(card.card_ad_id), normalized)
   }
-  mockCards.forEach(addCard)
+  demoCards.forEach(addCard)
   ownedCards.value.forEach(addCard)
   ;(recommendationBundle.value?.results || []).forEach(addCard)
   ;(recommendationBundle.value?.ownedCategoryGuides || []).forEach((item) => addCard({
@@ -679,47 +682,6 @@ const statusMessage = computed(() => {
   if (isLoading.value) return '최신 소비 인사이트를 준비하고 있습니다.'
   return ''
 })
-
-function buildMockSummary(monthKey = null) {
-  const inMonth = (tx) => !monthKey || String(tx.date || '').slice(0, 7) === monthKey
-  const expenses = mockTransactions.filter((tx) => Number(tx.amt) < 0 && inMonth(tx))
-  const categoryMap = new Map()
-  const cardMap = new Map()
-  expenses.forEach((tx) => {
-    categoryMap.set(tx.cat, (categoryMap.get(tx.cat) || 0) + Math.abs(Number(tx.amt) || 0))
-    cardMap.set(String(tx.cardId), (cardMap.get(String(tx.cardId)) || 0) + Math.abs(Number(tx.amt) || 0))
-  })
-  const byCategory = [...categoryMap.entries()].map(([category, amount]) => ({ category, amount }))
-  const byCard = [...cardMap.entries()].map(([cardId, amount]) => ({ cardId, amount }))
-  const totalExpense = expenses.reduce((sum, tx) => sum + Math.abs(Number(tx.amt) || 0), 0)
-  return {
-    totalExpense,
-    totalIncome: mockTransactions
-      .filter((tx) => Number(tx.amt) > 0 && inMonth(tx))
-      .reduce((sum, tx) => sum + Number(tx.amt || 0), 0),
-    byCategory,
-    byCard,
-    period: { currentMonth: monthKey || '2026-06' },
-    spendingTrend: {
-      currentMonth: monthKey || '2026-06',
-      total: {
-        deltaFromPrevious: totalExpense - 483500,
-        deltaFromBaseline: totalExpense - 463183,
-      },
-      reviewCandidates: [],
-      oneTimeCandidates: [],
-    },
-    aiAnalysis: {
-      savingOpportunities: [{ amount: 12000 }],
-      cardInsights: byCard.map((item) => ({
-        cardId: item.cardId,
-        cardName: resolveCardMeta(item.cardId).name,
-        amount: item.amount,
-        fit: '보통',
-      })),
-    },
-  }
-}
 
 function buildEmptySummary(monthKey = LATEST_MONTH) {
   return {

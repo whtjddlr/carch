@@ -14,7 +14,7 @@
 
       <label v-if="isSignup">
         <span>이름</span>
-        <input v-model.trim="form.name" class="form-field" type="text" autocomplete="name" placeholder="남주현" />
+        <input v-model.trim="form.name" class="form-field" type="text" autocomplete="name" placeholder="홍길동" />
       </label>
       <label>
         <span>{{ identityLabel }}</span>

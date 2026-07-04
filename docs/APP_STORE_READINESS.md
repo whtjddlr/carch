@@ -76,7 +76,7 @@ APP_CHANNEL=demo
 DEMO_FEATURES_ENABLED=true
 DATABASE_SCHEMA=demo
 CARD_CATALOG_SCHEMA=catalog
-DATABASE_SEARCH_PATH=catalog
+DATABASE_SEARCH_PATH=demo,catalog
 CARD_CATALOG_SOURCE=postgres
 VITE_APP_CHANNEL=demo
 같은 Supabase DB의 demo schema 사용
@@ -87,13 +87,19 @@ DEMO_FEATURES_ENABLED=false
 DEV_AUTO_LOGIN_ENABLED=false
 DATABASE_SCHEMA=service
 CARD_CATALOG_SCHEMA=catalog
-DATABASE_SEARCH_PATH=catalog
+DATABASE_SEARCH_PATH=service,catalog
 CARD_CATALOG_SOURCE=postgres
 VITE_APP_CHANNEL=service
 같은 Supabase DB의 service schema 사용
 ```
 
-하나의 Supabase 프로젝트 안에서 `demo`, `service`, `catalog` schema를 나눈다. Django 앱 테이블은 `DATABASE_SCHEMA` 첫 번째 search_path에 생성되고, 카드 카탈로그는 공용 `catalog` schema에서 읽는다. `public`에는 기존 테이블이 남아 있을 수 있으므로 demo/service 배포의 search_path에는 넣지 않는다. 서비스용 schema는 카드 카탈로그만 공용으로 참조하고, `auth_user`, `transactions`, `owned_cards`, `purchase_plans`, `community_posts`, `ai_analysis_records`는 비어 있어야 한다. service 채널에서는 마이그레이션, 런타임 API, `seed_demo` 명령이 데모 유저와 데모 데이터를 만들지 않는다.
+하나의 Supabase 프로젝트 안에서 `demo`, `service`, `catalog` schema를 나눈다. Django 앱 테이블(`auth_user`, `transactions`, `django_migrations` 등)은 마이그레이션 시 `DATABASE_SEARCH_PATH` 첫 번째 schema(= `DATABASE_SCHEMA`)에 생성된다. 그래서 `DATABASE_SEARCH_PATH`는 반드시 `DATABASE_SCHEMA`로 시작해야 한다. (이전 문서의 `DATABASE_SEARCH_PATH=catalog`는 앱 테이블을 catalog에 잘못 생성하므로 사용하지 않는다.)
+
+런타임 조회는 search_path에 의존하지 않는다. 앱 모델 테이블은 `"schema"."table"`로 한정되고(`api/db_schema.py`), 카드 카탈로그 SQL도 `"catalog".cards`처럼 스키마를 명시한다(`api/card_repository.py`). 따라서 Supabase 트랜잭션 풀러(6543)가 `SET search_path`를 트랜잭션마다 리셋해도 런타임 API는 영향받지 않는다.
+
+단, **마이그레이션(`migrate`)은 세션이 유지되는 direct 연결(포트 5432 / session mode)로 실행한다.** 트랜잭션 풀러로 migrate하면 `SET search_path`가 유지되지 않아 앱 테이블이 엉뚱한 schema에 생성될 수 있다.
+
+`public`에는 기존 테이블이 남아 있을 수 있으므로 demo/service 배포의 search_path에는 넣지 않는다. 서비스용 schema는 카드 카탈로그만 공용으로 참조하고, `auth_user`, `transactions`, `owned_cards`, `purchase_plans`, `community_posts`, `ai_analysis_records`는 비어 있어야 한다. service 채널에서는 마이그레이션, 런타임 API, `seed_demo` 명령이 데모 유저와 데모 데이터를 만들지 않는다.
 
 Supabase SQL Editor에서 최초 1회 schema를 만든다.
 

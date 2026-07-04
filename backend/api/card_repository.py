@@ -60,6 +60,17 @@ def use_supabase_catalog():
     return getattr(settings, 'CARD_CATALOG_SOURCE', 'sqlite') == 'supabase'
 
 
+def catalog_table(name):
+    # Postgres 카탈로그는 search_path에 의존하지 않도록 스키마를 명시한다.
+    # (Supabase 트랜잭션 풀러는 SET search_path를 트랜잭션마다 리셋한다.)
+    # sqlite 번들은 스키마 개념이 없으므로 테이블명을 그대로 쓴다.
+    if use_postgres_catalog():
+        schema = getattr(settings, 'CARD_CATALOG_SCHEMA', '') or ''
+        if schema:
+            return f'"{schema}".{name}'
+    return name
+
+
 def supabase_catalog_get(table, params):
     supabase_url = getattr(settings, 'SUPABASE_URL', '').rstrip('/')
     supabase_key = getattr(settings, 'SUPABASE_SECRET_KEY', '') or getattr(settings, 'SUPABASE_PUBLISHABLE_KEY', '')
@@ -304,7 +315,7 @@ def list_benefits(card_ad_id, limit=5):
         rows = card_catalog_query(
             f'''
                 select {BENEFIT_SELECT_COLUMNS.replace(',', ', ')}
-                from card_benefits
+                from {catalog_table('card_benefits')}
                 where card_ad_id = ?
                 order by
                   case when is_auto_usable = 1 then 0 else 1 end,
@@ -338,7 +349,7 @@ def list_benefits_bulk(card_ad_ids):
         rows = card_catalog_query(
             f'''
                 select {BENEFIT_SELECT_COLUMNS.replace(',', ', ')}
-                from card_benefits
+                from {catalog_table('card_benefits')}
                 where card_ad_id in ({placeholders})
                 order by
                   card_ad_id,
@@ -470,7 +481,7 @@ def fetch_cards(request, limit=30, search='', issuer='', active_only=False, incl
     rows = card_catalog_query(
         f'''
             select *
-            from cards
+            from {catalog_table('cards')}
             where {where_sql}
             order by
               case when issue_status = 'active' then 0 else 1 end,
@@ -502,7 +513,7 @@ def fetch_cards_by_ids(card_ad_ids, request, include_benefits=True):
         })
     else:
         placeholders = ','.join('?' for _ in ids)
-        rows = card_catalog_query(f'select * from cards where card_ad_id in ({placeholders})', ids)
+        rows = card_catalog_query(f'select * from {catalog_table("cards")} where card_ad_id in ({placeholders})', ids)
     benefit_map = list_benefits_bulk(ids) if include_benefits else {}
     cards = [
         serialize_card(
@@ -530,7 +541,7 @@ def fetch_card(card_ad_id, request):
             return None
         return serialize_card(row, request, include_benefits=True)
 
-    row = card_catalog_one('select * from cards where card_ad_id = ?', (card_ad_id,))
+    row = card_catalog_one(f'select * from {catalog_table("cards")} where card_ad_id = ?', (card_ad_id,))
     if not row:
         return None
     return serialize_card(row, request, include_benefits=True)
