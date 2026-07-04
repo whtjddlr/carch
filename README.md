@@ -4,6 +4,20 @@
 “지금 가진 카드 중 무엇을 쓰면 좋은지”와 “새 카드를 발급할 가치가 있는지”를
 나누어 안내하는 카드 소비 코치 서비스입니다.
 
+## 빠른 링크
+
+| 구분 | 링크 |
+| --- | --- |
+| 서비스 웹 | https://carch.vercel.app |
+| 서비스 API | https://carch-api.vercel.app |
+| 시연/demo | https://carch-demo.vercel.app/demo |
+| 개인정보 처리방침 | https://carch.vercel.app/privacy |
+| App Store 준비 문서 | [docs/APP_STORE_READINESS.md](docs/APP_STORE_READINESS.md) |
+| Supabase/Vercel 배포 문서 | [docs/SUPABASE_VERCEL_DEMO.md](docs/SUPABASE_VERCEL_DEMO.md) |
+
+서비스 채널과 시연 채널은 같은 코드베이스를 사용하지만 환경변수와 DB schema를 분리합니다.
+`carch.vercel.app`은 실제 서비스/App Store 기준이고, `carch-demo.vercel.app/demo`는 자동 로그인되는 발표/포트폴리오용 흐름입니다.
+
 ## 1. 팀원 정보 및 업무 분담
 
 | 팀원 | 주요 업무 |
@@ -46,7 +60,7 @@
 | Backend | Django 5, Django ORM, SQLite/Supabase Postgres 호환 구조 |
 | AI | SSAFY GMS OpenAI-compatible API, FastAPI AI proxy 선택 지원 |
 | Data | Supabase Postgres, Supabase Storage, 카드 혜택 정규화 테이블 |
-| Deployment Ready | Vercel 설정 파일, Supabase 연동 문서 |
+| Deployment | Vercel, Supabase schema split, Capacitor iOS shell |
 
 ## 4. 데이터베이스 모델링 / ERD
 
@@ -214,8 +228,9 @@ erDiagram
 ### 커뮤니티
 
 - 카드 후기와 혜택 전략 게시글
-- 댓글, 좋아요
-- 검색 연동
+- 댓글, 좋아요, 저장
+- 검색, 나의 글, 저장됨 필터
+- 신고/숨김 흐름으로 서비스 채널 운영 리스크 완화
 
 ## 7. 생성형 AI 활용 부분
 
@@ -231,14 +246,14 @@ GMS API 키가 없거나 응답이 실패해도 fallback 응답으로 기본 시
 
 ### 현재 서비스 URL
 
-- 서비스 웹: https://carch.vercel.app
-- 서비스 API: https://carch-api.vercel.app
-- 시연/demo 웹: https://carch-demo.vercel.app/demo
-- 시연/demo API: 프론트 mock/데모 채널 기준. 별도 demo 백엔드를 붙일 때만 `BACKEND_URL_DEMO`를 설정합니다.
-- legacy frontend alias: https://carch-web.vercel.app
-- 체험 계정: `skawngus / skawngus`
+| 채널 | URL | 용도 |
+| --- | --- | --- |
+| service web | https://carch.vercel.app | 실제 서비스/App Store 기준 웹 |
+| service API | https://carch-api.vercel.app | Django API, service schema 기준 |
+| demo web | https://carch-demo.vercel.app/demo | 발표/포트폴리오 시연, 자동 로그인 |
+| legacy alias | https://carch-web.vercel.app | 이전 프론트 alias |
 
-`carch.vercel.app`은 실제 서비스/App Store 기준 채널입니다. `carch-demo.vercel.app/demo`는 체험 계정으로 자동 로그인한 뒤 카드 홈으로 이동하는 시연용 채널입니다.
+체험 계정은 `skawngus / skawngus`입니다. 이 계정은 demo 채널에서만 자동 시연 흐름으로 사용합니다.
 
 ### 배포 준비
 
@@ -249,6 +264,19 @@ GMS API 키가 없거나 응답이 실패해도 fallback 응답으로 기본 시
 - 서비스용 DB에는 공용 카드 카탈로그만 참조하고, 일반 사용자 데이터는 비어 있는 상태에서 시작합니다.
 - iOS 앱스토어 배포 준비는 [docs/APP_STORE_READINESS.md](docs/APP_STORE_READINESS.md)에 정리했습니다.
 - 자세한 배포 절차는 [docs/SUPABASE_VERCEL_DEMO.md](docs/SUPABASE_VERCEL_DEMO.md)를 참고합니다.
+
+### 채널별 환경 구조
+
+| 항목 | demo | service |
+| --- | --- | --- |
+| `APP_CHANNEL` | `demo` | `service` |
+| `DEMO_FEATURES_ENABLED` | `true` | `false` |
+| `DATABASE_SCHEMA` | `demo` | `service` |
+| `CARD_CATALOG_SCHEMA` | `catalog` | `catalog` |
+| 자동 로그인 | 사용 | 미사용 |
+| 초기 데이터 | 남주현 시연 데이터 | 신규 사용자는 빈 상태 |
+
+서비스 채널은 카드 카탈로그만 공용 `catalog` schema에서 읽고, 사용자 데이터는 `service` schema에 따로 저장합니다.
 
 ### App Store 준비 상태
 
@@ -300,6 +328,19 @@ password: skawngus
 ```
 
 관리자/데모 로그인 흐름에서도 남주현 시나리오가 재현되도록 구성했습니다.
+
+### 검증 명령
+
+```bash
+cd backend
+.venv/bin/python manage.py test api
+
+cd ../frontend
+npm run build
+VITE_IOS_API_BASE_URL=https://carch-api.vercel.app npm run ios:sync
+```
+
+현재 기준 백엔드 API 테스트 30개, 프론트 프로덕션 빌드, Capacitor iOS sync를 통과했습니다.
 
 ## 10. 실행 화면 캡처본
 
