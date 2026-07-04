@@ -120,13 +120,13 @@ import { CalendarDays, Check, Clock, Coins, CreditCard, ImageIcon, Sparkles, Sto
 import AppBackButton from '@/components/AppBackButton.vue'
 import AppCalendarPicker from '@/components/AppCalendarPicker.vue'
 import { cards as mockCards } from '@/data/mockData'
-import { createTransaction, fetchOwnedCards, normalizeCard, parseTransaction } from '@/services/api'
+import { createTransaction, fetchOwnedCards, IS_DEMO_CHANNEL, normalizeCard, parseTransaction } from '@/services/api'
 
 const router = useRouter()
-const rawText = ref('오늘 컴포즈커피 역삼센터필드점에서 3800원 LOCA LIKIT Eat로 결제했어')
+const rawText = ref(IS_DEMO_CHANNEL ? '오늘 컴포즈커피 역삼센터필드점에서 3800원 LOCA LIKIT Eat로 결제했어' : '')
 const isParsing = ref(false)
 const isSaving = ref(false)
-const cards = ref(mockCards)
+const cards = ref(IS_DEMO_CHANNEL ? mockCards : [])
 const imageName = ref('')
 const previewOri = ref('')
 
@@ -135,14 +135,14 @@ const installmentMonthOptions = [2, 3, 4, 5, 6, 9, 10, 12]
 
 const form = reactive({
   merchantName: '',
-  amount: 3800,
+  amount: IS_DEMO_CHANNEL ? 3800 : 0,
   category: '카페',
-  cardId: '10106',
+  cardId: IS_DEMO_CHANNEL ? '10106' : '',
   paymentType: 'lump_sum',
   installmentMonths: 0,
   isInterestFreeInstallment: false,
-  date: '2026-06-23',
-  time: '08:42',
+  date: IS_DEMO_CHANNEL ? '2026-06-23' : new Date().toLocaleDateString('sv-SE'),
+  time: IS_DEMO_CHANNEL ? '08:42' : new Date().toTimeString().slice(0, 5),
   address: '',
   icon: '☕',
 })
@@ -233,10 +233,12 @@ onMounted(async () => {
   try {
     const apiCards = await fetchOwnedCards()
     cards.value = apiCards.map((card, index) => normalizeCard(card, index))
+    if (!form.cardId && cards.value[0]) form.cardId = cards.value[0].id
   } catch (error) {
-    console.warn('카드 API를 불러오지 못해 mock 카드 목록을 사용합니다.', error)
+    if (!IS_DEMO_CHANNEL) cards.value = []
+    console.warn('카드 API를 불러오지 못했습니다.', error)
   }
-  await handleParse()
+  if (rawText.value.trim()) await handleParse()
 })
 </script>
 

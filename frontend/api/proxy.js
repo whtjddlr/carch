@@ -1,4 +1,6 @@
 const DEFAULT_BACKEND_URL = 'https://carch-api.vercel.app'
+const DEFAULT_DEMO_HOSTS = ['carch-demo.vercel.app']
+const DEFAULT_SERVICE_HOSTS = ['carch.vercel.app', 'carch-service.vercel.app']
 
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
@@ -14,7 +16,29 @@ const HOP_BY_HOP_HEADERS = new Set([
   'upgrade',
 ])
 
-const backendBaseUrl = () => (process.env.BACKEND_URL || DEFAULT_BACKEND_URL).replace(/\/+$/, '')
+const envList = (value, fallback = []) => {
+  const items = String(value || '')
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+  return items.length ? items : fallback
+}
+
+const requestHost = (req) => String(req.headers?.['x-forwarded-host'] || req.headers?.host || '').split(',')[0].trim().toLowerCase()
+
+const backendBaseUrl = (req) => {
+  const host = requestHost(req)
+  const demoHosts = envList(process.env.DEMO_HOSTS || process.env.VITE_DEMO_HOSTS, DEFAULT_DEMO_HOSTS)
+  const serviceHosts = envList(process.env.SERVICE_HOSTS || process.env.VITE_SERVICE_HOSTS, DEFAULT_SERVICE_HOSTS)
+
+  if (host && demoHosts.includes(host)) {
+    return (process.env.BACKEND_URL_DEMO || process.env.DEMO_BACKEND_URL || process.env.BACKEND_URL || DEFAULT_BACKEND_URL).replace(/\/+$/, '')
+  }
+  if (host && serviceHosts.includes(host)) {
+    return (process.env.BACKEND_URL_SERVICE || process.env.SERVICE_BACKEND_URL || process.env.BACKEND_URL || DEFAULT_BACKEND_URL).replace(/\/+$/, '')
+  }
+  return (process.env.BACKEND_URL || DEFAULT_BACKEND_URL).replace(/\/+$/, '')
+}
 
 const readPath = (req) => {
   const rawPath = req.query?.path
@@ -47,7 +71,7 @@ const appendQuery = (url, query) => {
 
 const targetUrl = (req) => {
   const path = readPath(req).replace(/^\/+/, '')
-  return appendQuery(`${backendBaseUrl()}/api/${path}`, req.query)
+  return appendQuery(`${backendBaseUrl(req)}/api/${path}`, req.query)
 }
 
 const requestHeaders = (headers = {}, hasJsonBody = false) => {
@@ -96,7 +120,7 @@ export default async function handler(req, res) {
   } catch (error) {
     res.status(502).json({
       detail: 'Backend proxy request failed.',
-      backendUrl: backendBaseUrl(),
+      backendUrl: backendBaseUrl(req),
       message: error instanceof Error ? error.message : String(error),
     })
   }

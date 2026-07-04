@@ -247,6 +247,19 @@
           </div>
           <ChevronRight :size="17" />
         </button>
+        <button
+          class="app-card setting-row account-delete-row"
+          type="button"
+          :disabled="isDeletingAccount"
+          @click="deleteAccountModalOpen = true"
+        >
+          <Trash2 :size="18" />
+          <div>
+            <strong>계정 삭제</strong>
+            <span>계정과 연결된 소비 데이터를 삭제합니다.</span>
+          </div>
+          <ChevronRight :size="17" />
+        </button>
       </section>
 
       <section v-else-if="props.type === 'notificationSettings'" class="notification-settings-view">
@@ -299,7 +312,7 @@
           </div>
           <div>
             <strong>프로필 정보</strong>
-            <p>카드 추천과 커뮤니티에 표시되는 기본 정보입니다.</p>
+            <p>{{ profileDescription }}</p>
           </div>
         </div>
         <section class="profile-photo-panel">
@@ -347,7 +360,7 @@
             v-model.trim="searchTerm"
             type="search"
             aria-label="통합 검색"
-            placeholder="카드, 거래, 커뮤니티 검색"
+            :placeholder="searchPlaceholder"
             autofocus
           />
         </label>
@@ -365,7 +378,7 @@
         <article v-if="searchLoading && hasSearchTerm" class="app-card empty-card search-status">
           <Search :size="28" />
           <strong>검색 중입니다</strong>
-          <p>카드, 거래, 커뮤니티를 함께 확인하고 있어요.</p>
+          <p>{{ searchLoadingMessage }}</p>
         </article>
         <article v-else-if="searchError && hasSearchTerm" class="app-card empty-card search-status">
           <Search :size="28" />
@@ -414,7 +427,7 @@
         <article v-if="hasSearchTerm && !searchLoading && !searchError && searchResults.length === 0" class="app-card empty-card">
           <Search :size="28" />
           <strong>검색 결과가 없어요</strong>
-          <p>카드명, 가맹점명, 커뮤니티 제목으로 검색해보세요.</p>
+          <p>{{ searchEmptyMessage }}</p>
         </article>
       </section>
 
@@ -425,6 +438,29 @@
         <div v-if="content.planLink" class="utility-actions">
           <RouterLink class="primary-button" to="/plans">목표 지출 계획</RouterLink>
           <RouterLink class="outline-button" to="/plans/new">목표 지출 만들기</RouterLink>
+        </div>
+      </article>
+    </div>
+
+    <div
+      v-if="deleteAccountModalOpen"
+      class="modal-scrim"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-account-title"
+      @click.self="deleteAccountModalOpen = false"
+    >
+      <article class="sheet account-delete-sheet">
+        <strong id="delete-account-title">계정을 삭제할까요?</strong>
+        <p>{{ accountDeletionDescription }}</p>
+        <p v-if="deleteAccountError" class="account-delete-error">{{ deleteAccountError }}</p>
+        <div class="account-delete-actions">
+          <button class="outline-button" type="button" :disabled="isDeletingAccount" @click="deleteAccountModalOpen = false">
+            취소
+          </button>
+          <button class="danger-button" type="button" :disabled="isDeletingAccount" @click="handleDeleteAccount">
+            {{ isDeletingAccount ? '삭제 중' : '삭제' }}
+          </button>
         </div>
       </article>
     </div>
@@ -476,11 +512,11 @@ import {
   krw,
   notifications,
   transactions as mockTransactions,
-  user,
+  user as mockUser,
 } from '@/data/mockData'
 import AppBackButton from '@/components/AppBackButton.vue'
-import { deleteOwnedCard, deleteTransaction, fetchCard, fetchOwnedCards, fetchSearchResults, fetchTransactions, normalizeCard } from '@/services/api'
-import { logout } from '@/services/auth'
+import { deleteOwnedCard, deleteTransaction, fetchCard, fetchOwnedCards, fetchSearchResults, fetchTransactions, IS_DEMO_CHANNEL, normalizeCard } from '@/services/api'
+import { deleteAccount, getStoredUser, logout } from '@/services/auth'
 
 const props = defineProps({
   type: { type: String, default: 'default' },
@@ -504,13 +540,16 @@ const backFallback = computed(() => {
 })
 
 const apiCard = ref(null)
-const transactionRows = ref(mockTransactions)
+const transactionRows = ref(IS_DEMO_CHANNEL ? mockTransactions : [])
 const isTransactionLoading = ref(props.type === 'transaction')
-const cardRows = ref(mockCards)
-const communityRows = ref(mockCommunityPosts)
+const cardRows = ref(IS_DEMO_CHANNEL ? mockCards : [])
+const communityRows = ref(IS_DEMO_CHANNEL ? mockCommunityPosts : [])
 const profileSaved = ref(false)
 const profileImageError = ref('')
 const isLoggingOut = ref(false)
+const isDeletingAccount = ref(false)
+const deleteAccountModalOpen = ref(false)
+const deleteAccountError = ref('')
 const searchTerm = ref('')
 const searchType = ref('all')
 const searchRows = ref([])
@@ -789,23 +828,33 @@ const PROFILE_IMAGE_MAX_BYTES = 1024 * 1024
 
 function profileInitialsFrom(name, email) {
   const source = String(name || email || '').trim()
-  if (!source) return user.initials || '김'
+  if (!source) return mockUser.initials || '김'
   const compact = source.replace(/\s+/g, '')
   return compact.slice(0, 2).toUpperCase()
 }
 
-function readProfileSettings() {
-  const defaults = {
-    name: user.name,
-    email: user.email,
-    phone: user.phone,
-    initials: user.initials,
+function currentAuthProfile() {
+  const storedUser = getStoredUser() || {}
+  const name = storedUser.name || mockUser.name
+  const email = storedUser.email || mockUser.email
+  return {
+    name,
+    email,
+    phone: mockUser.phone,
+    initials: storedUser.initials || profileInitialsFrom(name, email),
     avatarUrl: '',
   }
+}
+
+function readProfileSettings() {
+  const defaults = currentAuthProfile()
   if (typeof window === 'undefined') return defaults
 
   try {
     const saved = JSON.parse(window.localStorage.getItem(PROFILE_SETTINGS_KEY) || '{}')
+    if (saved.email && saved.email !== defaults.email && saved.authEmail !== defaults.email) {
+      return defaults
+    }
     return {
       ...defaults,
       name: saved.name || defaults.name,
@@ -826,9 +875,7 @@ const profileForm = reactive({
 
 const profileInitials = computed(() => profileInitialsFrom(profileForm.name, profileForm.email))
 const displayProfile = computed(() => ({
-  name: user.name,
-  email: user.email,
-  phone: user.phone,
+  ...currentAuthProfile(),
   ...profileForm,
   initials: profileInitials.value,
 }))
@@ -840,8 +887,8 @@ const applySteps = [
 ]
 
 const firstTransactionPath = computed(() => {
-  const id = transactionRows.value[0]?.id || mockTransactions[0]?.id || 't1'
-  return `/transactions/${id}`
+  const id = transactionRows.value[0]?.id || (IS_DEMO_CHANNEL ? mockTransactions[0]?.id : '')
+  return id ? `/transactions/${id}` : '/transactions'
 })
 
 const notificationItems = computed(() =>
@@ -902,6 +949,7 @@ watch(
 const settingItems = [
   { label: '알림 설정', description: '결제, 예산, 추천 알림 관리', path: '/settings/notifications', icon: Bell },
   { label: '보안', description: '로그인과 개인정보 보호 설정', path: '/settings/security', icon: Lock },
+  { label: '개인정보 처리방침', description: '수집 데이터와 보관 기준 확인', path: '/privacy', icon: ShieldCheck },
 ]
 
 const securityItems = [
@@ -917,6 +965,11 @@ const searchTypes = [
   { label: '커뮤니티', value: 'community' },
 ]
 const searchSuggestions = ['LOCA LIKIT Eat', '쇼핑 할인', '컴포즈커피']
+const profileDescription = computed(() => '카드 추천과 커뮤니티에 표시되는 기본 정보입니다.')
+const accountDeletionDescription = computed(() => '카드, 거래내역, 분석 기록, 소비계획, 커뮤니티 활동 등 계정에 연결된 데이터가 삭제됩니다.')
+const searchPlaceholder = computed(() => '카드, 거래, 커뮤니티 검색')
+const searchLoadingMessage = computed(() => '카드, 거래, 커뮤니티를 함께 확인하고 있어요.')
+const searchEmptyMessage = computed(() => '카드명, 가맹점명, 커뮤니티 제목으로 검색해보세요.')
 
 const searchIconMap = {
   card: CreditCard,
@@ -964,15 +1017,16 @@ const localSearchResults = computed(() => {
 const searchResults = computed(() => {
   if (!hasSearchTerm.value) return []
   if (props.type === 'search' && searchLoaded.value) {
-    return searchRows.value.map((item) => ({
-      ...item,
-      id: item.id || `${item.type}-${item.title}`,
-      path: item.path || '/search',
-      description: item.description || item.badge || '',
-      imageUrl: item.imageUrl || item.image_url || item.meta?.imageUrl || '',
-      imageOrientation: item.imageOrientation || item.image_orientation || item.meta?.imageOrientation || '',
-      icon: searchIconMap[item.type] || Search,
-    }))
+    return searchRows.value
+      .map((item) => ({
+        ...item,
+        id: item.id || `${item.type}-${item.title}`,
+        path: item.path || '/search',
+        description: item.description || item.badge || '',
+        imageUrl: item.imageUrl || item.image_url || item.meta?.imageUrl || '',
+        imageOrientation: item.imageOrientation || item.image_orientation || item.meta?.imageOrientation || '',
+        icon: searchIconMap[item.type] || Search,
+      }))
   }
   return localSearchResults.value
 })
@@ -1040,11 +1094,13 @@ const pageDescription = computed(() => {
 
 function writeProfileSettings() {
   if (typeof window === 'undefined') return
+  const authProfile = currentAuthProfile()
   window.localStorage.setItem(
     PROFILE_SETTINGS_KEY,
     JSON.stringify({
       name: profileForm.name,
       email: profileForm.email,
+      authEmail: authProfile.email,
       phone: profileForm.phone,
       initials: profileInitials.value,
       avatarUrl: profileForm.avatarUrl,
@@ -1109,6 +1165,21 @@ async function handleLogout() {
   }
 }
 
+async function handleDeleteAccount() {
+  if (isDeletingAccount.value) return
+  isDeletingAccount.value = true
+  deleteAccountError.value = ''
+  try {
+    await deleteAccount()
+    deleteAccountModalOpen.value = false
+    router.replace({ name: 'Signup' })
+  } catch (error) {
+    deleteAccountError.value = error?.response?.data?.detail || '계정 삭제를 완료하지 못했습니다.'
+  } finally {
+    isDeletingAccount.value = false
+  }
+}
+
 function markAllNotificationsRead() {
   readNotificationIds.value = new Set(notifications.map((notice) => notice.id))
 }
@@ -1155,7 +1226,7 @@ async function loadSearchResults() {
     searchLoaded.value = true
   } catch (error) {
     if (requestId !== searchRequestId) return
-    console.warn('Search API request failed. Falling back to local rows.', error)
+    console.warn('Search API request failed.', error)
     searchRows.value = []
     searchLoaded.value = true
     searchError.value = '검색 결과를 불러오지 못했습니다.'
@@ -1181,7 +1252,9 @@ onMounted(async () => {
         fetchTransactions({ cardId: route.params.id }),
       ])
       if (cardResult.status === 'fulfilled') {
-        const transactions = transactionResult.status === 'fulfilled' ? transactionResult.value : mockTransactions
+        const transactions = transactionResult.status === 'fulfilled'
+          ? transactionResult.value
+          : (IS_DEMO_CHANNEL ? mockTransactions : [])
         apiCard.value = normalizeCard(cardResult.value, 0, transactions)
       } else {
         throw cardResult.reason
@@ -1197,7 +1270,14 @@ onMounted(async () => {
       cardRows.value = ownedCards.map((card, index) => normalizeCard(card, index, transactions))
     }
   } catch (error) {
-    console.warn('상세 화면 API를 불러오지 못해 mock 데이터를 사용합니다.', error)
+    if (!IS_DEMO_CHANNEL) {
+      if (needsCard.value) apiCard.value = null
+      if (props.type === 'transaction' || props.type === 'notifications') {
+        transactionRows.value = []
+        cardRows.value = []
+      }
+    }
+    console.warn('상세 화면 API를 불러오지 못했습니다.', error)
   } finally {
     if (props.type === 'transaction') {
       isTransactionLoading.value = false
@@ -2723,6 +2803,55 @@ onMounted(async () => {
 .logout-row:disabled {
   opacity: 0.66;
   cursor: wait;
+}
+
+.account-delete-row {
+  width: 100%;
+  border: 0;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-delete-row > svg:first-child,
+.account-delete-row strong,
+.account-delete-row > svg:last-child {
+  color: #d92d20;
+}
+
+.account-delete-row:disabled {
+  opacity: 0.66;
+  cursor: wait;
+}
+
+.account-delete-sheet {
+  display: grid;
+  gap: 12px;
+}
+
+.account-delete-sheet > strong {
+  color: #17202b;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.account-delete-sheet p {
+  margin: 0;
+  color: #5b6777;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.account-delete-error {
+  color: #d92d20 !important;
+}
+
+.account-delete-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
 }
 
 .search-box {

@@ -53,20 +53,3 @@ export function readCustomBudgetCategories() {
     }))
     .filter((item) => item.id && item.name && item.budget > 0)
 }
-
-export function appendCustomBudgetCategory(input) {
-  const name = String(input.name || '').trim()
-  const budget = Number(input.budget || input.amount || 0)
-  if (!name || budget <= 0) return null
-
-  const category = {
-    id: `local-budget-${Date.now()}`,
-    name,
-    icon: input.icon || '🎯',
-    budget,
-    spent: 0,
-    color: input.color || '#0f5fae',
-  }
-  writeJson(BUDGET_CATEGORIES_KEY, [...readCustomBudgetCategories(), category])
-  return category
-}

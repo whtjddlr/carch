@@ -1,39 +1,67 @@
-import { API_BASE_URL, DEV_AUTO_LOGIN_ENABLED, api, loginAsDevAdmin, loginWithEmail, logoutAuth, signupWithEmail, fetchCurrentUser } from './api'
+import { API_BASE_URL, DEV_AUTO_LOGIN_ENABLED, api, deleteAccountAuth, loginAsDevAdmin, loginWithEmail, logoutAuth, signupWithEmail, fetchCurrentUser } from './api'
+import { getSecureItem, isNativeRuntime, removeBrowserOnlyItem, removeSecureItem, setSecureItem } from './secureStorage'
 
 const AUTH_TOKEN_KEY = 'carch-auth-token'
 const AUTH_USER_KEY = 'carch-auth-user'
 const LEGACY_DEV_ADMIN_EMAIL = 'admin@carch.local'
 
-export const getAuthToken = () => localStorage.getItem(AUTH_TOKEN_KEY) || ''
+const authSession = {
+  initialized: false,
+  token: '',
+  user: null,
+}
 
-export const getStoredUser = () => {
+const parseStoredUser = (value) => {
   try {
-    return JSON.parse(localStorage.getItem(AUTH_USER_KEY) || 'null')
+    return JSON.parse(value || 'null')
   } catch {
     return null
   }
 }
 
+export const getAuthToken = () => authSession.token || ''
+
+export const getStoredUser = () => authSession.user
+
 export const isAuthenticated = () => Boolean(getAuthToken())
-export const isDevAutoLoginEnabled = () => DEV_AUTO_LOGIN_ENABLED
 
 let devAutoLoginPromise = null
 
-export const setAuthSession = ({ token, user }) => {
-  if (token) localStorage.setItem(AUTH_TOKEN_KEY, token)
-  if (user) localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user))
+const persistAuthToken = async (token) => {
+  authSession.token = token || ''
+  if (token) {
+    await setSecureItem(AUTH_TOKEN_KEY, token)
+  } else {
+    await removeSecureItem(AUTH_TOKEN_KEY)
+  }
 }
 
-export const clearAuthSession = () => {
-  localStorage.removeItem(AUTH_TOKEN_KEY)
-  localStorage.removeItem(AUTH_USER_KEY)
-  localStorage.removeItem('carch-auth')
+export const setAuthSession = async ({ token, user }) => {
+  if (token) await persistAuthToken(token)
+  if (user) {
+    authSession.user = user
+    await setSecureItem(AUTH_USER_KEY, JSON.stringify(user))
+  }
 }
 
-export const clearLegacyAdminSession = () => {
+export const clearAuthSession = async () => {
+  authSession.token = ''
+  authSession.user = null
+  await Promise.all([
+    removeSecureItem(AUTH_TOKEN_KEY),
+    removeSecureItem(AUTH_USER_KEY),
+  ])
+  removeBrowserOnlyItem('carch-auth')
+  if (isNativeRuntime()) {
+    removeBrowserOnlyItem(AUTH_TOKEN_KEY)
+    removeBrowserOnlyItem(AUTH_USER_KEY)
+  }
+}
+
+export const clearLegacyAdminSession = async () => {
   const storedUser = getStoredUser()
   if (storedUser?.email === LEGACY_DEV_ADMIN_EMAIL) {
-    clearAuthSession()
+    await clearAuthSession()
   }
 }
 
@@ -46,21 +74,34 @@ export const hydrateAuthHeader = () => {
   }
 }
 
+export const initAuthSession = async () => {
+  if (authSession.initialized) return
+  const [token, user] = await Promise.all([
+    getSecureItem(AUTH_TOKEN_KEY),
+    getSecureItem(AUTH_USER_KEY),
+  ])
+  authSession.token = token || ''
+  authSession.user = parseStoredUser(user)
+  authSession.initialized = true
+  await clearLegacyAdminSession()
+  hydrateAuthHeader()
+}
+
 export const completeOAuthLogin = async ({ token }) => {
   if (!token) {
-    clearAuthSession()
+    await clearAuthSession()
     hydrateAuthHeader()
     throw new Error('Missing auth token')
   }
 
-  localStorage.setItem(AUTH_TOKEN_KEY, token)
+  await persistAuthToken(token)
   hydrateAuthHeader()
   try {
     const current = await fetchCurrentUser()
-    setAuthSession({ token, user: current.user })
+    await setAuthSession({ token, user: current.user })
     return current.user
   } catch (error) {
-    clearAuthSession()
+    await clearAuthSession()
     hydrateAuthHeader()
     throw error
   }
@@ -69,7 +110,7 @@ export const completeOAuthLogin = async ({ token }) => {
 export const emailLogin = async (payload) => {
   const result = await loginWithEmail(payload)
   if (!result?.token) throw new Error('Missing auth token')
-  setAuthSession(result)
+  await setAuthSession(result)
   hydrateAuthHeader()
   return result
 }
@@ -77,7 +118,7 @@ export const emailLogin = async (payload) => {
 export const emailSignup = async (payload) => {
   const result = await signupWithEmail(payload)
   if (!result?.token) throw new Error('Missing auth token')
-  setAuthSession(result)
+  await setAuthSession(result)
   hydrateAuthHeader()
   return result
 }
@@ -85,12 +126,13 @@ export const emailSignup = async (payload) => {
 export const devAdminLogin = async () => {
   const result = await loginAsDevAdmin()
   if (!result?.token) throw new Error('Missing auth token')
-  setAuthSession(result)
+  await setAuthSession(result)
   hydrateAuthHeader()
   return result
 }
 
 export const ensureDevAutoLogin = async () => {
+  await initAuthSession()
   if (isAuthenticated()) return true
   if (!DEV_AUTO_LOGIN_ENABLED) return false
   if (!devAutoLoginPromise) {
@@ -108,16 +150,27 @@ export const ensureDevAutoLogin = async () => {
 }
 
 export const logout = async () => {
+  await initAuthSession()
   try {
     await logoutAuth()
   } finally {
-    clearAuthSession()
+    await clearAuthSession()
+    hydrateAuthHeader()
+  }
+}
+
+export const deleteAccount = async () => {
+  await initAuthSession()
+  try {
+    await deleteAccountAuth()
+  } finally {
+    await clearAuthSession()
     hydrateAuthHeader()
   }
 }
 
 export const oauthStartUrl = (provider, next = '/cards') =>
-  `${API_BASE_URL}/api/auth/oauth/${provider}/start/?next=${encodeURIComponent(next)}`
-
-clearLegacyAdminSession()
-hydrateAuthHeader()
+  `${API_BASE_URL}/api/auth/oauth/${provider}/start/?${new URLSearchParams({
+    next,
+    ...(isNativeRuntime() ? { frontend: 'capacitor://localhost' } : {}),
+  }).toString()}`

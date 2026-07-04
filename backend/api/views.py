@@ -93,6 +93,10 @@ DEMO_LOGIN_ID = getattr(settings, 'DEMO_LOGIN_ID', 'skawngus') or 'skawngus'
 DEMO_USER_PASSWORD = getattr(settings, 'DEMO_USER_PASSWORD', 'skawngus') or 'skawngus'
 
 
+def demo_features_enabled():
+    return bool(getattr(settings, 'DEMO_FEATURES_ENABLED', False))
+
+
 def json_response(payload, status=200):
     return JsonResponse(
         payload,
@@ -103,7 +107,12 @@ def json_response(payload, status=200):
 
 
 def health(request):
-    return json_response({'ok': True, 'service': 'carch-api'})
+    return json_response({
+        'ok': True,
+        'service': 'carch-api',
+        'channel': getattr(settings, 'APP_CHANNEL', ''),
+        'demoFeaturesEnabled': bool(getattr(settings, 'DEMO_FEATURES_ENABLED', False)),
+    })
 
 
 def _token_hash(token):
@@ -160,6 +169,8 @@ def get_request_user(request):
 
 
 def get_demo_user():
+    if not demo_features_enabled():
+        raise RuntimeError('Demo features are disabled for this app channel.')
     User = get_user_model()
     user = User.objects.filter(email__iexact=DEMO_USER_EMAIL).first()
     if not user:
@@ -190,6 +201,8 @@ def get_demo_user():
 
 def is_demo_seed_user(user):
     """데모/시연 계정에만 데모 데이터를 자동 시드한다(실제 가입자는 빈 지갑으로 시작)."""
+    if not demo_features_enabled():
+        return False
     if not user:
         return False
     email = (getattr(user, 'email', '') or '').strip().lower()
@@ -243,7 +256,10 @@ def get_dev_admin_user():
 
 
 def get_effective_user(request):
-    return get_request_user(request) or get_demo_user()
+    user = get_request_user(request)
+    if user:
+        return user
+    return get_demo_user() if demo_features_enabled() else None
 
 
 def auth_required_response():
@@ -297,10 +313,16 @@ def _unique_username(seed):
     return username
 
 
-def _oauth_frontend_redirect(path='', **params):
+def _safe_oauth_frontend_url(value=''):
+    candidate = str(value or '').strip().rstrip('/')
+    allowed = set(getattr(settings, 'OAUTH_ALLOWED_FRONTEND_REDIRECTS', []))
+    return candidate if candidate in allowed else settings.FRONTEND_URL
+
+
+def _oauth_frontend_redirect(path='', frontend_url='', **params):
     safe_path = path if str(path or '').startswith('/') else '/cards'
     query = urllib.parse.urlencode({key: value for key, value in params.items() if value not in {None, ''}})
-    url = f'{settings.FRONTEND_URL}{safe_path}'
+    url = f'{_safe_oauth_frontend_url(frontend_url)}{safe_path}'
     return redirect(f'{url}?{query}' if query else url)
 
 
@@ -450,7 +472,7 @@ def auth_providers(request):
         {
             'email': {'enabled': settings.EMAIL_AUTH_ENABLED},
             'devLogin': {
-                'enabled': bool(settings.DEBUG and settings.DEV_AUTO_LOGIN_ENABLED),
+                'enabled': bool(demo_features_enabled() and settings.DEV_AUTO_LOGIN_ENABLED),
                 'email': DEMO_USER_EMAIL,
                 'loginId': DEMO_LOGIN_ID,
                 'name': DEMO_USER_NAME,
@@ -465,7 +487,7 @@ def auth_providers(request):
 def dev_login(request):
     if request.method != 'POST':
         return json_response({'detail': 'POST 요청만 지원합니다.'}, status=405)
-    if not (settings.DEBUG and settings.DEV_AUTO_LOGIN_ENABLED):
+    if not (demo_features_enabled() and settings.DEV_AUTO_LOGIN_ENABLED):
         return json_response({'detail': '개발용 자동 로그인이 비활성화되어 있습니다.'}, status=403)
 
     user = get_demo_user()
@@ -547,6 +569,20 @@ def auth_logout(request):
     return json_response({'ok': True})
 
 
+@csrf_exempt
+def auth_account(request):
+    if request.method != 'DELETE':
+        return json_response({'detail': 'DELETE 요청만 지원합니다.'}, status=405)
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
+    if is_demo_seed_user(user):
+        return json_response({'detail': '체험 계정은 삭제할 수 없습니다.'}, status=403)
+
+    user.delete()
+    return json_response({'ok': True})
+
+
 def oauth_start(request, provider):
     config = _oauth_config(provider)
     if not config:
@@ -555,10 +591,12 @@ def oauth_start(request, provider):
         return json_response({'detail': f'{config["label"]} 로그인 키가 설정되어 있지 않습니다.'}, status=400)
 
     next_path = request.GET.get('next') or '/cards'
+    frontend_url = _safe_oauth_frontend_url(request.GET.get('frontend'))
     state = signing.dumps(
         {
             'provider': provider,
             'next': next_path if next_path.startswith('/') else '/cards',
+            'frontendUrl': frontend_url,
             'nonce': secrets.token_urlsafe(8),
         },
         salt='carch-oauth',
@@ -585,12 +623,12 @@ def oauth_callback(request, provider):
     except signing.BadSignature:
         return _oauth_frontend_redirect('/login', auth_error='invalid_state')
     if state.get('provider') != provider:
-        return _oauth_frontend_redirect('/login', auth_error='provider_mismatch')
+        return _oauth_frontend_redirect('/login', frontend_url=state.get('frontendUrl'), auth_error='provider_mismatch')
     if request.GET.get('error'):
-        return _oauth_frontend_redirect('/login', auth_error=request.GET.get('error'))
+        return _oauth_frontend_redirect('/login', frontend_url=state.get('frontendUrl'), auth_error=request.GET.get('error'))
     code = request.GET.get('code')
     if not code:
-        return _oauth_frontend_redirect('/login', auth_error='missing_code')
+        return _oauth_frontend_redirect('/login', frontend_url=state.get('frontendUrl'), auth_error='missing_code')
 
     token_payload = {
         'grant_type': 'authorization_code',
@@ -615,10 +653,11 @@ def oauth_callback(request, provider):
         user = _get_or_create_social_user(provider, profile, raw_profile)
         auth_token, _ = _create_auth_session(user, provider)
     except (urllib.error.URLError, ValueError, KeyError) as exc:
-        return _oauth_frontend_redirect('/login', auth_error='oauth_failed', detail=str(exc)[:80])
+        return _oauth_frontend_redirect('/login', frontend_url=state.get('frontendUrl'), auth_error='oauth_failed', detail=str(exc)[:80])
 
     return _oauth_frontend_redirect(
         '/login/callback',
+        frontend_url=state.get('frontendUrl'),
         token=auth_token,
         provider=provider,
         next=state.get('next') or '/cards',
@@ -846,6 +885,8 @@ def cleanup_legacy_seed_transactions(user):
 
 
 def ensure_transactions_seeded(user=None):
+    if not demo_features_enabled():
+        return
     user = user or get_demo_user()
     # 실제 신규 가입자는 빈 거래로 시작 — 데모 거래는 데모/시연 계정에만 자동 시드
     if not is_demo_seed_user(user):
@@ -917,6 +958,8 @@ def ensure_transactions_seeded(user=None):
 
 
 def ensure_purchase_plans_seeded(user=None):
+    if not demo_features_enabled():
+        return
     user = user or get_demo_user()
     # 실제 신규 가입자는 빈 상태로 시작 — 데모 지출 계획은 데모/시연 계정에만 자동 시드
     if not is_demo_seed_user(user):
@@ -945,7 +988,9 @@ def ensure_purchase_plans_seeded(user=None):
 
 
 def transaction_queryset(request=None, user=None):
-    user = user or (get_effective_user(request) if request is not None else get_demo_user())
+    user = user or (get_effective_user(request) if request is not None else (get_demo_user() if demo_features_enabled() else None))
+    if not user:
+        return Transaction.objects.none()
     ensure_transactions_seeded(user)
     return Transaction.objects.filter(user=user)
 
@@ -1179,6 +1224,8 @@ def extract_card_tags(text):
 
 
 def ensure_community_seeded():
+    if not demo_features_enabled():
+        return
     if CommunityPost.objects.exists():
         return
 
@@ -1712,6 +1759,8 @@ def card_detail(request, card_ad_id):
 
 
 def ensure_owned_cards_seeded(user=None):
+    if not demo_features_enabled():
+        return
     user = user or get_demo_user()
     existing = list(OwnedCard.objects.filter(user=user).order_by('display_order', 'id'))
     if existing:
@@ -1744,7 +1793,9 @@ def ensure_owned_cards_seeded(user=None):
 
 
 def owned_card_queryset(request=None, user=None):
-    user = user or (get_effective_user(request) if request is not None else get_demo_user())
+    user = user or (get_effective_user(request) if request is not None else (get_demo_user() if demo_features_enabled() else None))
+    if not user:
+        return OwnedCard.objects.none()
     ensure_owned_cards_seeded(user)
     return OwnedCard.objects.filter(user=user)
 
@@ -2178,6 +2229,16 @@ def spending_summary(request):
     include_ai = request.GET.get('ai') in {'1', 'true', 'yes'}
     refresh_ai = request.GET.get('refresh') in {'1', 'true', 'yes'} or request.GET.get('force') in {'1', 'true', 'yes'}
     cards = fetch_cards_by_ids(by_card.keys(), request, include_benefits=False)
+    card_meta_by_id = {str(_card_id(card)): card for card in cards}
+    summary['byCard'] = [
+        {
+            **item,
+            'cardName': _card_name(card) if card else '',
+            'imageUrl': _card_image_url(card) if card else '',
+        }
+        for item in summary['byCard']
+        for card in [card_meta_by_id.get(str(item.get('cardId')))]
+    ]
     input_summary = {
         'totalExpense': summary['totalExpense'],
         'totalIncome': summary['totalIncome'],
@@ -2777,6 +2838,43 @@ def community_post_like(request, post_id):
 
 
 @csrf_exempt
+def community_post_report(request, post_id):
+    if request.method != 'POST':
+        return json_response({'detail': 'POST 요청만 지원합니다.'}, status=405)
+    user, error_response = require_request_user(request)
+    if error_response:
+        return error_response
+
+    post = get_community_post_or_404(post_id)
+    if post.user_id == user.id:
+        return json_response({'detail': '본인이 작성한 글은 신고할 수 없습니다.'}, status=400)
+    payload, error_response = parse_request_body(request)
+    if error_response:
+        return error_response
+
+    reason = (payload.get('reason') or '부적절한 콘텐츠').strip()[:80]
+    detail = (payload.get('detail') or '').strip()[:500]
+    AIAnalysisRecord.objects.create(
+        user=user,
+        analysis_type='community_report',
+        title=f'커뮤니티 신고: {post.title[:60]}',
+        input_payload={
+            'postId': f'c{post.id}',
+            'postRawId': post.id,
+            'postAuthor': post.author,
+            'reason': reason,
+            'detail': detail,
+        },
+        result_payload={
+            'status': 'received',
+            'reviewState': 'pending',
+        },
+        ai_mode='moderation',
+    )
+    return json_response({'ok': True, 'status': 'received'})
+
+
+@csrf_exempt
 def community_comment_list(request, post_id):
     ensure_community_seeded()
     post = get_community_post_or_404(post_id)
@@ -3194,7 +3292,7 @@ def _is_general_benefit_label(label):
 
 
 def _build_spending_profile(request=None, adjusted_for_recommendation=False, recurring_overrides=None):
-    user = get_effective_user(request) if request is not None else get_demo_user()
+    user = get_effective_user(request) if request is not None else (get_demo_user() if demo_features_enabled() else None)
     transactions = serialize_transactions(transaction_queryset(request, user=user), user=user)
     spending_trend = _build_spending_trend(
         transactions,
@@ -3639,14 +3737,6 @@ def _apply_monthly_limit(raw, limit_usage=None):
         'limitRemainingAfter': max(available - capped, 0),
         'limitUsageKey': f'{key[0]}:{key[1]}',
     }
-
-
-def _card_evaluation_spend(card, profile, fallback_to_total=True):
-    card_id = _card_id(card)
-    for row in profile.get('byCard') or []:
-        if str(row.get('cardId')) == card_id:
-            return _as_int(row.get('amount'))
-    return _as_int(profile.get('totalExpense')) if fallback_to_total else 0
 
 
 def _card_fee(card):
@@ -4452,6 +4542,59 @@ def _fallback_card_recommendation_decision(context):
     }
 
 
+def _cold_start_card_recommendation_payload(profile, data_readiness):
+    message = data_readiness.get('message') or '보유 카드와 결제 내역을 입력하면 추천을 시작할 수 있어요.'
+    profile_payload = {
+        **profile,
+        'totalExpense': _as_int(profile.get('actualTotalExpense')),
+        'categoryRows': [],
+        'benefitEvaluationRows': [],
+        'topCategory': None,
+        'recommendationTopCategory': None,
+        'styleTags': [data_readiness.get('label') or '학습 전'],
+    }
+    return {
+        'count': 0,
+        'profile': profile_payload,
+        'dataReadiness': data_readiness,
+        'baseline': {
+            'cardId': None,
+            'cardName': None,
+            'monthlyNetBenefit': 0,
+            'expectedMonthlyBenefit': 0,
+            'potentialMonthlyBenefit': 0,
+            'monthlyAnnualFee': 0,
+            'annualFee': 0,
+            'breakdown': [],
+        },
+        'recommendationEngine': {
+            'mode': 'data_required',
+            'aiConfigured': get_ai_status()['configured'],
+            'aiMode': 'rule_based',
+            'cacheKey': '',
+            'cacheHit': False,
+        },
+        'aiDecision': {
+            'schemaVersion': 'card-recommendation-decision-v1',
+            'strategyType': 'no_action',
+            'title': '추천을 시작하려면 데이터를 먼저 입력하세요',
+            'summary': '보유 카드와 결제 내역이 아직 부족해 카드 추천을 계산하지 않았습니다.',
+            'primaryAction': '카드를 등록하거나 첫 결제 내역을 추가하면 보유 카드 사용 추천과 새 카드 발급 비교를 시작합니다.',
+            'decisionCards': [],
+            'tradeoffs': [],
+            'reasonCodes': ['DATA_REQUIRED'],
+            'warnings': [message],
+            'aiMode': 'rule_based',
+            'confidence': data_readiness.get('confidence') or 0.25,
+        },
+        'alert': {'show': False},
+        'ownedCategoryGuides': [],
+        'routingSuggestions': [],
+        'results': [],
+        'warnings': [message],
+    }
+
+
 def card_recommendations(request):
     user, error_response = require_request_user(request)
     if error_response:
@@ -4463,6 +4606,9 @@ def card_recommendations(request):
     )
     owned_ids = {str(item.card_id) for item in owned_card_queryset(request)}
     data_readiness = _recommendation_data_readiness(profile, owned_ids)
+    if data_readiness.get('stage') in {'empty', 'cold_start'}:
+        return json_response(_cold_start_card_recommendation_payload(profile, data_readiness))
+
     current_card_spend = _profile_card_spend_map(profile, 'currentByCard')
     previous_card_spend = _profile_card_spend_map(profile, 'previousByCard')
 

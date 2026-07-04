@@ -85,8 +85,8 @@
                 <span class="flag" :class="c.thisMonthOk ? 'on' : 'off'">
                   이번달 할인 {{ c.thisMonthOk ? '✓' : '✗' }}
                 </span>
-                <span class="flag" :class="(c.noPerf || c.nextMonthOk) ? 'on' : 'wait'">
-                  {{ c.noPerf ? '전월실적 없음' : c.nextMonthOk ? '실적 충족 ✓' : `실적 ${c.nextPct}%` }}
+                <span class="flag" :class="c.nextMonthOk ? 'on' : 'wait'">
+                  {{ c.nextMonthOk ? '실적 충족 ✓' : `실적 ${c.nextPct}%` }}
                 </span>
               </div>
             </div>
@@ -286,7 +286,7 @@ import { CalendarClock, Check, ChevronDown, ChevronRight, CreditCard, Pencil, Pe
 import AppBackButton from '@/components/AppBackButton.vue'
 import { budgetCategories, cards as mockCards, expenseModes, krw, monthLabel } from '@/data/mockData'
 import { demoMonthSummary } from '@/data/monthlyAnalytics'
-import { fetchBudget, fetchCardRecommendationBundle, fetchMonthlySpending, fetchOwnedCards, fetchSpendingSummary, fetchTransactions, normalizeCard, saveBudget } from '@/services/api'
+import { fetchBudget, fetchCardRecommendationBundle, fetchMonthlySpending, fetchOwnedCards, fetchSpendingSummary, fetchTransactions, IS_DEMO_CHANNEL, normalizeCard, saveBudget } from '@/services/api'
 import { getPurchasePlans } from '@/services/purchasePlans'
 import { readBudgetOverride, readCustomBudgetCategories, writeBudgetOverride } from '@/services/budgetStorage'
 import { budgetProgressWidth, budgetRiskColor, budgetRiskLabel, budgetUsagePercent } from '@/utils/budgetRisk'
@@ -324,8 +324,9 @@ const totalBudget = computed(() => {
     // 백엔드에 이번 달 예산이 있으면(데모 등) 그 값, 없으면(신규 유저) 30만 기본 제안값
     return june && june.budget != null ? Number(june.budget) : DEFAULT_NEW_USER_GOAL
   }
-  // 월별 데이터 로딩 전: 데모 깜빡임 방지용 기존 기본값
-  return displayBudgetCategories.reduce((sum, category) => sum + category.budget, 0)
+  return IS_DEMO_CHANNEL
+    ? displayBudgetCategories.reduce((sum, category) => sum + category.budget, 0)
+    : DEFAULT_NEW_USER_GOAL
 })
 
 // 목표 금액: 백엔드(사용자별·월별 Budget) 우선, 실패 시 localStorage 캐시 유지
@@ -353,7 +354,10 @@ async function loadCurrentSpending() {
       realSpent.value = Number(summary.totalExpense)
     }
   } catch {
-    // 실패 시 데모 카테고리 합 사용
+    if (!IS_DEMO_CHANNEL) {
+      spendingSummary.value = null
+      realSpent.value = 0
+    }
   }
 }
 onMounted(loadCurrentSpending)
@@ -381,7 +385,9 @@ function saveGoal() {
   saveBudget(CURRENT_MONTH, { totalGoal: budgetOverride.value || 0 }).catch(() => {})
   isEditingGoal.value = false
 }
-const totalSpent = computed(() => realSpent.value ?? displayBudgetCategories.reduce((sum, category) => sum + category.spent, 0))
+const totalSpent = computed(() => realSpent.value ?? (IS_DEMO_CHANNEL
+  ? displayBudgetCategories.reduce((sum, category) => sum + category.spent, 0)
+  : 0))
 const cards = mockCards
 const walletPerformance = computed(() => summarizeWalletPerformance(cards))
 const cardGuideItems = computed(() => (
@@ -447,30 +453,31 @@ function shortBenefit(card) {
   return card.benefitSummary || ''
 }
 
-// 카드 현황 데이터: 백엔드(보유 카드 + 거래 집계 사용액) 우선, 실패하면 목 데이터 그대로 유지.
-// 할인 한도/실적 등 데모 전용 필드는 백엔드에 없으므로 목 값으로 보강 → 화면은 기존과 동일.
+// 카드 현황 데이터: 백엔드(보유 카드 + 거래 집계 사용액) 우선.
+// 데모 채널에서만 목 데이터로 오프라인 보강하고, 서비스 채널은 실제 응답만 표시한다.
 const mockCardById = new Map(mockCards.map((card) => [String(card.id), card]))
-const walletCards = ref(mockCards.map((card) => ({ ...card })))
+const walletCards = ref(IS_DEMO_CHANNEL ? mockCards.map((card) => ({ ...card })) : [])
 
 function mergeWalletCard(apiCard, index, transactions) {
   const normalized = normalizeCard(apiCard, index, transactions || [])
-  const demo = mockCardById.get(String(normalized.id)) || {}
-  const hasTx = Array.isArray(transactions) && transactions.length > 0
+  const demo = IS_DEMO_CHANNEL ? (mockCardById.get(String(normalized.id)) || {}) : {}
+  const hasTransactions = Array.isArray(transactions)
+  const hasAnyTransaction = hasTransactions && transactions.length > 0
+  const serviceLimit = Number(apiCard?.limit ?? apiCard?.monthlyLimit ?? apiCard?.monthly_limit ?? 0)
+  const normalizedDiscountLimit = Number(normalized.discountLimit ?? normalized.discount_limit ?? 0)
+  const normalizedDiscountUsed = Number(normalized.discountUsed ?? normalized.discount_used ?? 0)
   return {
     ...demo,
     ...normalized,
-    // 백엔드에 없는 데모 전용 필드는 목 값 유지(현 화면 보존)
-    limit: Number(demo.limit) || Number(normalized.limit) || 0,
-    discountLimit: demo.discountLimit ?? 0,
-    discountUsed: demo.discountUsed ?? 0,
+    limit: IS_DEMO_CHANNEL ? (Number(demo.limit) || Number(normalized.limit) || 0) : serviceLimit,
+    discountLimit: IS_DEMO_CHANNEL ? (demo.discountLimit ?? normalizedDiscountLimit) : normalizedDiscountLimit,
+    discountUsed: IS_DEMO_CHANNEL ? (demo.discountUsed ?? normalizedDiscountUsed) : normalizedDiscountUsed,
     previousMonthMinSpend: demo.previousMonthMinSpend ?? normalized.previousMonthMinSpend ?? 0,
-    previousMonthSpend: demo.previousMonthSpend ?? 0,
-    // 이번 달 사용액·당월 실적은 실제 거래가 있으면 거래 집계, 없으면 목 값
-    spent: hasTx ? normalized.spent : (demo.spent ?? normalized.spent ?? 0),
-    currentMonthSpend: hasTx ? normalized.spent : (demo.currentMonthSpend ?? demo.spent),
-    // 혜택 표기는 큐레이션된 데모 값을 유지(카드 현황 표기 보존)
-    benefitItems: demo.benefitItems?.length ? demo.benefitItems : normalized.benefitItems,
-    benefitSummary: demo.benefitSummary || normalized.benefitSummary,
+    previousMonthSpend: demo.previousMonthSpend ?? normalized.previousMonthSpend ?? normalized.previous_month_spend ?? 0,
+    spent: hasAnyTransaction ? normalized.spent : (IS_DEMO_CHANNEL ? (demo.spent ?? normalized.spent ?? 0) : (normalized.spent ?? 0)),
+    currentMonthSpend: hasAnyTransaction ? normalized.spent : (IS_DEMO_CHANNEL ? (demo.currentMonthSpend ?? demo.spent ?? normalized.spent ?? 0) : (normalized.currentMonthSpend ?? normalized.current_month_spend ?? normalized.spent ?? 0)),
+    benefitItems: IS_DEMO_CHANNEL && demo.benefitItems?.length ? demo.benefitItems : normalized.benefitItems,
+    benefitSummary: IS_DEMO_CHANNEL && demo.benefitSummary ? demo.benefitSummary : normalized.benefitSummary,
   }
 }
 
@@ -478,14 +485,17 @@ const allTransactions = ref([])
 async function loadWallet() {
   try {
     const [txResult, cardResult] = await Promise.allSettled([fetchTransactions(), fetchOwnedCards()])
-    const transactions = txResult.status === 'fulfilled' && Array.isArray(txResult.value) ? txResult.value : null
+    const transactions = txResult.status === 'fulfilled' && Array.isArray(txResult.value) ? txResult.value : []
     // 반복지출 드릴다운(가맹점별 내역)에서 사용할 거래 원본 보관
-    if (transactions) allTransactions.value = transactions
-    // 호출 실패 시에만 초기 목 데이터 유지(오프라인 폴백). 성공하면 빈 배열도 그대로 반영 → 빈 지갑.
-    if (cardResult.status !== 'fulfilled' || !Array.isArray(cardResult.value)) return
+    allTransactions.value = transactions
+    // 호출 실패 시 데모는 초기 목 데이터를 유지하고, 서비스는 빈 지갑으로 둔다.
+    if (cardResult.status !== 'fulfilled' || !Array.isArray(cardResult.value)) {
+      if (!IS_DEMO_CHANNEL) walletCards.value = []
+      return
+    }
     walletCards.value = cardResult.value.map((card, index) => mergeWalletCard(card, index, transactions))
   } catch {
-    // 어떤 단계든 실패하면 초기 목 데이터 유지
+    if (!IS_DEMO_CHANNEL) walletCards.value = []
   }
 }
 onMounted(loadWallet)
@@ -498,6 +508,7 @@ const ownedEligibilityMap = computed(() => {
     if (!(id in map)) {
       map[id] = {
         thisMonthOk: Boolean(g.eligibleForBenefit),
+        nextMonthOk: Boolean(g.eligibleForBenefit || g.nextMonthEligible),
       }
     }
   }
@@ -516,9 +527,7 @@ const cardUsageList = computed(() => walletCards.value.map((card) => {
   // 추천 번들에 잡힌 카드는 백엔드 산출 자격을 그대로 쓰고, 없으면 기존 실적 계산으로 폴백.
   const elig = ownedEligibilityMap.value[String(card.id)]
   const thisMonthOk = elig ? elig.thisMonthOk : (noPerf || prevSpend >= minSpend)
-  // 카드 현황의 다음 달 실적 상태는 추천 번들의 예측값이 아니라
-  // 실제 이번 달 누적 사용액으로만 판단해야 한다.
-  const nextMonthOk = noPerf || curSpend >= minSpend
+  const nextMonthOk = elig ? elig.nextMonthOk : (noPerf || curSpend >= minSpend)
   // 할인 한도(월 최대)는 카드 metadata, 받은 할인은 이번 달 사용액 × 혜택률을 한도 내에서 계산.
   // 혜택률/한도 정보가 없으면(예: 신규 사용자 카드) metadata 값으로 폴백(보통 0).
   const rawDiscountLimit = Number(card.discountLimit || 0)
@@ -593,8 +602,8 @@ const aiRecommendations = computed(() => {
     const guides = aiBundle.value?.ownedCategoryGuides
     return Array.isArray(guides) && guides.length ? guides.map(mapGuideToReco).slice(0, 3) : []
   }
-  // 호출 실패(오프라인) 시에만 로컬 추천으로 폴백
-  return cardGuideItems.value.slice(0, 3)
+  // 호출 실패(오프라인) 시에도 서비스 채널에서는 데모 추천을 섞지 않는다.
+  return IS_DEMO_CHANNEL ? cardGuideItems.value.slice(0, 3) : []
 })
 // 까치(카치AI)가 말풍선에서 건네는 짧은 추천 한마디
 const aiBubble = computed(() => {
@@ -615,7 +624,7 @@ async function loadMonthly() {
     const data = await fetchMonthlySpending(5)
     if (data && Array.isArray(data.months) && data.months.length) monthlySeries.value = data.months
   } catch {
-    // 실패 시 데모 데이터(monthlyAnalytics)로 폴백
+    if (!IS_DEMO_CHANNEL) monthlySeries.value = []
   }
 }
 onMounted(loadMonthly)
@@ -712,7 +721,7 @@ const barChart = computed(() => {
       { label: '6월', ym: '2026-06', current: true },
     ].map((m) => (m.current
       ? { ...m, budget: currentBudget.value.budget, spent: currentBudget.value.spent }
-      : { ...m, budget: monthBudget[m.ym] || 0, spent: demoMonthSummary(m.ym)?.totalExpense || 0 }))
+      : { ...m, budget: IS_DEMO_CHANNEL ? (monthBudget[m.ym] || 0) : 0, spent: IS_DEMO_CHANNEL ? (demoMonthSummary(m.ym)?.totalExpense || 0) : 0 }))
   const w = 320
   const h = 168
   const padTop = 28

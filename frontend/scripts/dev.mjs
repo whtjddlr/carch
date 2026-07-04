@@ -1,30 +1,26 @@
 import { createServer } from 'vite'
 import { createViteConfig } from './vite-config.mjs'
 
-function readArg(name, fallback) {
-  const index = process.argv.indexOf(name)
-  if (index >= 0 && process.argv[index + 1]) return process.argv[index + 1]
-  const inline = process.argv.find((arg) => arg.startsWith(`${name}=`))
-  return inline ? inline.split('=').slice(1).join('=') : fallback
+const args = process.argv.slice(2)
+const argValue = (name, fallback = '') => {
+  const index = args.indexOf(name)
+  return index >= 0 ? args[index + 1] || fallback : fallback
 }
 
-const host = readArg('--host', '127.0.0.1')
-const port = Number(readArg('--port', '5174'))
-const mode = readArg('--mode', 'development')
-
+const mode = argValue('--mode')
 if (mode === 'mock') {
-  process.env.VITE_USE_MOCK_API = process.env.VITE_USE_MOCK_API || 'true'
+  process.env.VITE_USE_MOCK_API = 'true'
 }
 
-const server = await createServer({
-  ...createViteConfig(),
-  mode,
+const host = argValue('--host', '127.0.0.1')
+const port = Number(argValue('--port', mode === 'mock' ? '5175' : '5173'))
+
+const server = await createServer(createViteConfig({
   server: {
     host,
     port,
-    strictPort: false,
   },
-})
+}))
 
 await server.listen()
 server.printUrls()

@@ -1,4 +1,6 @@
 import json
+from contextlib import contextmanager
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase, override_settings
@@ -343,6 +345,83 @@ class CardRecommendationLogicTests(SimpleTestCase):
 
 
 class AuthApiTests(TestCase):
+    TEST_CARDS = {
+        '10029': {
+            'id': '10029',
+            'cardAdId': 10029,
+            'cardName': 'LOCA 100',
+            'issuerName': '롯데카드',
+            'benefitSummary': '일상 가맹점 1.5% 할인',
+            'imageUrl': '/api/card-images/10029.png',
+        },
+        '10106': {
+            'id': '10106',
+            'cardAdId': 10106,
+            'cardName': 'LOCA LIKIT Eat',
+            'issuerName': '롯데카드',
+            'benefitSummary': '카페·음식점 생활권 집중 할인',
+            'imageUrl': '/api/card-images/10106.png',
+        },
+        '10107': {
+            'id': '10107',
+            'cardAdId': 10107,
+            'cardName': 'LOCA LIKIT Shop',
+            'issuerName': '롯데카드',
+            'benefitSummary': '온라인 쇼핑·편의점 집중 할인',
+            'imageUrl': '/api/card-images/10107.png',
+        },
+        '10071': {
+            'id': '10071',
+            'cardAdId': 10071,
+            'cardName': 'LOCA Coffee',
+            'issuerName': '롯데카드',
+            'benefitSummary': '카페 결제 특화 할인',
+            'imageUrl': '/api/card-images/10071.png',
+        },
+        '10612': {
+            'id': '10612',
+            'cardAdId': 10612,
+            'cardName': '카드의정석2 SHOPPER',
+            'issuerName': '우리카드',
+            'benefitSummary': '쇼핑 최대 15% 할인',
+            'imageUrl': '/api/card-images/10612.png',
+        },
+    }
+
+    def fake_fetch_card(self, card_id, request=None):
+        card = self.TEST_CARDS.get(str(card_id))
+        return dict(card) if card else None
+
+    def fake_fetch_cards(self, request=None, limit=30, search='', issuer='', active_only=False, include_benefits=False):
+        rows = list(self.TEST_CARDS.values())
+        if search:
+            keyword = str(search).lower()
+            rows = [
+                card
+                for card in rows
+                if keyword in card['cardName'].lower()
+                or keyword in card['issuerName'].lower()
+                or keyword in card['benefitSummary'].lower()
+            ]
+        if issuer:
+            issuer_keyword = str(issuer).lower()
+            rows = [card for card in rows if issuer_keyword in card['issuerName'].lower()]
+        return [dict(card) for card in rows[:limit]]
+
+    def fake_fetch_cards_by_ids(self, card_ids, request=None, include_benefits=True):
+        return [
+            dict(self.TEST_CARDS[str(card_id)])
+            for card_id in card_ids
+            if str(card_id) in self.TEST_CARDS
+        ]
+
+    @contextmanager
+    def patched_card_catalog(self):
+        with patch('api.views.fetch_card', side_effect=self.fake_fetch_card), \
+            patch('api.views.fetch_cards', side_effect=self.fake_fetch_cards), \
+            patch('api.views.fetch_cards_by_ids', side_effect=self.fake_fetch_cards_by_ids):
+            yield
+
     def signup_user(self, email, name='사용자'):
         response = self.client.post(
             '/api/auth/email/signup/',
@@ -407,6 +486,25 @@ class AuthApiTests(TestCase):
         self.assertEqual(login.status_code, 200)
         self.assertIn('token', login.json())
 
+    def test_delete_account_removes_user_and_invalidates_session(self):
+        token = self.signup_user('delete-me@carch.test', '삭제 대상')
+
+        delete_response = self.client.delete('/api/auth/account/', HTTP_AUTHORIZATION=f'Bearer {token}')
+
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertTrue(delete_response.json()['ok'])
+
+        User = get_user_model()
+        self.assertFalse(User.objects.filter(email='delete-me@carch.test').exists())
+
+        me = self.client.get('/api/auth/me/', HTTP_AUTHORIZATION=f'Bearer {token}')
+        self.assertEqual(me.status_code, 401)
+
+    def test_delete_account_requires_auth(self):
+        response = self.client.delete('/api/auth/account/')
+
+        self.assertEqual(response.status_code, 401)
+
     def test_username_login_returns_token(self):
         self.client.post(
             '/api/auth/email/signup/',
@@ -453,11 +551,31 @@ class AuthApiTests(TestCase):
         self.assertEqual(me.status_code, 200)
         self.assertTrue(me.json()['authenticated'])
 
-    @override_settings(DEBUG=False, DEV_AUTO_LOGIN_ENABLED=True)
-    def test_dev_login_is_blocked_when_debug_is_off(self):
+        delete_response = self.client.delete('/api/auth/account/', HTTP_AUTHORIZATION=f"Bearer {payload['token']}")
+        self.assertEqual(delete_response.status_code, 403)
+
+    @override_settings(APP_CHANNEL='demo', DEMO_FEATURES_ENABLED=True, DEBUG=False, DEV_AUTO_LOGIN_ENABLED=True)
+    def test_demo_channel_allows_dev_login_when_enabled_in_production(self):
         response = self.client.post('/api/auth/dev-login/')
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['demoLogin'])
+
+    @override_settings(APP_CHANNEL='service', DEMO_FEATURES_ENABLED=False, DEBUG=True, DEV_AUTO_LOGIN_ENABLED=True)
+    def test_service_channel_blocks_demo_runtime_features(self):
+        User = get_user_model()
+        User.objects.filter(email='demo@carch.local').delete()
+
+        dev_login = self.client.post('/api/auth/dev-login/')
+        providers = self.client.get('/api/auth/providers/')
+        community = self.client.get('/api/community/posts/')
+
+        self.assertEqual(dev_login.status_code, 403)
+        self.assertEqual(providers.status_code, 200)
+        self.assertFalse(providers.json()['devLogin']['enabled'])
+        self.assertEqual(community.status_code, 200)
+        self.assertEqual(community.json()['count'], 0)
+        self.assertFalse(User.objects.filter(email='demo@carch.local').exists())
 
     @override_settings(KAKAO_CLIENT_ID='', KAKAO_CLIENT_SECRET='', NAVER_CLIENT_ID='', NAVER_CLIENT_SECRET='')
     def test_auth_providers_hide_unconfigured_oauth(self):
@@ -533,66 +651,88 @@ class AuthApiTests(TestCase):
     def test_regular_user_created_transaction_does_not_trigger_demo_seed(self):
         token = self.signup_user('seed-after-create@carch.test', 'Seed')
 
-        self.client.post(
-            '/api/transactions/',
-            data=json.dumps(
-                {
-                    'id': 'first-user-tx',
-                    'cardId': '10029',
-                    'merchantName': '첫 결제',
-                    'category': '식비',
-                    'amount': -12000,
-                    'approvedAt': '2026-06-23T12:00:00+09:00',
-                }
-            ),
-            content_type='application/json',
-            HTTP_AUTHORIZATION=f'Bearer {token}',
-        )
+        with self.patched_card_catalog():
+            self.client.post(
+                '/api/transactions/',
+                data=json.dumps(
+                    {
+                        'id': 'first-user-tx',
+                        'cardId': '10029',
+                        'merchantName': '첫 결제',
+                        'category': '식비',
+                        'amount': -12000,
+                        'approvedAt': '2026-06-23T12:00:00+09:00',
+                    }
+                ),
+                content_type='application/json',
+                HTTP_AUTHORIZATION=f'Bearer {token}',
+            )
 
-        rows = self.client.get('/api/transactions/', HTTP_AUTHORIZATION=f'Bearer {token}').json()['results']
-        summary = self.client.get('/api/analytics/spending-summary/', HTTP_AUTHORIZATION=f'Bearer {token}').json()
+            rows = self.client.get('/api/transactions/', HTTP_AUTHORIZATION=f'Bearer {token}').json()['results']
+            summary = self.client.get('/api/analytics/spending-summary/', HTTP_AUTHORIZATION=f'Bearer {token}').json()
 
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]['id'], 'first-user-tx')
         self.assertEqual(summary['totalExpense'], 12000)
+        self.assertEqual(summary['byCard'][0]['cardName'], 'LOCA 100')
+
+    def test_card_recommendations_cold_start_returns_data_required_without_ai(self):
+        token = self.signup_user('cold-start-reco@carch.test', 'Cold')
+
+        with patch('api.views.recommend_cards_with_ai') as ai_mock:
+            response = self.client.get('/api/recommendations/cards/', HTTP_AUTHORIZATION=f'Bearer {token}')
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['count'], 0)
+        self.assertEqual(payload['results'], [])
+        self.assertEqual(payload['profile']['totalExpense'], 0)
+        self.assertEqual(payload['profile']['categoryRows'], [])
+        self.assertEqual(payload['dataReadiness']['stage'], 'empty')
+        self.assertEqual(payload['recommendationEngine']['mode'], 'data_required')
+        self.assertEqual(payload['aiDecision']['strategyType'], 'no_action')
+        self.assertEqual(payload['aiDecision']['reasonCodes'], ['DATA_REQUIRED'])
+        ai_mock.assert_not_called()
 
     def test_owned_cards_are_scoped_by_user(self):
         token_a = self.signup_user('card-a@carch.test', 'A')
         token_b = self.signup_user('card-b@carch.test', 'B')
 
-        self.client.post(
-            '/api/owned-cards/',
-            data=json.dumps({'cardId': '10029'}),
-            content_type='application/json',
-            HTTP_AUTHORIZATION=f'Bearer {token_a}',
-        )
-        self.client.post(
-            '/api/owned-cards/',
-            data=json.dumps({'cardId': '10029'}),
-            content_type='application/json',
-            HTTP_AUTHORIZATION=f'Bearer {token_b}',
-        )
-        self.client.delete('/api/owned-cards/10029/', HTTP_AUTHORIZATION=f'Bearer {token_a}')
+        with self.patched_card_catalog():
+            self.client.post(
+                '/api/owned-cards/',
+                data=json.dumps({'cardId': '10029'}),
+                content_type='application/json',
+                HTTP_AUTHORIZATION=f'Bearer {token_a}',
+            )
+            self.client.post(
+                '/api/owned-cards/',
+                data=json.dumps({'cardId': '10029'}),
+                content_type='application/json',
+                HTTP_AUTHORIZATION=f'Bearer {token_b}',
+            )
+            self.client.delete('/api/owned-cards/10029/', HTTP_AUTHORIZATION=f'Bearer {token_a}')
 
-        a_cards = self.client.get('/api/owned-cards/', HTTP_AUTHORIZATION=f'Bearer {token_a}').json()['results']
-        b_cards = self.client.get('/api/owned-cards/', HTTP_AUTHORIZATION=f'Bearer {token_b}').json()['results']
+            a_cards = self.client.get('/api/owned-cards/', HTTP_AUTHORIZATION=f'Bearer {token_a}').json()['results']
+            b_cards = self.client.get('/api/owned-cards/', HTTP_AUTHORIZATION=f'Bearer {token_b}').json()['results']
 
         self.assertFalse(any(str(card['cardAdId']) == '10029' for card in a_cards))
         self.assertTrue(any(str(card['cardAdId']) == '10029' for card in b_cards))
 
     def test_card_search_includes_full_catalog_beyond_owned_cards(self):
         token = self.signup_user('search-cards@carch.test', 'Search')
-        self.client.post(
-            '/api/owned-cards/',
-            data=json.dumps({'cardId': '10029'}),
-            content_type='application/json',
-            HTTP_AUTHORIZATION=f'Bearer {token}',
-        )
+        with self.patched_card_catalog():
+            self.client.post(
+                '/api/owned-cards/',
+                data=json.dumps({'cardId': '10029'}),
+                content_type='application/json',
+                HTTP_AUTHORIZATION=f'Bearer {token}',
+            )
 
-        response = self.client.get(
-            '/api/search/?type=card&q=LOCA&limit=50',
-            HTTP_AUTHORIZATION=f'Bearer {token}',
-        )
+            response = self.client.get(
+                '/api/search/?type=card&q=LOCA&limit=50',
+                HTTP_AUTHORIZATION=f'Bearer {token}',
+            )
 
         self.assertEqual(response.status_code, 200)
         rows = response.json()['results']

@@ -1,196 +1,57 @@
-<div align="center">
+# CARCH 카치
 
-# 💳 CARCH · 카치
+카치는 사용자의 결제내역, 보유 카드, 카드 혜택 조건, 소비계획을 함께 분석해서
+“지금 가진 카드 중 무엇을 쓰면 좋은지”와 “새 카드를 발급할 가치가 있는지”를
+나누어 안내하는 카드 소비 코치 서비스입니다.
 
-### 보유 카드 혜택 최적화 & AI 소비 분석 서비스
+## 1. 팀원 정보 및 업무 분담
 
-**“어떤 새 카드를 발급할까?”가 아니라, “지금 가진 카드 중 무엇을 써야 가장 이득일까?”**
-<br/>결제 전에 보유 카드의 혜택·실적·한도를 한 번에 계산해 *가장 유리한 한 장*을 추천하는 카드 소비 코치입니다.
-
-[![Live](https://img.shields.io/badge/Live-carch--web.vercel.app-2b6fd6?style=flat-square)](https://carch-web.vercel.app)
-![Vue](https://img.shields.io/badge/Vue_3-42b883?style=flat-square&logo=vuedotjs&logoColor=white)
-![Django](https://img.shields.io/badge/Django_5-092e20?style=flat-square&logo=django&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
-![Postgres](https://img.shields.io/badge/Supabase_Postgres-3ecf8e?style=flat-square&logo=supabase&logoColor=white)
-![GPT](https://img.shields.io/badge/GPT--4o--mini-412991?style=flat-square&logo=openai&logoColor=white)
-
-</div>
-
----
-
-## 📌 한눈에 보기
-
-| | |
+| 팀원 | 주요 업무 |
 | --- | --- |
-| **서비스명** | CARCH (CARD + CATCH) — 가진 카드에서 *새는 혜택을 잡는다* |
-| **핵심 가치** | 결제 **전** 의사결정 · 보유 카드 **최적화** · 근거 있는 추천 |
-| **차별점** | 신규 카드 발급 권유(X) → **보유 카드 최적 사용(O)** / 사후 통계(X) → **결제 전 설계(O)** |
-| **AI 역할** | 계산·순위는 **룰 엔진**이, 해석·설명은 **생성형 AI**가 — 돈과 직결된 값은 AI가 만들지 않음 |
-| **배포** | [[carch-web.vercel.app](https://carch-web.vercel.app)](https://carch-demo.vercel.app/demo) (멀티유저, 회원가입 시 개인 지갑 생성) |
+| 남주현 | 프론트엔드 UI/UX, 카드 메인 화면, 소비계획/분석/카치AI 화면 고도화, 데모 시나리오 검증 |
+| 조성익 | 백엔드 API, 데이터 모델링, 카드 혜택 데이터 정제, 추천 로직, GMS AI 연동, 배포 구조 정리 |
+| 공통 | 서비스 기획, 테스트, 발표 시나리오, README 및 산출물 정리 |
 
----
+## 2. 목표 서비스와 실제 구현 정도
 
-## 🖼️ 서비스 화면
+### 목표
 
-| 카드 홈 | 소비 분석 | 소비계획 | 카치AI |
-| :---: | :---: | :---: | :---: |
-| ![cards](docs/screenshots/cards.png) | ![analytics](docs/screenshots/analytics.png) | ![budget](docs/screenshots/budget.png) | ![chat](docs/screenshots/chat.png) |
+- 카드별 혜택 조건을 사람이 직접 비교하지 않아도 되도록 자동 분석한다.
+- 사용자의 실제 결제내역을 기반으로 보유 카드 사용 전략을 제안한다.
+- 소비 패턴상 유의미한 이득이 있을 때만 새 카드 발급 추천을 분리해서 제안한다.
+- 예산/지출계획과 카드 추천이 따로 놀지 않도록 하나의 흐름으로 연결한다.
+- 생성형 AI는 숫자를 새로 만들지 않고, 규칙 기반 계산 결과를 사용자가 이해하기 쉽게 설명한다.
 
----
+### 구현 완료
 
-## 🎯 풀고자 한 문제
+- 이메일/데모 로그인 및 세션 인증
+- 카드 목록, 카드 상세, 보유 카드 추가/삭제
+- 거래내역 목록, 상세, 직접 입력, 삭제
+- 월별 소비 분석, 카테고리/카드별 소비 집계
+- 소비계획 화면, 월 예산, 반복 지출 판단, 새 카드 추천 패널
+- 보유 카드 사용 추천과 새 카드 발급 추천 분리
+- 카치AI 채팅 UI 및 GMS 기반 응답
+- 커뮤니티 게시글/댓글/좋아요/신고/숨김
+- Supabase 카드 카탈로그 연동 및 Supabase Storage 카드 이미지 연동
+- Vercel 배포 준비 설정 파일과 실행 문서
+- App Store 제출용 service 채널, iOS Capacitor shell, Keychain 기반 토큰 저장, 계정 삭제, 개인정보 처리방침
 
-대부분의 사용자는 카드를 여러 장 갖고도 **결국 익숙한 한 장만** 씁니다. 이유는 명확합니다.
+> 시연/demo 채널은 `/demo`와 자동 로그인 흐름을 유지합니다. App Store/service 채널은 실제 이메일 가입/로그인, 계정 삭제, 개인정보 처리방침, 커뮤니티 신고/숨김 흐름을 기준으로 검수합니다.
 
-1. 시장은 *보유 카드 활용*보다 *새 카드 발급*을 권합니다.
-2. 전월 실적·할인 한도·실적 제외 항목 등 **혜택 조건이 결제할 때마다 따지기엔 너무 복잡**합니다.
-3. 기존 가계부/분석은 대부분 **사후 통계**라, 정작 결제 *전*에는 도움이 안 됩니다.
+## 3. 기술 스택
 
-> CARCH는 “결제 후 보고서”가 아니라 **“결제 전 의사결정 도구”** 를 지향합니다.
-
----
-
-## 🧠 핵심 설계 — “AI는 양 끝, 계산은 룰 엔진”
-
-CARCH의 추천은 생성형 AI가 임의로 만들지 않습니다. **검증 가능한 룰 엔진**이 혜택·실적·점수를 결정론적으로 계산하고, AI는 입력 해석과 결과 설명이라는 **양 끝단**만 담당합니다.
-
-```mermaid
-%%{init: {'flowchart': {'padding': 14, 'nodeSpacing': 55, 'rankSpacing': 55}}}%%
-flowchart TD
-    U["사용자 · Vue 3 SPA"]
-    AIin["AI 프록시 · FastAPI<br/>① 자연어 → JSON 구조화"]
-    RE["Django 룰 엔진 · 계산<br/>실적 · 한도 · 제외 필터<br/>혜택 + 실적 − 기회비용<br/>= 추천 점수"]
-    AIout["AI 프록시 · FastAPI<br/>② 확정값 → 자연어 설명"]
-    DB[("Supabase PostgreSQL<br/>카드 혜택 카탈로그")]
-
-    U -->|"자연어 입력"| AIin
-    AIin -->|"구조화 입력"| RE
-    RE -->|"확정 수치"| AIout
-    AIout -->|"자연어 설명"| U
-    DB -->|"카드 규칙"| RE
-```
-
-> **AI는 양 끝(입력 해석 · 출력 설명), 계산은 가운데 룰 엔진** — 돈과 직결된 값은 AI가 만들지 않습니다.
-
-**왜 이렇게 나눴나**
-- **역할 분리**: LLM이 ‘돈 계산’을 못 하게 차단 → 환각이 결과를 오염시키지 않음
-- **신뢰성**: 룰 엔진은 결정론적 → 같은 입력엔 항상 같은 결과 → 검증·디버깅 가능
-- **교체 용이**: AI는 FastAPI 프록시 뒤에 있어 모델을 바꿔도 핵심 계산 로직은 그대로
-
----
-
-## 🛡️ AI 가드레일 (3겹)
-
-생성형 AI를 쓰면서 “AI가 틀리면?”에 대비해 **3단계**로 막았습니다.
-
-| 단계 | 위치 | 역할 |
-| --- | --- | --- |
-| 프롬프트 | 시스템 프롬프트 | 역할·사용 가능 데이터·금지 행동·출력 형식·불확실 시 처리를 고정 |
-| 프록시 | FastAPI | 클라이언트의 LLM 직접 호출 차단, 입출력·API 키 검사 |
-| 코드 | Django 서버 | 허용되지 않은 카드·누락 필드·계산 불일치 시 **룰 기반 기본 문구로 자동 대체** |
-
-> AI가 틀려도 **사용자 의사결정에는 영향을 주지 않도록** 설계했습니다.
-
----
-
-## 🗄️ AI가 활용하는 데이터 (수집 · 전처리 · 관리)
-
-| 단계 | 내용 |
+| 영역 | 사용 기술 |
 | --- | --- |
-| **수집** | 소셜 로그인(카카오·네이버) 후 사용자별 거래·보유 카드·예산, 자연어/영수증 입력. 카드 상품·혜택은 공식 데이터를 수집해 카탈로그화 |
-| **전처리** | 자연어·영수증을 GPT가 금액·카테고리·카드로 **구조화(JSON)**, 카드 약관을 전월실적·할인율·한도·제외조건의 **규칙 스키마로 정규화** |
-| **관리** | 멀티유저별 지갑 분리 저장(PostgreSQL), 카드 혜택을 *코드가 아닌 데이터*(규칙 DB)로 관리 → 카드 추가 시 **데이터만 추가**로 확장 |
+| Frontend | Vue 3, Vite, Vue Router, lucide-vue-next |
+| Backend | Django 5, Django ORM, SQLite/Supabase Postgres 호환 구조 |
+| AI | SSAFY GMS OpenAI-compatible API, FastAPI AI proxy 선택 지원 |
+| Data | Supabase Postgres, Supabase Storage, 카드 혜택 정규화 테이블 |
+| Deployment Ready | Vercel 설정 파일, Supabase 연동 문서 |
 
-카드 혜택 정규화 산출물은 [`backend/data/`](backend/data) 와 [`docs/DATASET_SUMMARY.md`](docs/DATASET_SUMMARY.md) 에서 확인할 수 있습니다.
+## 4. 데이터베이스 모델링 / ERD
 
----
-
-## ⚙️ 추천 알고리즘
-
-1. **소비 프로필 생성** — 거래내역을 월·카테고리·카드별로 집계, 이번 달/지난달/최근 평균 비교, 일시 지출과 반복 지출 분리
-2. **혜택 규칙 매칭** — 카테고리·가맹점·결제 채널·제외 조건·전월 실적·월 한도를 정규화해 비교, 할부/무이자 등 제외 위험 결제는 감점·제외
-3. **보유 카드 사용 추천** — 가진 카드만 대상으로 적용 가능 혜택 계산, “지금 바로 혜택 / 실적 채우면 다음 달 유리 / 혜택 제외 위험” 이유 코드 제공
-4. **신규 카드 발급 추천** — 전월 실적·월 한도·연회비 월 환산을 반영한 **순가치**로, 보유 카드 대비 추가 이득이 있는 후보만 노출
-5. **AI 설명 레이어** — 룰 엔진이 확정한 카드명·금액·조건·사유를 자연어로 설명 (보유 vs 신규를 명확히 구분)
-
-> 핵심: *“지금 할인율이 가장 높은 카드”가 항상 1등은 아니다.* 한 번의 할인이 아니라 **한 달 전체 혜택**을 최적화합니다.
-
----
-
-## ✨ 핵심 기능
-
-- **카드 홈** — 보유 카드 캐러셀, 실적 충족률, 카테고리별 보유 카드 추천, 최근 거래
-- **소비 분석** — 월별 총 소비, 전월/평균 대비 변화, 카테고리·카드별 비중, 예산 추이 (상단 요약 고정)
-- **소비계획** — 예산 사용 현황, 반복 지출 판단, 큰 지출 계획 입력 → **카드별 분배안·예상 혜택** 계산
-- **추천** — 보유 카드 개선 / 맞춤 카드 발급 분리, 혜택·한도·실적 조건 반영, 추천 사유 + AI 설명
-- **카치AI** — 결제내역·보유 카드·소비계획을 컨텍스트로 한 자연어 상담, 화면 이동 연계
-- **거래 입력** — “컴포즈 3,800원” 같은 자연어/영수증을 구조화해 등록, *추가 결과 실시간 미리보기*
-- **커뮤니티** — 카드 후기·혜택 전략 게시글, 댓글·좋아요·저장, 검색
-
----
-
-## 🧩 기술 스택
-
-| 영역 | 기술 | 선택 이유 |
-| --- | --- | --- |
-| Frontend | Vue 3 · Vite · Vue Router · lucide | SPA로 대시보드·추천·계획 흐름을 빠르게 구성, 모바일 우선 UI |
-| Backend | Django 5 · Django ORM | 금융 규칙을 *데이터로* 다루고 서버에서 **결정론적으로** 정확히 계산 |
-| AI Gateway | FastAPI · Uvicorn | AI 전용 게이트웨이 — API 키 보호, 입출력 검증, 모델 교체 격리 |
-| AI | GPT-4o-mini (SSAFY GMS, OpenAI 호환) | 계산이 아닌 *해석·설명* 전용 → 소형 모델로 비용·지연 최소화 |
-| Data | Supabase PostgreSQL · Storage · 혜택 정규화 테이블 | 관리형 Postgres로 멀티유저·이미지·확장을 빠르게 |
-| Auth | 토큰 세션 · 카카오/네이버 OAuth | 실제 멀티유저 서비스로 동작 |
-| Deploy | Vercel | 서버리스 배포 |
-
----
-
-## 🗂️ 프로젝트 구조
-
-```
-carch/
-├── frontend/              # Vue 3 SPA
-│   └── src/
-│       ├── views/         # 19개 화면 (대시보드·분석·소비계획·추천·카치AI·커뮤니티 …)
-│       ├── components/     # 화면 단위 컴포넌트
-│       ├── services/       # api·auth·purchasePlans 등 API 연동 계층
-│       ├── composables/    # 상태 로직 (usePurchasePlan 등)
-│       └── data/ utils/    # mock·포맷·유틸
-├── backend/
-│   ├── api/                # Django 앱 — 모델·뷰·룰 엔진·시드·AI 프롬프트
-│   ├── ai_proxy/           # FastAPI AI 프록시 (main.py)
-│   ├── data/               # 카드 혜택 정규화 데이터셋
-│   └── config/             # Django 설정
-├── docs/                  # 명세·런북·데이터셋 요약·스크린샷
-└── scripts/               # 실행 스크립트 (AI 프록시 등)
-```
-
----
-
-## 🚀 로컬 실행
-
-```bash
-# 1) Backend (Django 룰 엔진 API)
-cd backend
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver            # http://127.0.0.1:8000
-
-# 2) AI Proxy (FastAPI) — .env에 GMS/OpenAI 키 설정
-uvicorn ai_proxy.main:app --reload --port 8001
-#   (Windows: ../scripts/run_ai_proxy.ps1)
-
-# 3) Frontend (Vue 3)
-cd ../frontend
-npm install
-npm run dev                           # http://127.0.0.1:5173
-```
-
-> 개발 편의용 `/dev` 라우트에서 모든 화면으로 바로 이동할 수 있습니다(로컬 전용).
-
----
-
-## 🗃️ 데이터베이스 모델링 / ERD
-
-서비스 데이터는 Django 모델로 관리하고, 카드 상품·혜택 카탈로그는 Supabase에 정규화된 별도 테이블로 관리합니다.
+서비스 데이터는 Django 모델을 중심으로 관리하고, 카드 상품/혜택 카탈로그는
+Supabase에 정규화된 별도 테이블로 관리합니다.
 
 ```mermaid
 erDiagram
@@ -281,23 +142,199 @@ erDiagram
     }
 ```
 
----
+## 5. 추천 알고리즘 기술 설명
 
-## 👥 팀원 & 역할
+카치의 추천은 생성형 AI가 임의로 만드는 방식이 아니라, 백엔드의 규칙 기반 계산 결과를
+먼저 만들고 AI는 그 결과를 자연어로 설명하는 구조입니다.
 
-> 2인 풀스택 협업 — 기획·프론트·백엔드·데이터·AI 연동·배포를 함께 맡고, 강점 영역을 나눠 리드했습니다.
+1. **소비 프로필 생성**
+   - 로그인 사용자의 거래내역을 월별, 카테고리별, 카드별로 집계합니다.
+   - 이번 달, 지난달, 최근 평균 사용액을 비교해 소비 변화와 주요 카테고리를 계산합니다.
+   - 일시 지출과 반복 가능 지출을 분리해서 카드 추천에 반영합니다.
 
-| 팀원 | 역할 | 주요 기여 |
-| --- | --- | --- |
-| **남주현** · Full-stack | 프론트엔드 리드 · 데이터 | • Vue 3 SPA 전체(19개 화면) UI/UX 설계·구현<br/>• 카드/소비분석/소비계획/카치AI 화면 고도화 및 인터랙션<br/>• **카드 혜택 데이터 수집·정규화 및 규칙 스키마 설계**<br/>• **거래·카드 시드 데이터 구축, 추천 결과 검증·데모 시나리오 QA**<br/>• 프론트 API 연동 계층 정비 |
-| **조성익** · Full-stack | 백엔드 리드 · AI/인프라 | • Django 룰 엔진 추천 로직 · 데이터 모델링<br/>• FastAPI AI 프록시 및 GMS(GPT) 연동·가드레일<br/>• Supabase(Postgres)·Storage 연동, 인증/세션<br/>• 일부 프론트 연동(서비스 계층·상태) 협업<br/>• Vercel 배포 및 환경 구성 |
-| **공통** | 기획 · 검증 | 서비스 기획, 테스트(E2E 점검), 발표 시나리오, 문서·산출물 정리 |
+2. **혜택 규칙 매칭**
+   - 카드 혜택의 카테고리, 가맹점, 결제 채널, 제외 조건, 전월 실적, 월 한도를 정규화해 비교합니다.
+   - 거래 카테고리와 카드 혜택 범위가 맞는지 확인합니다.
+   - 할부/무이자 할부처럼 혜택 제외 가능성이 있는 결제 조건은 별도 감점 또는 제외 처리합니다.
 
----
+3. **보유 카드 사용 추천**
+   - 사용자가 이미 가진 카드만 대상으로 현재 지출에 적용 가능한 혜택을 계산합니다.
+   - 현재 혜택 가능 카드와 다음 달 실적 준비용 카드를 구분합니다.
+   - “지금 바로 혜택”, “실적을 채우면 다음 달 유리”, “혜택 제외 위험” 같은 이유 코드를 함께 제공합니다.
 
-## 🔗 링크
+4. **새 카드 발급 추천**
+   - 전체 카드 후보를 대상으로 예상 월 혜택을 계산합니다.
+   - 전월 실적 조건, 월 한도, 연회비의 월 환산액을 반영합니다.
+   - 보유 카드 대비 추가 이득이 있는 후보만 우선순위로 노출합니다.
 
-- **배포(Live)**: [https://carch-demo.vercel.app/demo](https://carch-demo.vercel.app/demo)
-- **서비스 명세**: [docs/SERVICE_SPEC.md](docs/SERVICE_SPEC.md)
-- **데모 런북**: [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md)
-- **데이터셋 요약**: [docs/DATASET_SUMMARY.md](docs/DATASET_SUMMARY.md)
+5. **AI 설명 레이어**
+   - 백엔드가 계산한 카드명, 금액, 조건, 추천 사유만 프롬프트에 전달합니다.
+   - AI는 없는 혜택, 없는 카드, 임의의 할인율을 만들 수 없도록 프롬프트에서 제한합니다.
+   - AI 응답 실패 시에도 규칙 기반 fallback 응답으로 시연이 유지됩니다.
+
+## 6. 핵심 기능
+
+### 카드 홈
+
+- 보유 카드 캐러셀
+- 카드별 실적 충족률
+- 카드 상세 진입 및 삭제
+- 카테고리별 보유 카드 추천
+- 최근 거래내역 확인
+
+### 소비 분석
+
+- 월별 총 소비
+- 전월/평균 대비 변화
+- 카테고리별 소비 비중
+- 카드별 사용액
+- 예산 사용 추이
+
+### 소비계획
+
+- 이번 달 예산 사용 현황
+- 반복 지출 후보 판단
+- 지출계획 입력
+- 새 카드 추천과 연결
+
+### 추천
+
+- 보유 카드 개선 추천
+- 맞춤 카드 발급 추천
+- 혜택 조건, 월 한도, 전월 실적 조건 반영
+- 추천 결과에 대한 AI 설명
+
+### 카치AI
+
+- 카카오톡형 말풍선 UI
+- 보유 카드 개선/맞춤 카드 추천 빠른 질문
+- 사용자의 결제내역, 보유 카드, 소비계획 컨텍스트 기반 답변
+- 대화 상태 유지 및 관련 화면 이동 지원
+
+### 커뮤니티
+
+- 카드 후기와 혜택 전략 게시글
+- 댓글, 좋아요
+- 검색 연동
+
+## 7. 생성형 AI 활용 부분
+
+- **거래내역 입력 보정**: 사용자가 자연어로 입력한 결제 내용을 구조화합니다.
+- **소비계획 분석**: 큰 지출 계획을 항목/기간/예산으로 정리하고 카드 사용 시나리오를 생성합니다.
+- **카드 추천 설명**: 규칙 기반 추천 결과를 사용자가 이해하기 쉬운 문장으로 설명합니다.
+- **카치AI 상담**: 최근 결제내역, 보유 카드, 소비계획을 컨텍스트로 받아 짧고 실용적인 답변을 생성합니다.
+
+AI 연동은 `backend/api/ai_prompts.py`, `backend/api/ai_service.py`에 분리되어 있으며,
+GMS API 키가 없거나 응답이 실패해도 fallback 응답으로 기본 시연 흐름이 유지됩니다.
+
+## 8. 배포 및 데이터 구조
+
+### 현재 서비스 URL
+
+- 서비스 웹: https://carch.vercel.app
+- 서비스 API: https://carch-api.vercel.app
+- 시연/demo 웹: https://carch-demo.vercel.app/demo
+- 시연/demo API: 프론트 mock/데모 채널 기준. 별도 demo 백엔드를 붙일 때만 `BACKEND_URL_DEMO`를 설정합니다.
+- legacy frontend alias: https://carch-web.vercel.app
+- 체험 계정: `skawngus / skawngus`
+
+`carch.vercel.app`은 실제 서비스/App Store 기준 채널입니다. `carch-demo.vercel.app/demo`는 체험 계정으로 자동 로그인한 뒤 카드 홈으로 이동하는 시연용 채널입니다.
+
+### 배포 준비
+
+- Supabase 프로젝트에 카드 카탈로그와 남주현 데모 데이터를 적재했습니다.
+- 카드 이미지는 Supabase Storage `card-images` 버킷 기준으로 제공할 수 있습니다.
+- Vercel 배포 설정 파일을 `backend/vercel.json`, `frontend/vercel.json`에 추가했습니다.
+- Supabase는 하나의 프로젝트 안에서 `catalog`, `demo`, `service` schema를 분리합니다.
+- 서비스용 DB에는 공용 카드 카탈로그만 참조하고, 일반 사용자 데이터는 비어 있는 상태에서 시작합니다.
+- iOS 앱스토어 배포 준비는 [docs/APP_STORE_READINESS.md](docs/APP_STORE_READINESS.md)에 정리했습니다.
+- 자세한 배포 절차는 [docs/SUPABASE_VERCEL_DEMO.md](docs/SUPABASE_VERCEL_DEMO.md)를 참고합니다.
+
+### App Store 준비 상태
+
+- Bundle ID: `com.choim2013.carch`
+- App Store Connect 앱: `CARCH`
+- App Store 버전: `1.0`
+- 연결된 빌드: `3`
+- App Store Connect 상태: `PREPARE_FOR_SUBMISSION`
+- 제출용 스크린샷: `docs/screenshots/appstore/iphone-6-9/`에 보관하고 App Store Connect에도 업로드
+- 남은 제출 전 수동 항목: App Review 연락 담당자 정보, App Privacy 설문
+
+리뷰 계정은 App Store Connect의 App Review Information에만 저장합니다. 공개 README에는 심사용 비밀번호를 커밋하지 않습니다.
+
+## 9. 실행 방법
+
+### Backend
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+python manage.py migrate
+python manage.py seed_demo
+python manage.py runserver 127.0.0.1:8000
+```
+
+### Frontend
+
+```powershell
+cd frontend
+npm install
+Copy-Item .env.example .env
+npm.cmd run dev
+```
+
+브라우저에서 아래 주소로 접속합니다.
+
+```txt
+http://127.0.0.1:5173
+```
+
+### 데모 계정
+
+```txt
+id: skawngus
+password: skawngus
+```
+
+관리자/데모 로그인 흐름에서도 남주현 시나리오가 재현되도록 구성했습니다.
+
+## 10. 실행 화면 캡처본
+
+실행 화면 캡처본은 `docs/screenshots/`에 저장합니다.
+
+| 화면 | 파일 |
+| --- | --- |
+| 카드 홈 | `docs/screenshots/cards.png` |
+| 소비 분석 | `docs/screenshots/analytics.png` |
+| 소비계획 | `docs/screenshots/budget.png` |
+| 카치AI | `docs/screenshots/chat.png` |
+
+App Store 제출용 iPhone 6.7/6.9 스크린샷은 `docs/screenshots/appstore/iphone-6-9/`에 저장합니다.
+
+## 11. 제출 산출물
+
+- `README.md`: 프로젝트 개요, 역할 분담, ERD, 알고리즘, 실행 방법
+- 완성된 소스코드: `backend/`, `frontend/`
+- 실행 화면 캡처본: `docs/screenshots/`
+- 이전 기획/설계 문서:
+  - [docs/SERVICE_SPEC.md](docs/SERVICE_SPEC.md)
+  - [docs/DATASET_SUMMARY.md](docs/DATASET_SUMMARY.md)
+  - [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md)
+  - [docs/LOCAL_COLLAB_SETUP.md](docs/LOCAL_COLLAB_SETUP.md)
+  - [docs/SUPABASE_VERCEL_DEMO.md](docs/SUPABASE_VERCEL_DEMO.md)
+
+## 12. 보안 및 제출 주의사항
+
+아래 파일과 값은 커밋하지 않습니다.
+
+- `.env`
+- `backend/db.sqlite3`
+- Supabase secret key
+- GMS API key
+- OAuth client secret
+- 원본 카드 데이터 번들 전체
+
+공유 저장소에는 실행 가능한 코드와 문서, 공개 가능한 정적 이미지와 예시 설정만 포함합니다.

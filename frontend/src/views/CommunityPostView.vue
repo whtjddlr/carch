@@ -2,15 +2,27 @@
   <section class="screen">
     <header class="detail-header blue-gradient">
       <AppBackButton fallback="/community" />
-      <div v-if="post?.editable" class="header-actions">
-        <button class="ghost-button" type="button" @click="router.push(`/community/${route.params.id}/edit`)">
-          <Pencil :size="15" />
-          수정
-        </button>
-        <button class="ghost-button danger" type="button" @click="handleDelete">
-          <Trash2 :size="15" />
-          삭제
-        </button>
+      <div v-if="post" class="header-actions">
+        <template v-if="post.editable">
+          <button class="ghost-button" type="button" @click="router.push(`/community/${route.params.id}/edit`)">
+            <Pencil :size="15" />
+            수정
+          </button>
+          <button class="ghost-button danger" type="button" @click="handleDelete">
+            <Trash2 :size="15" />
+            삭제
+          </button>
+        </template>
+        <template v-else>
+          <button class="ghost-button" type="button" @click="handleReport">
+            <Flag :size="15" />
+            신고
+          </button>
+          <button class="ghost-button" type="button" @click="handleBlockAuthor">
+            <UserX :size="15" />
+            숨김
+          </button>
+        </template>
       </div>
     </header>
 
@@ -19,6 +31,7 @@
       <div v-else-if="error" class="notice-card" :class="{ danger: !isFallbackData, subtle: isFallbackData }">
         {{ error }}
       </div>
+      <div v-if="notice" class="notice-card subtle">{{ notice }}</div>
 
       <article v-if="post" class="app-card post-detail">
         <div class="post-head">
@@ -77,7 +90,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Heart, MessageCircle, Pencil, Send, Trash2 } from 'lucide-vue-next'
+import { Flag, Heart, MessageCircle, Pencil, Send, Trash2, UserX } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { communityPosts } from '@/data/mockData'
 import {
@@ -85,6 +98,8 @@ import {
   deleteCommunityComment,
   deleteCommunityPost,
   fetchCommunityPost,
+  IS_DEMO_CHANNEL,
+  reportCommunityPost,
   toggleCommunityPostLike,
 } from '@/services/api'
 
@@ -94,8 +109,10 @@ const post = ref(null)
 const commentBody = ref('')
 const isLoading = ref(false)
 const error = ref('')
+const notice = ref('')
 const isFallbackData = ref(false)
 const comments = computed(() => post.value?.commentItems || [])
+const BLOCKED_AUTHORS_KEY = 'carch.community.blockedAuthors.v1'
 
 async function loadPost() {
   isLoading.value = true
@@ -104,7 +121,9 @@ async function loadPost() {
   try {
     post.value = await fetchCommunityPost(route.params.id)
   } catch {
-    const fallbackPost = communityPosts.find((item) => String(item.id) === String(route.params.id))
+    const fallbackPost = IS_DEMO_CHANNEL
+      ? communityPosts.find((item) => String(item.id) === String(route.params.id))
+      : null
     if (fallbackPost) {
       post.value = {
         ...fallbackPost,
@@ -175,6 +194,39 @@ async function handleDelete() {
   } catch {
     error.value = '게시글을 삭제할 권한이 없습니다.'
   }
+}
+
+async function handleReport() {
+  if (!post.value || notice.value) return
+  error.value = ''
+  try {
+    await reportCommunityPost(post.value.id, { reason: '부적절한 콘텐츠' })
+    notice.value = '신고가 접수되었습니다.'
+  } catch {
+    error.value = '신고를 접수하지 못했습니다.'
+  }
+}
+
+function readBlockedAuthors() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(BLOCKED_AUTHORS_KEY) || '[]')
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : []
+  } catch {
+    return []
+  }
+}
+
+function handleBlockAuthor() {
+  const author = String(post.value?.author || '').trim()
+  if (!author) return
+  const next = new Set(readBlockedAuthors())
+  next.add(author)
+  try {
+    window.localStorage.setItem(BLOCKED_AUTHORS_KEY, JSON.stringify([...next]))
+  } catch {
+    // localStorage 사용 불가 시 현재 이동만 수행
+  }
+  router.push('/community')
 }
 
 onMounted(loadPost)

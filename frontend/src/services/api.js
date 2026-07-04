@@ -7,21 +7,25 @@ import {
   transactions as seedTransactions,
   user as seedUser,
 } from '@/data/mockData'
-
-const envNumber = (value, fallback) => {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
-}
-
-const normalizeBaseUrl = (value) => String(value || '').trim().replace(/\/+$/, '')
-const envApiBaseUrl = import.meta.env.PROD ? '' : import.meta.env.VITE_API_BASE_URL
-const defaultApiBaseUrl = import.meta.env.PROD ? '' : 'http://127.0.0.1:8000'
-
-export const API_BASE_URL = normalizeBaseUrl(envApiBaseUrl || defaultApiBaseUrl)
-export const DEFAULT_API_TIMEOUT_MS = envNumber(import.meta.env.VITE_API_TIMEOUT_MS, 8000)
-export const AI_REQUEST_TIMEOUT_MS = envNumber(import.meta.env.VITE_AI_TIMEOUT_MS, 100000)
-export const USE_MOCK_API = ['true', '1', 'yes'].includes(String(import.meta.env.VITE_USE_MOCK_API || '').toLowerCase())
-export const DEV_AUTO_LOGIN_ENABLED = import.meta.env.DEV && !['false', '0', 'no'].includes(String(import.meta.env.VITE_DEV_AUTO_LOGIN || 'true').toLowerCase())
+export {
+  AI_REQUEST_TIMEOUT_MS,
+  API_BASE_URL,
+  APP_CHANNEL,
+  DEFAULT_API_TIMEOUT_MS,
+  DEV_AUTO_LOGIN_ENABLED,
+  IS_DEMO_CHANNEL,
+  IS_SERVICE_CHANNEL,
+  USE_MOCK_API,
+} from '@/services/channel'
+import {
+  AI_REQUEST_TIMEOUT_MS,
+  API_BASE_URL,
+  DEFAULT_API_TIMEOUT_MS,
+  DEV_AUTO_LOGIN_ENABLED,
+  IS_DEMO_CHANNEL,
+  IS_SERVICE_CHANNEL,
+  USE_MOCK_API,
+} from '@/services/channel'
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -114,6 +118,15 @@ export async function logoutAuth() {
     return { ok: true }
   }
   const response = await api.post('/api/auth/logout/')
+  return response.data
+}
+
+export async function deleteAccountAuth() {
+  if (USE_MOCK_API) {
+    await delay(120)
+    return { ok: true }
+  }
+  const response = await api.delete('/api/auth/account/')
   return response.data
 }
 
@@ -260,7 +273,6 @@ let mockCommunityPosts = clone(seedCommunityPosts).map((post) => ({
     { id: `${post.id}-comment-1`, author: '남주현', avatar: '남', date: '방금 전', body: '혜택 비교 흐름이 잘 보입니다.', editable: true },
   ],
 }))
-let mockAnalysisRecords = []
 
 const mockSearchText = (...values) => values.map((value) => String(value || '').toLowerCase()).join(' ')
 const mockScore = (query, ...values) => {
@@ -283,10 +295,20 @@ const filterByQuery = (rows, query, fields) => {
 const isNetworkFallbackError = (error) => !error?.response
 const LOCAL_FALLBACK_DELAY_MS = 700
 
-const withTimedLocalFallback = (requestPromise, fallbackFactory) => Promise.race([
-  requestPromise,
-  delay(LOCAL_FALLBACK_DELAY_MS).then(fallbackFactory),
-])
+const withTimedLocalFallback = (requestPromise, fallbackFactory) => (
+  IS_DEMO_CHANNEL
+    ? Promise.race([
+      requestPromise,
+      delay(LOCAL_FALLBACK_DELAY_MS).then(fallbackFactory),
+    ])
+    : requestPromise
+)
+
+const fallbackForDemoOnly = (error, message, fallbackFactory) => {
+  if (!isNetworkFallbackError(error) || !IS_DEMO_CHANNEL) throw error
+  console.warn(message, error)
+  return fallbackFactory()
+}
 
 const localCardCatalogRows = (params = {}) => {
   const rows = filterByQuery(mockCardCatalog, params.search || params.q || '', ['name', 'issuer', 'benefitSummary', 'titleDescription'])
@@ -700,9 +722,7 @@ export async function fetchOwnedCards() {
   const request = api.get('/api/owned-cards/')
     .then((response) => response.data.results || [])
     .catch((error) => {
-      if (!isNetworkFallbackError(error)) throw error
-      console.warn('Owned card API request failed. Falling back to local rows.', error)
-      return clone(mockOwnedCards)
+      return fallbackForDemoOnly(error, 'Owned card API request failed. Falling back to local rows.', () => clone(mockOwnedCards))
     })
   return withTimedLocalFallback(request, () => clone(mockOwnedCards))
 }
@@ -716,12 +736,10 @@ export async function fetchCards(params = {}) {
     .then((response) => {
       const rows = (response.data.results || []).map(applyPreferredCardImage)
       if (rows.length || params.search || params.q) return rows
-      return localCardCatalogRows(params)
+      return IS_DEMO_CHANNEL ? localCardCatalogRows(params) : rows
     })
     .catch((error) => {
-      if (!isNetworkFallbackError(error)) throw error
-      console.warn('Card catalog API request failed. Falling back to local rows.', error)
-      return localCardCatalogRows(params)
+      return fallbackForDemoOnly(error, 'Card catalog API request failed. Falling back to local rows.', () => localCardCatalogRows(params))
     })
   return withTimedLocalFallback(request, () => localCardCatalogRows(params))
 }
@@ -732,9 +750,7 @@ export async function addOwnedCard(cardId) {
       const response = await api.post('/api/owned-cards/', { cardId }, { timeout: Math.min(DEFAULT_API_TIMEOUT_MS, 1800) })
       return response.data
     } catch (error) {
-      if (!isNetworkFallbackError(error)) throw error
-      console.warn('Add owned card API request failed. Falling back to local rows.', error)
-      return addMockOwnedCard(cardId)
+      return fallbackForDemoOnly(error, 'Add owned card API request failed. Falling back to local rows.', () => addMockOwnedCard(cardId))
     }
   }
   if (USE_MOCK_API) {
@@ -755,10 +771,10 @@ export async function deleteOwnedCard(cardId) {
       const response = await api.delete(`/api/owned-cards/${cardId}/`, { timeout: Math.min(DEFAULT_API_TIMEOUT_MS, 1800) })
       return response.data
     } catch (error) {
-      if (!isNetworkFallbackError(error)) throw error
-      console.warn('Delete owned card API request failed. Falling back to local rows.', error)
-      mockOwnedCards = mockOwnedCards.filter((card) => String(card.id) !== String(cardId))
-      return { ok: true }
+      return fallbackForDemoOnly(error, 'Delete owned card API request failed. Falling back to local rows.', () => {
+        mockOwnedCards = mockOwnedCards.filter((card) => String(card.id) !== String(cardId))
+        return { ok: true }
+      })
     }
   }
   if (USE_MOCK_API) {
@@ -774,10 +790,10 @@ export async function deleteTransaction(transactionId) {
       const response = await api.delete(`/api/transactions/${transactionId}/`, { timeout: Math.min(DEFAULT_API_TIMEOUT_MS, 1800) })
       return response.data
     } catch (error) {
-      if (!isNetworkFallbackError(error)) throw error
-      console.warn('Delete transaction API request failed. Falling back to local rows.', error)
-      mockTransactions = mockTransactions.filter((tx) => String(tx.id) !== String(transactionId))
-      return { ok: true }
+      return fallbackForDemoOnly(error, 'Delete transaction API request failed. Falling back to local rows.', () => {
+        mockTransactions = mockTransactions.filter((tx) => String(tx.id) !== String(transactionId))
+        return { ok: true }
+      })
     }
   }
   if (USE_MOCK_API) {
@@ -806,9 +822,7 @@ export async function fetchTransactions(params = {}) {
   const request = api.get('/api/transactions/', { params })
     .then((response) => (response.data.results || []).map(normalizeTransaction))
     .catch((error) => {
-      if (!isNetworkFallbackError(error)) throw error
-      console.warn('Transaction API request failed. Falling back to local rows.', error)
-      return localTransactionRows(params)
+      return fallbackForDemoOnly(error, 'Transaction API request failed. Falling back to local rows.', () => localTransactionRows(params))
     })
   return withTimedLocalFallback(request, () => localTransactionRows(params))
 }
@@ -916,16 +930,9 @@ export async function fetchCardRecommendationBundle({ recurringCategories = [], 
   const request = api.get('/api/recommendations/cards/', { params, timeout: AI_REQUEST_TIMEOUT_MS })
     .then((response) => normalizeRecommendationBundle(response.data))
     .catch((error) => {
-      if (!isNetworkFallbackError(error)) throw error
-      console.warn('Card recommendation API request failed. Falling back to local rows.', error)
-      return fallback()
+      return fallbackForDemoOnly(error, 'Card recommendation API request failed. Falling back to local rows.', fallback)
     })
   return request
-}
-
-export async function fetchCardRecommendations() {
-  const data = await fetchCardRecommendationBundle()
-  return data.results || []
 }
 
 export async function fetchSpendingSummary({ ai = false, refresh = false, recurringCategories = [], month = '' } = {}) {
@@ -933,17 +940,6 @@ export async function fetchSpendingSummary({ ai = false, refresh = false, recurr
   if (USE_MOCK_API) {
     await delay(refresh ? 650 : 220)
     const summary = buildMockSpendingSummary({ ai, refresh, recurringCategories })
-    if (refresh) {
-      mockAnalysisRecords = [
-        {
-          id: `mock-analysis-${Date.now()}`,
-          title: '이번 달 소비 진단',
-          createdAt: new Date().toISOString(),
-          summary,
-        },
-        ...mockAnalysisRecords,
-      ].slice(0, 5)
-    }
     return clone(summary)
   }
   if (ai) params.ai = 1
@@ -955,7 +951,6 @@ export async function fetchSpendingSummary({ ai = false, refresh = false, recurr
   })
     .then((response) => response.data)
 
-  if (ai || refresh) return request
   return request
 }
 
@@ -986,37 +981,6 @@ export async function saveBudget(month, payload) {
   }
   // PATCH 사용(백엔드 CORS 허용 메서드: GET/POST/PATCH/DELETE/OPTIONS — PUT 미허용)
   const response = await api.patch(`/api/budgets/${month}/`, payload)
-  return response.data
-}
-
-export async function fetchAnalysisRecords(params = {}) {
-  if (USE_MOCK_API) {
-    await delay()
-    return clone(mockAnalysisRecords)
-  }
-  const response = await api.get('/api/analytics/records/', { params })
-  return response.data.results || []
-}
-
-export async function fetchAiContract() {
-  if (USE_MOCK_API) {
-    await delay()
-    return {
-      mode: 'mock',
-      spendingAnalysis: { route: '/analytics', schemaVersion: 'spending-analysis-v2' },
-      chat: { schemaVersion: 'chat-response-v2' },
-    }
-  }
-  const response = await api.get('/api/ai/contract/')
-  return response.data
-}
-
-export async function fetchAiStatus() {
-  if (USE_MOCK_API) {
-    await delay()
-    return { aiMode: 'mock', available: true, provider: 'frontend-fixture' }
-  }
-  const response = await api.get('/api/ai/status/')
   return response.data
 }
 
@@ -1129,6 +1093,15 @@ export async function toggleCommunityPostLike(id) {
     return clone(post)
   }
   const response = await api.post(`/api/community/posts/${id}/like/`)
+  return response.data
+}
+
+export async function reportCommunityPost(id, payload = {}) {
+  if (USE_MOCK_API) {
+    await delay(120)
+    return { ok: true, status: 'received' }
+  }
+  const response = await api.post(`/api/community/posts/${id}/report/`, payload)
   return response.data
 }
 

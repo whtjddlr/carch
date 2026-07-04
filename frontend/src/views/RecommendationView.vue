@@ -69,6 +69,11 @@
           <RouterLink class="primary-button w-100" to="/cards">내 카드와 비교하기</RouterLink>
           <RouterLink class="outline-button w-100" to="/analytics">소비분석 다시 보기</RouterLink>
         </article>
+
+        <article class="app-card compliance-notice-card">
+          <span>조건 확인</span>
+          <p>예상 혜택은 입력한 소비내역과 검수된 카드 규칙 기준입니다. 실제 발급 가능 여부, 이벤트, 전월 실적 인정 조건은 카드사 공식 안내가 우선입니다.</p>
+        </article>
       </div>
     </template>
 
@@ -84,18 +89,30 @@
         <article v-if="bundle?.profile" class="app-card profile-card">
           <div>
             <span>계산 기준</span>
-            <strong>{{ bundle.profile.styleTags?.join(' · ') || '소비 분석 중' }}</strong>
-            <p>
+            <strong>{{ profileBasisLabel }}</strong>
+            <p v-if="hasInsufficientRecommendationData">
+              아직 실제 소비 데이터가 부족해요. 보유 카드와 결제 내역을 추가하면 카드별 조건과 예상 혜택을 개인화해 계산합니다.
+            </p>
+            <p v-else-if="isColdStartRecommendation">
+              일반 생활비 가정 {{ krw(bundle.profile.totalExpense) }}으로 조건을 비교했습니다.
+              실제 결제 내역을 추가하면 개인화된 추천으로 바뀝니다.
+            </p>
+            <p v-else>
               반복적으로 쓰는 {{ krw(bundle.profile.totalExpense) }}을 기준으로 계산했습니다.
               <template v-if="oneTimeCount"> 일시적인 지출 {{ oneTimeCount }}건은 덜 반영했습니다.</template>
             </p>
           </div>
         </article>
 
+        <article class="app-card compliance-notice-card">
+          <span>조건 확인</span>
+          <p>예상 혜택은 입력한 소비내역과 검수된 카드 규칙 기준입니다. 실제 발급 가능 여부, 이벤트, 전월 실적 인정 조건은 카드사 공식 안내가 우선입니다.</p>
+        </article>
+
         <article v-if="displayAiDecision" class="app-card ai-decision-card">
           <div class="ai-decision-heading">
-            <span>AI 전략 판단</span>
-            <b>{{ aiDecision.aiMode === 'gms' ? 'LLM' : '검증 fallback' }}</b>
+            <span>전략 판단</span>
+            <b>{{ aiDecision.aiMode === 'gms' ? 'AI 검토' : '규칙 검증' }}</b>
           </div>
           <strong>{{ aiDecision.title }}</strong>
           <p>{{ aiDecision.summary }}</p>
@@ -164,7 +181,13 @@
             <b>미보유 카드</b>
           </div>
 
-          <div class="recommend-list">
+          <article v-if="hasInsufficientRecommendationData" class="app-card usage-empty-card">
+            <span>새 카드 추천</span>
+            <strong>아직 발급 추천을 판단할 데이터가 부족해요</strong>
+            <p>카드나 결제 내역을 먼저 추가하면 현재 카드 대비 새 카드의 추가 이득을 계산해 보여줄게요.</p>
+          </article>
+
+          <div v-else class="recommend-list">
             <article
               v-for="item in recommendationItems"
               :key="item.id"
@@ -208,7 +231,7 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { krw, recommendations } from '@/data/mockData'
-import { fetchCardRecommendationBundle } from '@/services/api'
+import { fetchCardRecommendationBundle, IS_DEMO_CHANNEL } from '@/services/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -223,7 +246,7 @@ const defaultEconomics = {
   paybackMonths: null,
 }
 
-const recommendationItems = ref(recommendations.map(normalizeRecommendation))
+const recommendationItems = ref(IS_DEMO_CHANNEL ? recommendations.map(normalizeRecommendation) : [])
 const isDetail = computed(() => Boolean(route.params.id))
 const recommendation = computed(() => {
   if (!isDetail.value) return recommendationItems.value[0]
@@ -237,7 +260,20 @@ const ownedUsageGuides = computed(() =>
 )
 const oneTimeCount = computed(() => bundle.value?.profile?.spendingTrend?.oneTimeCandidates?.length || 0)
 const aiDecision = computed(() => bundle.value?.aiDecision || null)
-const displayAiDecision = computed(() => isUsageMode.value && aiDecision.value)
+const dataReadiness = computed(() => bundle.value?.dataReadiness || {})
+const readinessStage = computed(() => dataReadiness.value.stage || '')
+const hasInsufficientRecommendationData = computed(() => ['empty', 'cold_start'].includes(readinessStage.value))
+const isColdStartRecommendation = computed(() => (
+  hasInsufficientRecommendationData.value
+  || readinessStage.value === 'cold_start'
+  || bundle.value?.profile?.dataSource === 'cold_start_defaults'
+))
+const profileBasisLabel = computed(() => {
+  if (hasInsufficientRecommendationData.value) return dataReadiness.value.label || '학습 전'
+  if (isColdStartRecommendation.value) return '가정 기반 조건 비교'
+  return bundle.value?.profile?.styleTags?.join(' · ') || '소비 분석 중'
+})
+const displayAiDecision = computed(() => isUsageMode.value && aiDecision.value && !hasInsufficientRecommendationData.value)
 
 function signedKrw(value) {
   const amount = Number(value || 0)
@@ -409,7 +445,8 @@ onMounted(async () => {
     bundle.value = data
     recommendationItems.value = (data.results || []).map(mapRecommendation)
   } catch (error) {
-    console.warn('카드 추천 API를 불러오지 못해 mock 데이터를 사용합니다.', error)
+    if (!IS_DEMO_CHANNEL) recommendationItems.value = []
+    console.warn('카드 추천 API를 불러오지 못했습니다.', error)
   } finally {
     await settleRecommendationScroll()
   }
@@ -478,6 +515,7 @@ onMounted(async () => {
 .result-card,
 .recommend-card,
 .ai-decision-card,
+.compliance-notice-card,
 .usage-guide-card,
 .usage-empty-card {
   padding: 18px;
@@ -486,6 +524,7 @@ onMounted(async () => {
 .profile-card span,
 .alert-card span,
 .ai-decision-heading span,
+.compliance-notice-card span,
 .recommend-card span {
   color: #0f5fae;
   font-size: 11px;
@@ -505,6 +544,7 @@ onMounted(async () => {
 .profile-card p,
 .alert-card p,
 .ai-decision-card p,
+.compliance-notice-card p,
 .result-card p,
 .recommend-card p {
   margin: 6px 0 0;
@@ -577,6 +617,12 @@ onMounted(async () => {
   margin-top: 12px;
   border-color: rgba(0, 140, 149, 0.18);
   background: rgba(240, 253, 250, 0.82);
+}
+
+.compliance-notice-card {
+  margin-top: 12px;
+  border-color: rgba(36, 54, 79, 0.1);
+  background: rgba(255, 255, 255, 0.74);
 }
 
 .recommend-section-title {
@@ -922,6 +968,7 @@ ul {
 
 :global(.app-backdrop .phone-shell .recommendation-body .profile-card),
 :global(.app-backdrop .phone-shell .recommendation-body .alert-card),
+:global(.app-backdrop .phone-shell .recommendation-body .compliance-notice-card),
 :global(.app-backdrop .phone-shell .recommendation-body .usage-guide-card),
 :global(.app-backdrop .phone-shell .recommendation-body .usage-empty-card),
 :global(.app-backdrop .phone-shell .recommendation-body .result-card),

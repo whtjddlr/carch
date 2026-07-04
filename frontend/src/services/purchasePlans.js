@@ -1,8 +1,7 @@
 import { clone, mockPlans } from '@/data/mockData'
 // 공용 인증 인스턴스(api)를 그대로 사용 — auth.js가 붙인 Authorization 헤더가 함께 전송됨(401 방지)
-import { AI_REQUEST_TIMEOUT_MS, api } from '@/services/api'
+import { AI_REQUEST_TIMEOUT_MS, USE_MOCK_API, api } from '@/services/api'
 
-const useMockApi = import.meta.env.VITE_USE_MOCK_API === 'true'
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 let mockStore = clone(mockPlans)
 
@@ -113,7 +112,7 @@ const buildScenarios = (plan) => {
 }
 
 export async function parsePurchasePlan(payload) {
-  if (useMockApi) {
+  if (USE_MOCK_API) {
     await delay(900)
     const text = payload.rawPrompt || payload.prompt || ''
     const type = inferType(text)
@@ -152,7 +151,7 @@ export async function parsePurchasePlan(payload) {
 }
 
 export async function createPurchasePlan(payload) {
-  if (!useMockApi) {
+  if (!USE_MOCK_API) {
     return request(api.post('/api/v1/purchase-plans/', payload))
   }
 
@@ -177,7 +176,7 @@ export async function createPurchasePlan(payload) {
 }
 
 export async function getPurchasePlans() {
-  if (!useMockApi) {
+  if (!USE_MOCK_API) {
     return request(api.get('/api/v1/purchase-plans/'))
   }
   await delay(200)
@@ -185,7 +184,7 @@ export async function getPurchasePlans() {
 }
 
 export async function getPurchasePlan(id) {
-  if (!useMockApi) {
+  if (!USE_MOCK_API) {
     return request(api.get(`/api/v1/purchase-plans/${id}/`))
   }
   await delay(160)
@@ -193,7 +192,7 @@ export async function getPurchasePlan(id) {
 }
 
 export async function generatePlanScenarios(id) {
-  if (!useMockApi) {
+  if (!USE_MOCK_API) {
     return request(api.post(`/api/v1/purchase-plans/${id}/scenarios/`))
   }
   await delay(1000)
@@ -205,7 +204,7 @@ export async function generatePlanScenarios(id) {
 }
 
 export async function selectPlanScenario(planId, scenarioId) {
-  if (!useMockApi) {
+  if (!USE_MOCK_API) {
     return request(api.post(`/api/v1/purchase-plans/${planId}/select/`, { scenarioId }))
   }
   await delay(200)
@@ -217,7 +216,7 @@ export async function selectPlanScenario(planId, scenarioId) {
 }
 
 export async function updatePurchasePlan(id, payload) {
-  if (!useMockApi) {
+  if (!USE_MOCK_API) {
     return request(api.patch(`/api/v1/purchase-plans/${id}/`, payload))
   }
   await delay(200)
@@ -226,7 +225,7 @@ export async function updatePurchasePlan(id, payload) {
 }
 
 export async function deletePurchasePlan(id) {
-  if (!useMockApi) {
+  if (!USE_MOCK_API) {
     return request(api.delete(`/api/v1/purchase-plans/${id}/`))
   }
   await delay(180)

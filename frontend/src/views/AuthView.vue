@@ -17,13 +17,13 @@
         <input v-model.trim="form.name" class="form-field" type="text" autocomplete="name" placeholder="남주현" />
       </label>
       <label>
-        <span>{{ isSignup ? '이메일' : '아이디' }}</span>
+        <span>{{ identityLabel }}</span>
         <input
           v-model.trim="form.email"
           class="form-field"
-          :type="isSignup ? 'email' : 'text'"
-          :autocomplete="isSignup ? 'email' : 'username'"
-          :placeholder="isSignup ? 'name@carch.kr' : 'skawngus'"
+          :type="identityInputType"
+          :autocomplete="identityAutocomplete"
+          :placeholder="identityPlaceholder"
         />
       </label>
       <label>
@@ -44,18 +44,18 @@
       </button>
 
       <button
-        v-if="devAutoLoginAvailable"
-        class="dev-login-button"
+        v-if="showQuickStart"
+        class="demo-login-button"
         type="button"
         :disabled="loading"
         @click="submitDemoLogin"
       >
-        남주현 데모 계정으로 시작하기
+        카치 바로 시작
       </button>
 
-      <div class="auth-divider"><span>또는</span></div>
+      <div v-if="showSocialLogin" class="auth-divider"><span>또는</span></div>
 
-      <div class="social-buttons">
+      <div v-if="showSocialLogin" class="social-buttons">
         <button
           v-for="provider in providers"
           :key="provider.id"
@@ -80,6 +80,9 @@
       <RouterLink class="auth-link" :to="{ path: isSignup ? '/login' : '/signup', query: route.query }">
         {{ isSignup ? '이미 계정이 있습니다' : '새 계정을 만듭니다' }}
       </RouterLink>
+      <RouterLink class="privacy-link" to="/privacy">
+        개인정보 처리방침
+      </RouterLink>
     </form>
   </section>
 </template>
@@ -87,8 +90,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { fetchAuthProviders, USE_MOCK_API } from '@/services/api'
-import { completeOAuthLogin, emailLogin, emailSignup, isDevAutoLoginEnabled, oauthStartUrl } from '@/services/auth'
+import { fetchAuthProviders, IS_DEMO_CHANNEL, IS_SERVICE_CHANNEL, USE_MOCK_API } from '@/services/api'
+import { completeOAuthLogin, emailLogin, emailSignup, oauthStartUrl } from '@/services/auth'
+import { isNativeRuntime } from '@/services/secureStorage'
 
 const props = defineProps({
   mode: { type: String, default: 'login' },
@@ -98,10 +102,16 @@ const router = useRouter()
 const route = useRoute()
 const isSignup = computed(() => props.mode === 'signup')
 const nextPath = computed(() => String(route.query.next || '/cards'))
+const identityLabel = computed(() => (isSignup.value || IS_SERVICE_CHANNEL ? '이메일' : '아이디'))
+const identityInputType = computed(() => (isSignup.value || IS_SERVICE_CHANNEL ? 'email' : 'text'))
+const identityAutocomplete = computed(() => (isSignup.value || IS_SERVICE_CHANNEL ? 'email' : 'username'))
+const identityPlaceholder = computed(() => (isSignup.value || IS_SERVICE_CHANNEL ? 'name@carch.kr' : 'skawngus'))
 const loading = ref(false)
 const message = ref(String(route.query.error || ''))
 const messageTone = ref(message.value ? 'danger' : 'info')
-const devAutoLoginAvailable = isDevAutoLoginEnabled()
+const isNativeApp = isNativeRuntime()
+const showQuickStart = computed(() => IS_DEMO_CHANNEL && !isSignup.value && !isNativeApp)
+const showSocialLogin = computed(() => !IS_SERVICE_CHANNEL && !isNativeApp)
 const providers = ref([
   { id: 'kakao', label: '카카오', enabled: false },
   { id: 'naver', label: '네이버', enabled: false },
@@ -113,6 +123,7 @@ const form = reactive({
 })
 
 onMounted(async () => {
+  if (isNativeApp || IS_SERVICE_CHANNEL) return
   try {
     const data = await fetchAuthProviders()
     providers.value = data.providers || providers.value
@@ -149,7 +160,7 @@ const submitDemoLogin = async () => {
     await emailLogin({ email: 'skawngus', password: 'skawngus' })
     router.replace(nextPath.value.startsWith('/') ? nextPath.value : '/cards')
   } catch (error) {
-    message.value = error?.response?.data?.detail || '데모 로그인을 완료하지 못했습니다.'
+    message.value = error?.response?.data?.detail || '로그인을 완료하지 못했습니다.'
     messageTone.value = 'danger'
   } finally {
     loading.value = false
@@ -323,7 +334,7 @@ const startSocial = async (provider) => {
   cursor: not-allowed;
 }
 
-.dev-login-button {
+.demo-login-button {
   min-height: 48px;
   border: 1px solid rgba(15, 95, 174, 0.26);
   border-radius: 16px;
@@ -333,7 +344,7 @@ const startSocial = async (provider) => {
   font-weight: 900;
 }
 
-.dev-login-button:disabled {
+.demo-login-button:disabled {
   opacity: 0.5;
 }
 
@@ -374,6 +385,15 @@ const startSocial = async (provider) => {
   color: var(--carch-blue);
   font-size: 13px;
   font-weight: 900;
+  text-align: center;
+  text-decoration: none;
+}
+
+.privacy-link {
+  margin-top: -2px;
+  color: #7b8794;
+  font-size: 12px;
+  font-weight: 800;
   text-align: center;
   text-decoration: none;
 }

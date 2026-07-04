@@ -244,12 +244,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { BarChart3, ChevronDown, CreditCard, RefreshCw, Search, Sparkles } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { cards as mockCards, krw, transactions as mockTransactions } from '@/data/mockData'
-import { fetchBudget, fetchCardRecommendationBundle, fetchMonthlySpending, fetchSpendingSummary } from '@/services/api'
+import { fetchBudget, fetchCardRecommendationBundle, fetchMonthlySpending, fetchOwnedCards, fetchSpendingSummary, normalizeCard } from '@/services/api'
 import { budgetRiskColor } from '@/utils/budgetRisk'
 
 const colors = ['#0f5fae', '#008c95', '#24364f', '#c49a49', '#8a9aad', '#5f6b77']
 const summary = ref(null)
 const recommendationBundle = ref(null)
+const ownedCards = ref([])
 const isLoading = ref(false)
 const isRefreshing = ref(false)
 const error = ref('')
@@ -594,17 +595,35 @@ const metricCards = computed(() => {
 
 const cardLookup = computed(() => {
   const map = new Map()
-  mockCards.forEach((card) => {
-    map.set(String(card.id), card)
-    if (card.cardAdId != null) map.set(String(card.cardAdId), card)
-  })
+  const addCard = (card = {}) => {
+    const id = card.id ?? card.cardId ?? card.cardAdId ?? card.card_ad_id
+    if (id == null) return
+    const normalized = {
+      ...card,
+      name: card.name || card.cardName || card.card_name,
+      imageUrl: card.imageUrl || card.image_url,
+    }
+    map.set(String(id), normalized)
+    if (card.cardId != null) map.set(String(card.cardId), normalized)
+    if (card.cardAdId != null) map.set(String(card.cardAdId), normalized)
+    if (card.card_ad_id != null) map.set(String(card.card_ad_id), normalized)
+  }
+  mockCards.forEach(addCard)
+  ownedCards.value.forEach(addCard)
+  ;(recommendationBundle.value?.results || []).forEach(addCard)
+  ;(recommendationBundle.value?.ownedCategoryGuides || []).forEach((item) => addCard({
+    id: item.cardId,
+    cardId: item.cardId,
+    name: item.cardName,
+    imageUrl: item.imageUrl,
+  }))
   return map
 })
 
 function resolveCardMeta(cardId, fallbackName) {
   const card = cardLookup.value.get(String(cardId))
   return {
-    name: card?.name || fallbackName || `카드 ${cardId}`,
+    name: card?.name || fallbackName || '카드 정보 확인 중',
     imageUrl: card?.imageUrl || '',
   }
 }
@@ -620,7 +639,7 @@ function onThumbLoad(key, event) {
 const cardRows = computed(() => {
   const sourceRows = (safeSummary.value.byCard || []).map((item) => ({
       id: item.cardId,
-      ...resolveCardMeta(item.cardId),
+      ...resolveCardMeta(item.cardId, item.cardName || item.card_name || item.name),
       amount: Number(item.amount || 0),
     }))
   const total = sourceRows.reduce((sum, item) => sum + Number(item.amount || 0), 0)
@@ -694,7 +713,7 @@ function buildMockSummary(monthKey = null) {
       savingOpportunities: [{ amount: 12000 }],
       cardInsights: byCard.map((item) => ({
         cardId: item.cardId,
-        cardName: `카드 ${item.cardId}`,
+        cardName: resolveCardMeta(item.cardId).name,
         amount: item.amount,
         fit: '보통',
       })),
@@ -738,6 +757,17 @@ async function loadSummary() {
     error.value = '분석 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
     isLoading.value = false
+  }
+}
+
+async function loadOwnedCardMeta() {
+  try {
+    const cards = await fetchOwnedCards()
+    ownedCards.value = Array.isArray(cards)
+      ? cards.map((card, index) => normalizeCard(card, index))
+      : []
+  } catch {
+    ownedCards.value = []
   }
 }
 
@@ -915,6 +945,7 @@ function goMonth(month) {
 
 onMounted(() => {
   applyMonthFromRoute()
+  loadOwnedCardMeta()
   loadSummary()
   loadBudgetGoal()
   loadMonthly()

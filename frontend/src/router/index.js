@@ -1,32 +1,38 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import LandingView from '@/views/LandingView.vue'
-import AuthView from '@/views/AuthView.vue'
-import AuthCallbackView from '@/views/AuthCallbackView.vue'
-import DashboardView from '@/views/DashboardView.vue'
-import TransactionsView from '@/views/TransactionsView.vue'
-import TransactionCreateView from '@/views/TransactionCreateView.vue'
-import BudgetListView from '@/views/BudgetListView.vue'
-import BudgetView from '@/views/BudgetView.vue'
-import RecommendationView from '@/views/RecommendationView.vue'
-import CommunityView from '@/views/CommunityView.vue'
-import CommunityPostView from '@/views/CommunityPostView.vue'
-import CommunityEditorView from '@/views/CommunityEditorView.vue'
-import ChatView from '@/views/ChatView.vue'
-import AnalyticsView from '@/views/AnalyticsView.vue'
-import UtilityView from '@/views/UtilityView.vue'
-import PlansListView from '@/views/PlansListView.vue'
-import PlansCreateView from '@/views/PlansCreateView.vue'
-import PlanDetailView from '@/views/PlanDetailView.vue'
-import DevPanelView from '@/views/DevPanelView.vue'
-import { ensureDevAutoLogin, isAuthenticated } from '@/services/auth'
+import { ensureDevAutoLogin, initAuthSession, isAuthenticated } from '@/services/auth'
+import { IS_DEMO_CHANNEL } from '@/services/api'
+import { isNativeRuntime } from '@/services/secureStorage'
 
 const protectedMeta = { requiresAuth: true, bottomNav: true }
+const LandingView = () => import('@/views/LandingView.vue')
+const AuthView = () => import('@/views/AuthView.vue')
+const AuthCallbackView = () => import('@/views/AuthCallbackView.vue')
+const DashboardView = () => import('@/views/DashboardView.vue')
+const TransactionsView = () => import('@/views/TransactionsView.vue')
+const TransactionCreateView = () => import('@/views/TransactionCreateView.vue')
+const BudgetListView = () => import('@/views/BudgetListView.vue')
+const BudgetView = () => import('@/views/BudgetView.vue')
+const RecommendationView = () => import('@/views/RecommendationView.vue')
+const CommunityView = () => import('@/views/CommunityView.vue')
+const CommunityPostView = () => import('@/views/CommunityPostView.vue')
+const CommunityEditorView = () => import('@/views/CommunityEditorView.vue')
+const ChatView = () => import('@/views/ChatView.vue')
+const AnalyticsView = () => import('@/views/AnalyticsView.vue')
+const UtilityView = () => import('@/views/UtilityView.vue')
+const PrivacyView = () => import('@/views/PrivacyView.vue')
+const PlansListView = () => import('@/views/PlansListView.vue')
+const PlansCreateView = () => import('@/views/PlansCreateView.vue')
+const PlanDetailView = () => import('@/views/PlanDetailView.vue')
+const DemoView = () => import('@/views/DemoView.vue')
+const DevPanelView = () => import('@/views/DevPanelView.vue')
 
 const routes = [
   { path: '/', name: 'Landing', component: LandingView, meta: { fullPage: true } },
+  { path: '/demo', name: 'QuickStart', component: DemoView, meta: { requiresAuth: false, demoOnly: true } },
   { path: '/login', name: 'Login', component: AuthView, props: { mode: 'login' }, meta: { requiresAuth: false } },
   { path: '/signup', name: 'Signup', component: AuthView, props: { mode: 'signup' }, meta: { requiresAuth: false } },
   { path: '/login/callback', name: 'AuthCallback', component: AuthCallbackView, meta: { requiresAuth: false } },
+  { path: '/privacy', name: 'Privacy', component: PrivacyView, meta: { requiresAuth: false } },
   { path: '/cards', name: 'Dashboard', component: DashboardView, meta: protectedMeta },
   { path: '/cards/:id', name: 'CardDetail', component: UtilityView, props: { type: 'card' }, meta: { requiresAuth: true } },
   { path: '/cards/apply/:id', name: 'CardApply', component: UtilityView, props: { type: 'cardApply' }, meta: { requiresAuth: true } },
@@ -66,7 +72,9 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
-  const allowDev = import.meta.env.DEV || ['localhost', '127.0.0.1'].includes(window.location.hostname)
+  await initAuthSession()
+  if (to.meta.demoOnly && !IS_DEMO_CHANNEL) return { name: 'Login', query: { next: '/cards' } }
+  const allowDev = IS_DEMO_CHANNEL && !isNativeRuntime() && (import.meta.env.DEV || ['localhost', '127.0.0.1'].includes(window.location.hostname))
   if (to.meta.devOnly && !allowDev) return { name: 'Dashboard' }
   if (to.meta.requiresAuth && !isAuthenticated()) {
     const didAutoLogin = await ensureDevAutoLogin()

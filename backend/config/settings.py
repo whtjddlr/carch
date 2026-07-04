@@ -47,6 +47,36 @@ def env_list(name, default=''):
     return [item.strip() for item in raw.split(',') if item.strip()]
 
 
+def normalize_identifier(value, default):
+    value = str(value or '').strip().lower()
+    if not value or value[0].isdigit() or not value.replace('_', '').isalnum():
+        return default
+    return value
+
+
+def env_identifier(name, default):
+    return normalize_identifier(os.environ.get(name, default), default)
+
+
+APP_CHANNEL = os.environ.get('APP_CHANNEL', os.environ.get('CARCH_APP_CHANNEL', 'demo')).strip().lower()
+if APP_CHANNEL not in {'demo', 'service'}:
+    APP_CHANNEL = 'demo'
+IS_DEMO_CHANNEL = APP_CHANNEL == 'demo'
+IS_SERVICE_CHANNEL = APP_CHANNEL == 'service'
+DEMO_FEATURES_ENABLED = IS_DEMO_CHANNEL and env_bool('DEMO_FEATURES_ENABLED', True)
+DATABASE_SCHEMA = env_identifier('DATABASE_SCHEMA', APP_CHANNEL)
+CARD_CATALOG_SCHEMA = env_identifier('CARD_CATALOG_SCHEMA', 'catalog')
+DATABASE_SEARCH_PATH = [
+    DATABASE_SCHEMA,
+    *[
+        item
+        for item in (normalize_identifier(raw, '') for raw in env_list('DATABASE_SEARCH_PATH', CARD_CATALOG_SCHEMA))
+        if item
+    ],
+]
+DATABASE_SEARCH_PATH = list(dict.fromkeys(DATABASE_SEARCH_PATH))
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -66,7 +96,7 @@ if os.environ.get('VERCEL_URL'):
 # Application definition
 
 INSTALLED_APPS = [
-    'api',
+    'api.apps.ApiConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -111,12 +141,20 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 if DATABASE_URL:
-    DATABASES = {
-        'default': dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=int(os.environ.get('DATABASE_CONN_MAX_AGE', '60')),
-            ssl_require=env_bool('DATABASE_SSL_REQUIRE', True),
+    DATABASE_CONFIG = dj_database_url.parse(
+        DATABASE_URL,
+        conn_max_age=int(os.environ.get('DATABASE_CONN_MAX_AGE', '60')),
+        ssl_require=env_bool('DATABASE_SSL_REQUIRE', True),
+    )
+    if DATABASE_SEARCH_PATH and DATABASE_CONFIG.get('ENGINE') == 'django.db.backends.postgresql':
+        DATABASE_CONFIG.setdefault('OPTIONS', {})
+        existing_options = DATABASE_CONFIG['OPTIONS'].get('options', '')
+        search_path_option = f'-c search_path={",".join(DATABASE_SEARCH_PATH)}'
+        DATABASE_CONFIG['OPTIONS']['options'] = ' '.join(
+            option for option in [existing_options, search_path_option] if option
         )
+    DATABASES = {
+        'default': DATABASE_CONFIG
     }
 else:
     DATABASES = {
@@ -198,19 +236,30 @@ DEFAULT_BACKEND_URL = 'https://carch-api.vercel.app' if IS_VERCEL else 'http://1
 FRONTEND_URL = os.environ.get('FRONTEND_URL', DEFAULT_FRONTEND_URL).rstrip('/')
 BACKEND_URL = os.environ.get('BACKEND_URL', DEFAULT_BACKEND_URL).rstrip('/')
 OAUTH_CALLBACK_BASE_URL = os.environ.get('OAUTH_CALLBACK_BASE_URL', BACKEND_URL).rstrip('/')
+NATIVE_APP_ORIGINS = ['capacitor://localhost', 'ionic://localhost']
+OAUTH_ALLOWED_FRONTEND_REDIRECTS = env_list(
+    'OAUTH_ALLOWED_FRONTEND_REDIRECTS',
+    ','.join([
+        FRONTEND_URL,
+        *NATIVE_APP_ORIGINS,
+    ]),
+)
 CORS_ALLOWED_ORIGINS = env_list(
     'CORS_ALLOWED_ORIGINS',
     ','.join([
         FRONTEND_URL,
+        *NATIVE_APP_ORIGINS,
         'http://127.0.0.1:5173',
         'http://127.0.0.1:5175',
         'http://localhost:5173',
         'http://localhost:5175',
     ]),
 )
+OAUTH_ALLOWED_FRONTEND_REDIRECTS = list(dict.fromkeys([*OAUTH_ALLOWED_FRONTEND_REDIRECTS, *NATIVE_APP_ORIGINS]))
+CORS_ALLOWED_ORIGINS = list(dict.fromkeys([*CORS_ALLOWED_ORIGINS, *NATIVE_APP_ORIGINS]))
 AUTH_SESSION_DAYS = int(os.environ.get('AUTH_SESSION_DAYS', '14'))
 EMAIL_AUTH_ENABLED = os.environ.get('EMAIL_AUTH_ENABLED', 'true').lower() in {'1', 'true', 'yes'}
-DEV_AUTO_LOGIN_ENABLED = env_bool('DEV_AUTO_LOGIN_ENABLED', DEBUG)
+DEV_AUTO_LOGIN_ENABLED = DEMO_FEATURES_ENABLED and env_bool('DEV_AUTO_LOGIN_ENABLED', DEBUG)
 DEV_ADMIN_EMAIL = os.environ.get('DEV_ADMIN_EMAIL', 'admin@carch.local').strip().lower()
 DEV_ADMIN_PASSWORD = os.environ.get('DEV_ADMIN_PASSWORD', 'Carchadmin123!')
 DEV_ADMIN_NAME = os.environ.get('DEV_ADMIN_NAME', 'CARCH 관리자')

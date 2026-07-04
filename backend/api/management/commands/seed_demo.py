@@ -35,6 +35,9 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        if not getattr(settings, 'DEMO_FEATURES_ENABLED', False):
+            raise CommandError('Demo seed is disabled when APP_CHANNEL=service.')
+
         self._check_card_bundle(strict=options['strict_card_bundle'])
 
         demo_user = get_demo_user()

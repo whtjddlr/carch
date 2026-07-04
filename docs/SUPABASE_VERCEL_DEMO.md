@@ -7,6 +7,30 @@ This setup is for a shareable CARCH demo:
 - Vercel project 1 serves the Django API from `backend/`.
 - Vercel project 2 serves the Vue app from `frontend/`.
 
+## Current Deployments
+
+Canonical service/App Store channel:
+
+```txt
+Frontend: https://carch.vercel.app
+Backend:  https://carch-api.vercel.app
+```
+
+Portfolio/demo channel:
+
+```txt
+Frontend: https://carch-demo.vercel.app/demo
+Backend:  프론트 mock/데모 채널 기준. 별도 demo 백엔드를 붙일 때만 `BACKEND_URL_DEMO`를 설정합니다.
+```
+
+Legacy frontend alias:
+
+```txt
+https://carch-web.vercel.app
+```
+
+`carch.vercel.app` hides demo-only entry points and keeps real email auth, account deletion, privacy, and community moderation flows. `carch-demo.vercel.app` keeps the quick-start demo flow.
+
 ## Supabase
 
 Project:
@@ -68,6 +92,11 @@ Environment variables:
 DATABASE_URL=<pooled Supabase Postgres URL required for Django auth/transactions/analytics>
 DATABASE_SSL_REQUIRE=true
 DATABASE_CONN_MAX_AGE=60
+APP_CHANNEL=demo
+DEMO_FEATURES_ENABLED=true
+DATABASE_SCHEMA=demo
+CARD_CATALOG_SCHEMA=catalog
+DATABASE_SEARCH_PATH=catalog
 DJANGO_SECRET_KEY=<generate-a-secret>
 DJANGO_DEBUG=false
 DJANGO_ALLOWED_HOSTS=<backend-vercel-domain>,127.0.0.1,localhost
@@ -98,6 +127,34 @@ DEMO_LOGIN_ID=skawngus
 DEMO_USER_PASSWORD=skawngus
 ```
 
+For the App Store/service backend use the same Supabase project, but point Django at a separate schema:
+
+```txt
+APP_CHANNEL=service
+DEMO_FEATURES_ENABLED=false
+DEV_AUTO_LOGIN_ENABLED=false
+DATABASE_SCHEMA=service
+CARD_CATALOG_SCHEMA=catalog
+DATABASE_SEARCH_PATH=catalog
+CARD_CATALOG_SOURCE=postgres
+```
+
+Current service API domain:
+
+```txt
+https://carch-api.vercel.app
+```
+
+Create schemas once in Supabase SQL Editor:
+
+```sql
+create schema if not exists catalog;
+create schema if not exists demo;
+create schema if not exists service;
+```
+
+Keep user/application tables in `demo` or `service`. Keep card catalog tables such as `cards` and `card_benefits` in `catalog`.
+
 ## Vercel Frontend
 
 Create a Vercel project with root directory:
@@ -111,10 +168,22 @@ Environment variables:
 ```txt
 BACKEND_URL=https://<backend-vercel-domain>
 VITE_API_BASE_URL=
+VITE_APP_CHANNEL=demo
 VITE_USE_MOCK_API=false
 VITE_DEV_AUTO_LOGIN=false
 VITE_API_TIMEOUT_MS=8000
 VITE_AI_TIMEOUT_MS=50000
+```
+
+For the service/App Store frontend set `VITE_APP_CHANNEL=service`.
+
+For the current frontend aliases:
+
+```txt
+BACKEND_URL_DEMO=https://carch-api.vercel.app
+BACKEND_URL_SERVICE=https://carch-api.vercel.app
+VITE_DEMO_HOSTS=carch-demo.vercel.app
+VITE_SERVICE_HOSTS=carch.vercel.app,carch-service.vercel.app
 ```
 
 Build command:

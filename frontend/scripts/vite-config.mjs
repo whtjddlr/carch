@@ -2,8 +2,6 @@ import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
 
-const root = fileURLToPath(new URL('..', import.meta.url))
-
 function figmaAssetResolver() {
   return {
     name: 'figma-asset-resolver',
@@ -17,9 +15,8 @@ function figmaAssetResolver() {
   }
 }
 
-export function createViteConfig() {
+export function createViteConfig(overrides = {}) {
   return {
-    root,
     configFile: false,
     plugins: [figmaAssetResolver(), vue(), tailwindcss()],
     resolve: {
@@ -28,9 +25,6 @@ export function createViteConfig() {
       },
     },
     assetsInclude: ['**/*.svg', '**/*.csv'],
-    optimizeDeps: {
-      noDiscovery: true,
-      include: [],
-    },
+    ...overrides,
   }
 }
