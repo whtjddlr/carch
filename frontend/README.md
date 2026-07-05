@@ -62,6 +62,8 @@ VITE_SERVICE_HOSTS=carch.vercel.app,carch-service.vercel.app
 
 같은 프론트 배포에 여러 alias를 붙일 때는 host 기준으로 채널을 나눕니다. `carch-demo.vercel.app`은 demo 채널로 동작해 `/demo`와 `카치 바로 시작`을 노출하고, `carch.vercel.app`은 service 채널로 동작해 demo-only 진입점과 소셜/아이디 기반 시연 힌트를 숨깁니다. 커뮤니티는 service 채널에도 포함하며, 신고/숨김/작성자 삭제 흐름을 유지합니다.
 
+카드 이미지는 demo 채널에서만 유지합니다. service/App Store 빌드는 카드 이미지 URL을 렌더링하지 않고, 빌드 산출물에서도 실카드 이미지 파일을 제거합니다. service 번들에는 CARCH 자체 캐릭터 이미지(`magpie-face*.png`)만 남깁니다.
+
 백엔드 없이 UI와 플로우만 검수할 때는 mock 모드를 사용합니다.
 
 ```bash
@@ -117,7 +119,7 @@ src/
   styles/          global app/theme styles
   views/           page-level Vue views
 public/
-  card-images/     card image assets
+  card-images/     demo card image assets and CARCH-owned magpie assets
 ```
 
 ## Collaboration Notes

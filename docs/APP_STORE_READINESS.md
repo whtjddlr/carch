@@ -18,13 +18,15 @@
 - 배포 채널: 포트폴리오/시연은 `demo`, App Store/서비스는 `service`로 분리
 - App Store 배포 범위: 대한민국
 - App Store 지원 기기: iPhone 전용
+- service/App Store 카드 아트워크: 실카드 이미지 파일은 번들에서 제외하고, 중립 카드 UI와 CARCH 자체 캐릭터 이미지(`magpie-face*.png`)만 포함한다.
 
 ## App Store Connect 현재 상태
 
 - 앱 이름: `CARCH`
 - 버전: `1.0`
-- 연결 빌드: `6`
+- 연결 빌드: `7`
 - 빌드 상태: `제출 준비 완료`
+- 업로드된 최신 빌드: `7` (실카드 이미지 제거)
 - 카테고리: `FINANCE`
 - 개인정보 처리방침 URL: https://carch.vercel.app/privacy
 - 지원 URL: https://carch.vercel.app/privacy
@@ -36,7 +38,7 @@
 - Apple Vision Pro 배포: 비활성
 - App Privacy: 게시 완료
 - 현재 App Store 상태: `PREPARE_FOR_SUBMISSION`
-- 남은 수동 확인: 콘텐츠 권한. 카드 이미지, 카드사명, 상품 데이터 등 타사 콘텐츠에 대한 필요한 권한이 있는지 확인 후 App Store Connect에서 저장해야 한다.
+- 남은 수동 확인: 콘텐츠 권한. service/App Store 번들에서 실카드 이미지 파일은 제거했지만, 카드사명, 상품명, 혜택 데이터 등 타사 콘텐츠에 대한 필요한 권한이 있는지 확인 후 App Store Connect에서 저장해야 한다.
 
 심사용 계정은 App Store Connect의 App Review Information에만 저장한다. 공개 저장소 README/문서에는 심사용 비밀번호를 커밋하지 않는다.
 
@@ -45,7 +47,7 @@
 - Apple Guideline 4.2는 단순 웹사이트 재포장 수준의 앱을 거절 위험으로 본다. CARCH는 Face ID 잠금, 네이티브 알림, 공유, 위젯 등 앱다운 기능을 추가해야 한다.
 - 계정 생성이 있으므로 앱 안에서 계정 삭제를 시작할 수 있어야 한다. 현재는 `DELETE /api/auth/account/`와 설정 화면 계정 삭제 진입점이 있다.
 - 개인정보 처리방침 URL이 필요하다. 현재 앱 내 `/privacy` 화면을 제공하며, App Store Connect 개인정보 라벨에는 계정 정보, 소비/거래 입력 데이터, 카드/추천 사용 데이터, AI 질의 데이터를 정확히 반영해야 한다.
-- 카드 이미지, 카드사명, 상품 데이터 사용 권한과 출처를 제출 전 확인해야 한다.
+- service/App Store 번들에는 실카드 이미지 파일을 포함하지 않는다. 카드사명, 상품명, 혜택 데이터 사용 권한과 출처는 제출 전 확인해야 한다.
 - 추천 결과에는 실제 카드사 정책과 다를 수 있다는 고지가 필요하다.
 - 카카오/네이버 로그인은 웹 배포에서는 유지하되, App Store용 iOS 앱에서는 숨긴다. iOS 제출 빌드는 자체 이메일 가입/로그인만 제공해서 Sign in with Apple 추가 요구 리스크를 줄인다.
 - OAuth 코드는 iOS 콜백도 처리할 수 있게 유지한다. 이후 Apple 로그인까지 추가하기로 결정하면 같은 redirect 구조를 재사용할 수 있다.
@@ -66,13 +68,16 @@
 - [x] iOS 제출 빌드에서 제3자 소셜 로그인 제외 결정
 - [x] service 채널에서 `/demo`, dev-login, 자동 seed 차단
 - [x] service 채널에서 커뮤니티 작성/삭제/신고/숨김 흐름 유지
+- [x] service iOS 번들에서 실카드 이미지 파일 제외
 - [ ] service iOS 번들에서 demo 계정 문자열과 mock 데이터를 제외
 - [x] service 백엔드 Vercel 프로젝트 생성 및 `BACKEND_URL_SERVICE`/`VITE_IOS_API_BASE_URL` 연결
 - [x] App Store Review용 service 계정 생성
 - [x] App Store Connect 메타데이터/스크린샷/build 6 연결
+- [x] App Store Connect build 7 업로드
+- [x] App Store Connect build 7 연결
 - [x] App Store Connect App Privacy 설문 게시
 - [x] App Store Connect 가격 무료 설정 및 대한민국만 사용 가능하도록 제한
-- [x] iOS 앱 빌드 번호 6에 iPhone 전용 설정 및 수출 규정 키 반영
+- [x] iOS 앱 빌드 번호 7에 iPhone 전용 설정 및 수출 규정 키 반영
 - [ ] App Store Connect 콘텐츠 권한 확인 및 저장
 
 ## Demo / Service 분리

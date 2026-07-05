@@ -65,6 +65,11 @@
                   @load="setImageOrientation(card.id, $event)"
                 />
               </span>
+              <span v-else class="fan-card-fallback">
+                <CreditCard :size="28" :stroke-width="1.8" />
+                <small>{{ card.issuer || card.brand }}</small>
+                <strong>{{ card.name }}</strong>
+              </span>
             </span>
           </button>
 
@@ -196,6 +201,7 @@
                     :class="cardImageClass(guide.card)"
                     @load="setImageOrientation(guide.card?.id, $event)"
                   />
+                  <CreditCard v-else :size="16" :stroke-width="2.1" />
                 </span>
               </RouterLink>
             </div>
@@ -228,12 +234,13 @@
             </div>
             <span class="tx-mini-card">
               <img
-                v-if="txCard(tx)"
+                v-if="txCard(tx)?.imageUrl"
                 :src="txCard(tx).imageUrl"
                 :alt="txCard(tx).name"
                 :class="cardImageClass(txCard(tx))"
                 @load="setImageOrientation(txCard(tx)?.id, $event)"
               />
+              <CreditCard v-else-if="txCard(tx)" :size="13" :stroke-width="2.2" />
             </span>
             <b :class="{ plus: tx.amt > 0 }">{{ Math.abs(tx.amt).toLocaleString() }}원</b>
           </button>
@@ -275,6 +282,7 @@
                   :src="candidate.imageUrl || candidate.image_url"
                   :alt="candidate.name || candidate.cardName || candidate.card_name"
                 />
+                <CreditCard v-else :size="24" :stroke-width="1.9" />
               </div>
               <div class="candidate-card-copy">
                 <span>{{ candidate.issuer || candidate.issuerName || candidate.issuer_name }}</span>
@@ -301,7 +309,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Bell, CalendarDays, Check, PlusCircle, Search, User, X } from 'lucide-vue-next'
+import { Bell, CalendarDays, Check, CreditCard, PlusCircle, Search, User, X } from 'lucide-vue-next'
 import { cards as mockCards, krw, transactions as mockTransactions, user } from '@/data/mockData'
 import { addOwnedCard, deleteOwnedCard, fetchCardRecommendationBundle, fetchCards, fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
 import { cardPerformance, paymentContextLabel } from '@/utils/cardPerformance'
@@ -1355,6 +1363,39 @@ onMounted(async () => {
   opacity: 1;
 }
 
+.fan-card-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(14px, 3.8vw, 18px);
+  color: rgba(255, 255, 255, 0.94);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.04)),
+    linear-gradient(135deg, rgba(28, 49, 73, 0.92), rgba(0, 140, 149, 0.88));
+}
+
+.fan-card-fallback svg {
+  opacity: 0.9;
+}
+
+.fan-card-fallback small {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.fan-card-fallback strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: clamp(15px, 4.4vw, 18px);
+  font-weight: 900;
+  line-height: 1.16;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 
 .card-stack {
   display: flex;
@@ -2383,6 +2424,14 @@ onMounted(async () => {
   transform: translate(-50%, -50%) rotate(-90deg);
 }
 
+.cg-card-img svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  color: #6f7f91;
+  transform: translate(-50%, -50%);
+}
+
 .section-block {
   margin-top: 34px;
 }
@@ -2483,6 +2532,14 @@ onMounted(async () => {
   height: 34px;
   max-width: none;
   transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.tx-mini-card svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  color: #718196;
+  transform: translate(-50%, -50%);
 }
 
 .tx-card b {
@@ -2634,6 +2691,10 @@ onMounted(async () => {
   max-height: 62px;
   object-fit: contain;
   filter: drop-shadow(0 10px 12px rgba(36, 54, 79, 0.12));
+}
+
+.candidate-card-image svg {
+  color: #5c6f86;
 }
 
 .candidate-card-copy {

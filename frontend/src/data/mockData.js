@@ -1,3 +1,5 @@
+import { cardImageUrl } from '@/utils/cardArtwork'
+
 export const gradients = {
   blue: '#0f5fae',
   purple: '#24364f',
@@ -53,7 +55,7 @@ export const cards = [
     previousMonthMinSpend: 400000,
     previousMonthSpend: 460500,
     currentMonthSpend: 121100,
-    imageUrl: '/card-images/10106.png',
+    imageUrl: cardImageUrl('/card-images/10106.png'),
     num: '5379 **** **** 7892',
     exp: '12/27',
     holder: 'NAM JUHYUN',
@@ -95,7 +97,7 @@ export const cards = [
     previousMonthMinSpend: 500000,
     previousMonthSpend: 176000,
     currentMonthSpend: 551500,
-    imageUrl: '/card-images/10612.png',
+    imageUrl: cardImageUrl('/card-images/10612.png'),
     num: '5412 **** **** 3345',
     exp: '08/26',
     holder: 'NAM JUHYUN',
@@ -127,7 +129,7 @@ export const cards = [
     previousMonthMinSpend: 750000,
     previousMonthSpend: 364100,
     currentMonthSpend: 379350,
-    imageUrl: '/card-images/10029.png',
+    imageUrl: cardImageUrl('/card-images/10029.png'),
     num: '4521 **** **** 8810',
     exp: '03/28',
     holder: 'NAM JUHYUN',
@@ -211,9 +213,9 @@ export const notifications = [
 ]
 
 export const recommendations = [
-  { id: 'r1', cardAdId: 10107, issuer: '롯데카드', name: 'LOCA LIKIT Shop', match: 94, benefit: '온라인 쇼핑·편의점 집중 할인', annualFee: 10000, previousMonthMinSpend: 400000, tags: ['쇼핑', '편의점'], grad: 'purple', imageUrl: '/card-images/10107.png', highlights: ['온라인 쇼핑 할인', '편의점 할인', '생활 쇼핑 특화', '전월 실적 40만원'] },
-  { id: 'r2', cardAdId: 10071, issuer: '롯데카드', name: 'LOCA LIKIT', match: 88, benefit: '카페·생활 결제 특화 할인', annualFee: 10000, previousMonthMinSpend: 400000, tags: ['카페', '생활'], grad: 'teal', imageUrl: '/card-images/10071.png', highlights: ['카페 할인', '생활 영역 할인', '전월 실적 40만원'] },
-  { id: 'r3', cardAdId: 10029, issuer: '롯데카드', name: 'LOCA 100', match: 82, benefit: '일상 가맹점 기본 할인', annualFee: 20000, previousMonthMinSpend: 750000, tags: ['생활', '교통'], grad: 'blue', imageUrl: '/card-images/10029.png', highlights: ['언제나 1.5% 할인', '대중교통 최대 1%', '전월 실적 75만원'] },
+  { id: 'r1', cardAdId: 10107, issuer: '롯데카드', name: 'LOCA LIKIT Shop', match: 94, benefit: '온라인 쇼핑·편의점 집중 할인', annualFee: 10000, previousMonthMinSpend: 400000, tags: ['쇼핑', '편의점'], grad: 'purple', imageUrl: cardImageUrl('/card-images/10107.png'), highlights: ['온라인 쇼핑 할인', '편의점 할인', '생활 쇼핑 특화', '전월 실적 40만원'] },
+  { id: 'r2', cardAdId: 10071, issuer: '롯데카드', name: 'LOCA LIKIT', match: 88, benefit: '카페·생활 결제 특화 할인', annualFee: 10000, previousMonthMinSpend: 400000, tags: ['카페', '생활'], grad: 'teal', imageUrl: cardImageUrl('/card-images/10071.png'), highlights: ['카페 할인', '생활 영역 할인', '전월 실적 40만원'] },
+  { id: 'r3', cardAdId: 10029, issuer: '롯데카드', name: 'LOCA 100', match: 82, benefit: '일상 가맹점 기본 할인', annualFee: 20000, previousMonthMinSpend: 750000, tags: ['생활', '교통'], grad: 'blue', imageUrl: cardImageUrl('/card-images/10029.png'), highlights: ['언제나 1.5% 할인', '대중교통 최대 1%', '전월 실적 75만원'] },
 ]
 
 export const planTypes = ['큰 지출', '취업 준비', '여행', '기념일', '운동', '전자기기', '학업', '기타']

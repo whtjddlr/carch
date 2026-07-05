@@ -26,6 +26,7 @@ import {
   IS_SERVICE_CHANNEL,
   USE_MOCK_API,
 } from '@/services/channel'
+import { cardImageUrl, withoutServiceCardImages } from '@/utils/cardArtwork'
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -150,7 +151,7 @@ const extraMockCards = [
     benefits: ['온라인 쇼핑 할인', '편의점 할인', '생활 쇼핑 특화'],
     annualFee: 10000,
     previousMonthMinSpend: 400000,
-    imageUrl: '/card-images/10107.png',
+    imageUrl: cardImageUrl('/card-images/10107.png'),
     grad: 'purple',
     brand: 'VISA',
   },
@@ -164,7 +165,7 @@ const extraMockCards = [
     benefits: ['카페 할인', '생활 영역 할인', '전월 실적 40만원'],
     annualFee: 10000,
     previousMonthMinSpend: 400000,
-    imageUrl: '/card-images/10071.png',
+    imageUrl: cardImageUrl('/card-images/10071.png'),
     grad: 'teal',
     brand: 'VISA',
   },
@@ -173,7 +174,7 @@ const landscapeCardImageNames = ['10029.png']
 const portraitCardImageNames = ['10071.png', '10106.png', '10107.png', '10612.png', '2960card.png', '707card.png']
 
 const cardIdentity = (card = {}) => String(card.id || card.cardAdId || card.card_ad_id || card.toCardId || '')
-const preferredCardImageUrl = (card = {}, fallback = '') => preferredCardImages[cardIdentity(card)] || fallback
+const preferredCardImageUrl = (card = {}, fallback = '') => cardImageUrl(preferredCardImages[cardIdentity(card)] || fallback)
 
 const inferCardImageOrientation = (imageUrl = '') => {
   const normalizedUrl = String(imageUrl).split('?')[0].toLowerCase()
@@ -527,7 +528,7 @@ function buildMockRecommendationBundle(options = {}) {
       annualFee: 10000,
       previousMonthMinSpend: 400000,
       tags: ['쇼핑', '편의점'],
-      imageUrl: '/card-images/10107.png',
+      imageUrl: cardImageUrl('/card-images/10107.png'),
       highlights: ['온라인 쇼핑 할인', '편의점 할인', '생활 쇼핑 특화'],
       reason: '반복 지출 기준으로 연회비를 반영해도 월 9,624원의 순혜택 개선이 예상됩니다.',
       economics: {
@@ -576,7 +577,7 @@ function buildMockRecommendationBundle(options = {}) {
       toCardId: '10107',
       toCardName: 'LOCA LIKIT Shop',
       toIssuer: '롯데카드',
-      toImageUrl: '/card-images/10107.png',
+      toImageUrl: cardImageUrl('/card-images/10107.png'),
       scope: 'candidate',
       scopeLabel: '비교 카드',
       title: '편의점은 LOCA LIKIT Shop',
@@ -593,7 +594,7 @@ function buildMockRecommendationBundle(options = {}) {
       toCardId: '10107',
       toCardName: 'LOCA LIKIT Shop',
       toIssuer: '롯데카드',
-      toImageUrl: '/card-images/10107.png',
+      toImageUrl: cardImageUrl('/card-images/10107.png'),
       scope: 'candidate',
       scopeLabel: '비교 카드',
       title: '쇼핑은 LOCA LIKIT Shop',
@@ -619,7 +620,7 @@ function buildMockRecommendationBundle(options = {}) {
         cardId: '10106',
         cardName: 'LOCA LIKIT Eat',
         issuer: '롯데카드',
-        imageUrl: '/card-images/10106.png',
+        imageUrl: cardImageUrl('/card-images/10106.png'),
         estimatedBenefit: 3000,
         potentialBenefit: 3000,
         monthlyGain: 0,
@@ -639,7 +640,7 @@ function buildMockRecommendationBundle(options = {}) {
         cardId: '10612',
         cardName: '카드의정석2 SHOPPER',
         issuer: '우리카드',
-        imageUrl: '/card-images/10612.png',
+        imageUrl: cardImageUrl('/card-images/10612.png'),
         estimatedBenefit: 7965,
         potentialBenefit: 7965,
         monthlyGain: 0,
@@ -720,7 +721,7 @@ export async function fetchOwnedCards() {
     return clone(mockOwnedCards)
   }
   const request = api.get('/api/owned-cards/')
-    .then((response) => response.data.results || [])
+    .then((response) => (response.data.results || []).map(applyPreferredCardImage))
     .catch((error) => {
       return fallbackForDemoOnly(error, 'Owned card API request failed. Falling back to local rows.', () => clone(mockOwnedCards))
     })
@@ -742,6 +743,36 @@ export async function fetchCards(params = {}) {
       return fallbackForDemoOnly(error, 'Card catalog API request failed. Falling back to local rows.', () => localCardCatalogRows(params))
     })
   return withTimedLocalFallback(request, () => localCardCatalogRows(params))
+}
+
+const stripSearchCardItemImage = (item = {}) => {
+  if (item?.type !== 'card') return item
+  return {
+    ...withoutServiceCardImages(item),
+    meta: item.meta ? withoutServiceCardImages(item.meta) : item.meta,
+  }
+}
+
+const normalizeSearchResults = (data = {}) => {
+  if (IS_DEMO_CHANNEL) return data
+  return {
+    ...data,
+    results: Array.isArray(data.results)
+      ? data.results.map(stripSearchCardItemImage)
+      : data.results,
+    sections: Array.isArray(data.sections)
+      ? data.sections.map((section) => (
+        section?.type === 'card'
+          ? {
+            ...section,
+            items: Array.isArray(section.items)
+              ? section.items.map(stripSearchCardItemImage)
+              : section.items,
+          }
+          : section
+      ))
+      : data.sections,
+  }
 }
 
 export async function addOwnedCard(cardId) {
@@ -833,7 +864,7 @@ export async function fetchSearchResults(params = {}) {
     return clone(buildMockSearchResults(params))
   }
   const response = await api.get('/api/search/', { params })
-  return response.data
+  return normalizeSearchResults(response.data)
 }
 
 export async function parseTransaction(rawText) {

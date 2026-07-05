@@ -258,7 +258,7 @@ GMS API 키가 없거나 응답이 실패해도 fallback 응답으로 기본 시
 ### 배포 준비
 
 - Supabase 프로젝트에 카드 카탈로그와 남주현 데모 데이터를 적재했습니다.
-- 카드 이미지는 Supabase Storage `card-images` 버킷 기준으로 제공할 수 있습니다.
+- 카드 이미지는 시연/demo 채널에서만 유지합니다. service/App Store 빌드는 실카드 이미지 파일을 번들에서 제거하고 중립 카드 아트워크로 렌더링합니다.
 - Vercel 배포 설정 파일을 `backend/vercel.json`, `frontend/vercel.json`에 추가했습니다.
 - Supabase는 하나의 프로젝트 안에서 `catalog`, `demo`, `service` schema를 분리합니다.
 - 서비스용 DB에는 공용 카드 카탈로그만 참조하고, 일반 사용자 데이터는 비어 있는 상태에서 시작합니다.
@@ -283,14 +283,15 @@ GMS API 키가 없거나 응답이 실패해도 fallback 응답으로 기본 시
 - Bundle ID: `com.choim2013.carch`
 - App Store Connect 앱: `CARCH`
 - App Store 버전: `1.0`
-- 연결된 빌드: `6`
+- 연결된 빌드: `7`
+- 업로드된 최신 빌드: `7` (service/App Store 번들에서 실카드 이미지 제거)
 - App Store Connect 상태: `PREPARE_FOR_SUBMISSION`
 - 배포 범위: 대한민국
 - 지원 기기: iPhone 전용
 - 가격: 무료
 - App Privacy: 게시 완료
 - 제출용 스크린샷: `docs/screenshots/appstore/iphone-6-9/`에 보관하고 App Store Connect에도 업로드
-- 남은 제출 전 확인 항목: 카드 이미지/카드사명/상품 데이터 등 타사 콘텐츠 권한 확인 후 App Store Connect 콘텐츠 권한 저장
+- 남은 제출 전 확인 항목: 카드사명/상품명/혜택 데이터 등 타사 콘텐츠 권한 확인 후 App Store Connect 콘텐츠 권한 저장. 실카드 이미지 파일은 service/App Store 번들에서 제거했습니다.
 
 리뷰 계정은 App Store Connect의 App Review Information에만 저장합니다. 공개 README에는 심사용 비밀번호를 커밋하지 않습니다.
 

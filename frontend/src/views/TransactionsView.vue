@@ -19,12 +19,13 @@
               </div>
               <span class="tx-mini-card">
                 <img
-                  v-if="txCard(tx)"
+                  v-if="txCard(tx)?.imageUrl"
                   :src="txCard(tx).imageUrl"
                   :alt="txCard(tx).name"
                   :class="cardImageClass(txCard(tx))"
                   @load="setImageOrientation(txCard(tx)?.id, $event)"
                 />
+                <CreditCard v-else-if="txCard(tx)" :size="13" :stroke-width="2.2" />
               </span>
               <b :class="{ plus: tx.amt > 0 }">{{ Math.abs(tx.amt).toLocaleString() }}원</b>
             </button>
@@ -49,7 +50,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus } from 'lucide-vue-next'
+import { CreditCard, Plus } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { cards as mockCards, krw, transactions as mockTransactions } from '@/data/mockData'
 import { fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
@@ -212,6 +213,14 @@ onMounted(async () => {
   height: 34px;
   max-width: none;
   transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.tx-mini-card svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  color: #718196;
+  transform: translate(-50%, -50%);
 }
 
 .tx-list strong {
