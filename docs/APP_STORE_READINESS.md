@@ -16,20 +16,27 @@
 - 웹 토큰 저장: 브라우저에서는 기존처럼 `localStorage` 사용
 - 백엔드 CORS 기본값: `capacitor://localhost`, `ionic://localhost` 허용 추가
 - 배포 채널: 포트폴리오/시연은 `demo`, App Store/서비스는 `service`로 분리
+- App Store 배포 범위: 대한민국
+- App Store 지원 기기: iPhone 전용
 
 ## App Store Connect 현재 상태
 
 - 앱 이름: `CARCH`
 - 버전: `1.0`
-- 연결 빌드: `3`
-- 빌드 상태: `VALID`
+- 연결 빌드: `6`
+- 빌드 상태: `제출 준비 완료`
 - 카테고리: `FINANCE`
 - 개인정보 처리방침 URL: https://carch.vercel.app/privacy
 - 지원 URL: https://carch.vercel.app/privacy
 - iPhone 6.7/6.9 스크린샷: 6장 업로드 완료, App Store Connect asset state `COMPLETE`
 - 저장소 보관 경로: `docs/screenshots/appstore/iphone-6-9/`
+- 가격: 무료, 기준 국가/통화 `대한민국(KRW)`
+- 사용 가능 국가/지역: `대한민국` 1개 사용 가능, 174개 사용 불가
+- Apple Silicon Mac 배포: 비활성
+- Apple Vision Pro 배포: 비활성
+- App Privacy: 게시 완료
 - 현재 App Store 상태: `PREPARE_FOR_SUBMISSION`
-- 남은 수동 입력: App Review 연락 담당자 이름/이메일/전화번호, App Privacy 설문
+- 남은 수동 확인: 콘텐츠 권한. 카드 이미지, 카드사명, 상품 데이터 등 타사 콘텐츠에 대한 필요한 권한이 있는지 확인 후 App Store Connect에서 저장해야 한다.
 
 심사용 계정은 App Store Connect의 App Review Information에만 저장한다. 공개 저장소 README/문서에는 심사용 비밀번호를 커밋하지 않는다.
 
@@ -62,9 +69,11 @@
 - [ ] service iOS 번들에서 demo 계정 문자열과 mock 데이터를 제외
 - [x] service 백엔드 Vercel 프로젝트 생성 및 `BACKEND_URL_SERVICE`/`VITE_IOS_API_BASE_URL` 연결
 - [x] App Store Review용 service 계정 생성
-- [x] App Store Connect 메타데이터/스크린샷/build 3 연결
-- [ ] App Store Connect App Privacy 설문 수동 입력
-- [ ] App Store Review 연락 담당자 정보 수동 입력
+- [x] App Store Connect 메타데이터/스크린샷/build 6 연결
+- [x] App Store Connect App Privacy 설문 게시
+- [x] App Store Connect 가격 무료 설정 및 대한민국만 사용 가능하도록 제한
+- [x] iOS 앱 빌드 번호 6에 iPhone 전용 설정 및 수출 규정 키 반영
+- [ ] App Store Connect 콘텐츠 권한 확인 및 저장
 
 ## Demo / Service 분리
 

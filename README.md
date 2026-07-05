@@ -283,10 +283,14 @@ GMS API 키가 없거나 응답이 실패해도 fallback 응답으로 기본 시
 - Bundle ID: `com.choim2013.carch`
 - App Store Connect 앱: `CARCH`
 - App Store 버전: `1.0`
-- 연결된 빌드: `3`
+- 연결된 빌드: `6`
 - App Store Connect 상태: `PREPARE_FOR_SUBMISSION`
+- 배포 범위: 대한민국
+- 지원 기기: iPhone 전용
+- 가격: 무료
+- App Privacy: 게시 완료
 - 제출용 스크린샷: `docs/screenshots/appstore/iphone-6-9/`에 보관하고 App Store Connect에도 업로드
-- 남은 제출 전 수동 항목: App Review 연락 담당자 정보, App Privacy 설문
+- 남은 제출 전 확인 항목: 카드 이미지/카드사명/상품 데이터 등 타사 콘텐츠 권한 확인 후 App Store Connect 콘텐츠 권한 저장
 
 리뷰 계정은 App Store Connect의 App Review Information에만 저장합니다. 공개 README에는 심사용 비밀번호를 커밋하지 않습니다.
 
