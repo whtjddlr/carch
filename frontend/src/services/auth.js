@@ -1,4 +1,5 @@
 import { API_BASE_URL, DEV_AUTO_LOGIN_ENABLED, api, deleteAccountAuth, loginAsDevAdmin, loginWithEmail, logoutAuth, signupWithEmail, fetchCurrentUser } from './api'
+import { isUnauthorizedError } from './runtimePolicy'
 import { getSecureItem, isNativeRuntime, removeBrowserOnlyItem, removeSecureItem, setSecureItem } from './secureStorage'
 
 const AUTH_TOKEN_KEY = 'carch-auth-token'
@@ -26,6 +27,13 @@ export const getStoredUser = () => authSession.user
 export const isAuthenticated = () => Boolean(getAuthToken())
 
 let devAutoLoginPromise = null
+let authInitializationPromise = null
+let authExpiryPromise = null
+let unauthorizedHandler = null
+
+export const setUnauthorizedHandler = (handler) => {
+  unauthorizedHandler = typeof handler === 'function' ? handler : null
+}
 
 const persistAuthToken = async (token) => {
   authSession.token = token || ''
@@ -74,17 +82,70 @@ export const hydrateAuthHeader = () => {
   }
 }
 
+const expireAuthSession = async () => {
+  if (!getAuthToken()) return
+  if (!authExpiryPromise) {
+    authExpiryPromise = (async () => {
+      await clearAuthSession()
+      hydrateAuthHeader()
+      if (unauthorizedHandler) {
+        Promise.resolve()
+          .then(() => unauthorizedHandler())
+          .catch((error) => console.warn('로그인 화면으로 이동하지 못했습니다.', error))
+      }
+    })().finally(() => {
+      authExpiryPromise = null
+    })
+  }
+  await authExpiryPromise
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (isUnauthorizedError(error) && getAuthToken()) {
+      await expireAuthSession()
+    }
+    return Promise.reject(error)
+  },
+)
+
 export const initAuthSession = async () => {
   if (authSession.initialized) return
-  const [token, user] = await Promise.all([
-    getSecureItem(AUTH_TOKEN_KEY),
-    getSecureItem(AUTH_USER_KEY),
-  ])
-  authSession.token = token || ''
-  authSession.user = parseStoredUser(user)
-  authSession.initialized = true
-  await clearLegacyAdminSession()
-  hydrateAuthHeader()
+  if (!authInitializationPromise) {
+    authInitializationPromise = (async () => {
+      const [token, user] = await Promise.all([
+        getSecureItem(AUTH_TOKEN_KEY),
+        getSecureItem(AUTH_USER_KEY),
+      ])
+      authSession.token = token || ''
+      authSession.user = parseStoredUser(user)
+      await clearLegacyAdminSession()
+      hydrateAuthHeader()
+
+      if (!getAuthToken()) return
+      try {
+        const current = await fetchCurrentUser()
+        if (!current?.authenticated) {
+          await expireAuthSession()
+          return
+        }
+        if (current.user) {
+          await setAuthSession({ token: getAuthToken(), user: current.user })
+        }
+      } catch (error) {
+        if (isUnauthorizedError(error)) {
+          await expireAuthSession()
+        } else {
+          console.warn('저장된 로그인 상태를 확인하지 못했습니다.', error)
+        }
+      }
+    })().finally(() => {
+      authSession.initialized = true
+      authInitializationPromise = null
+    })
+  }
+  await authInitializationPromise
 }
 
 export const completeOAuthLogin = async ({ token }) => {
