@@ -7,6 +7,7 @@ import {
   transactions as seedTransactions,
   user as seedUser,
 } from '@/data/mockData'
+import { demoMonthlySeries, demoMonthSummary, emptyDemoMonthSummary } from '@/data/monthlyAnalytics'
 export {
   AI_REQUEST_TIMEOUT_MS,
   API_BASE_URL,
@@ -369,6 +370,10 @@ function buildMockSpendingSummary({ recurringCategories = [] } = {}) {
   const byCard = sumBy(expenses, (tx) => String(tx.cardId), (tx) => Math.abs(Number(tx.amount || 0)))
     .map(({ key, amount }) => ({ cardId: key, amount }))
 
+  const previousMonthSummary = demoMonthSummary('2026-05')
+  const previousCategoryAmounts = new Map(
+    (previousMonthSummary?.byCategory || []).map((item) => [item.category, Number(item.amount || 0)]),
+  )
   const baseline = {
     쇼핑: { previous: 415000, average: 268300, median: 242900 },
     교육: { previous: 35500, average: 33217, median: 33650 },
@@ -384,7 +389,11 @@ function buildMockSpendingSummary({ recurringCategories = [] } = {}) {
   const recurringSet = new Set(recurringCategories)
   const categoryChanges = byCategory
     .map((item) => {
-      const ref = baseline[item.category] || { previous: item.amount, average: item.amount, median: item.amount }
+      const baseRef = baseline[item.category] || { previous: item.amount, average: item.amount, median: item.amount }
+      const ref = {
+        ...baseRef,
+        previous: previousCategoryAmounts.get(item.category) ?? baseRef.previous,
+      }
       const baselineReference = ref.median || ref.average || 0
       const detectedOneTimeCandidate = ['교육', '쇼핑'].includes(item.category) && item.amount > baselineReference * 1.8
       const userConfirmedRecurring = recurringSet.has(item.category)
@@ -410,7 +419,7 @@ function buildMockSpendingSummary({ recurringCategories = [] } = {}) {
     })
     .sort((a, b) => Math.abs(b.deltaFromBaseline) - Math.abs(a.deltaFromBaseline))
   const adjustedForRecommendation = categoryChanges.reduce((sum, item) => sum + Number(item.adjustedAmount || 0), 0)
-  const previousTotal = 1073600
+  const previousTotal = Number(previousMonthSummary?.totalExpense || 0)
   const baselineAverageTotal = 702800
   const topCategory = [...byCategory].sort((a, b) => b.amount - a.amount)[0] || { category: '소비', amount: 0 }
   const oneTimeCandidates = categoryChanges.filter((item) => item.oneTimeCandidate)
@@ -937,12 +946,26 @@ const applyCategoryOverrides = (params, categories = []) => {
   return params
 }
 
-export async function fetchCardRecommendationBundle({ recurringCategories = [], ai = false, refreshAi = false } = {}) {
+export async function fetchCardRecommendationBundle({ recurringCategories = [], ai = false, refreshAi = false, month = '' } = {}) {
   const params = applyCategoryOverrides({}, recurringCategories)
   if (!ai) params.ai = 0
   if (refreshAi) params.refreshAi = 1
+  if (month) params.month = month
   if (USE_MOCK_API) {
     await delay()
+    if (month) {
+      return {
+        count: 0,
+        profile: { period: { currentMonth: month } },
+        baseline: null,
+        ownedCategoryGuides: [],
+        results: [],
+        recommendations: [],
+        routingSuggestions: [],
+        oneTimeAdjustments: [],
+        alert: { show: false },
+      }
+    }
     return clone(buildMockRecommendationBundle({ recurringCategories }))
   }
   const normalizeRecommendationBundle = (data) => ({
@@ -970,7 +993,9 @@ export async function fetchSpendingSummary({ ai = false, refresh = false, recurr
   const params = applyCategoryOverrides({}, recurringCategories)
   if (USE_MOCK_API) {
     await delay(refresh ? 650 : 220)
-    const summary = buildMockSpendingSummary({ ai, refresh, recurringCategories })
+    const summary = month
+      ? (demoMonthSummary(month) || emptyDemoMonthSummary(month))
+      : buildMockSpendingSummary({ ai, refresh, recurringCategories })
     return clone(summary)
   }
   if (ai) params.ai = 1
@@ -988,7 +1013,14 @@ export async function fetchSpendingSummary({ ai = false, refresh = false, recurr
 export async function fetchMonthlySpending(months = 5, anchor = '') {
   if (USE_MOCK_API) {
     await delay(80)
-    return { months: [] }
+    const latestSummary = buildMockSpendingSummary()
+    return {
+      months: demoMonthlySeries(
+        months,
+        anchor || latestSummary.period.currentMonth,
+        latestSummary.totalExpense,
+      ),
+    }
   }
   const params = { months }
   if (anchor) params.anchor = anchor
