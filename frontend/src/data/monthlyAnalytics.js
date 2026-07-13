@@ -32,10 +32,26 @@ const MONTHLY_CATEGORIES = {
 
 const MONTHLY_INCOME = 860000
 
+const MONTHLY_BUDGETS = {
+  '2026-02': 600000,
+  '2026-03': 700000,
+  '2026-04': 700000,
+  '2026-05': 750000,
+  '2026-06': 1400000,
+}
+
+const LATEST_DEMO_MONTH = '2026-06'
+
 const ALL_KEYS = Object.keys(MONTHLY_CATEGORIES).sort()
 
 function sumValues(map) {
   return Object.values(map).reduce((sum, value) => sum + Number(value || 0), 0)
+}
+
+function shiftMonthKey(monthKey, diff) {
+  const [year, month] = String(monthKey || LATEST_DEMO_MONTH).split('-').map(Number)
+  const date = new Date(year, month - 1 + diff, 1)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
 // 각 카테고리의 전체 평균 (반복 지출/스파이크 판단용)
@@ -84,8 +100,10 @@ export function demoMonthSummary(monthKey) {
   const byCard = Object.entries(cardMap).map(([cardId, amount]) => ({ cardId, amount }))
 
   const index = ALL_KEYS.indexOf(monthKey)
+  const previousMonth = shiftMonthKey(monthKey, -1)
   const prevKey = index > 0 ? ALL_KEYS[index - 1] : null
-  const prevTotal = prevKey ? sumValues(MONTHLY_CATEGORIES[prevKey]) : totalExpense
+  const prevTotal = prevKey ? sumValues(MONTHLY_CATEGORIES[prevKey]) : 0
+  const baselineMonths = Array.from({ length: 6 }, (_, baselineIndex) => shiftMonthKey(monthKey, -(baselineIndex + 1)))
 
   // 이번 달에 평소보다 크게 늘어난 카테고리 → 반복 여부 확인 후보
   const reviewCandidates = byCategory
@@ -109,15 +127,29 @@ export function demoMonthSummary(monthKey) {
     totalIncome: MONTHLY_INCOME,
     byCategory,
     byCard,
-    period: { currentMonth: monthKey },
+    period: { currentMonth: monthKey, previousMonth, baselineMonths },
     spendingTrend: {
       currentMonth: monthKey,
+      previousMonth,
+      baselineMonths,
       total: {
+        current: totalExpense,
+        previous: prevTotal,
         deltaFromPrevious: totalExpense - prevTotal,
         deltaFromBaseline: totalExpense - OVERALL_BASELINE,
+        adjustedForRecommendation: totalExpense,
       },
+      categoryChanges: byCategory.map((item) => ({
+        category: item.category,
+        currentAmount: item.amount,
+        previousAmount: Number(MONTHLY_CATEGORIES[previousMonth]?.[item.category] || 0),
+        adjustedAmount: item.amount,
+        recommendationWeight: 1,
+        oneTimeCandidate: false,
+      })),
       reviewCandidates,
       oneTimeCandidates: [],
+      recurringCategories: [],
     },
     aiAnalysis: {
       savingOpportunities: [{ amount: expectedSaving }],
@@ -129,6 +161,49 @@ export function demoMonthSummary(monthKey) {
       })),
     },
   }
+}
+
+export function emptyDemoMonthSummary(monthKey) {
+  const previousMonth = shiftMonthKey(monthKey, -1)
+  const baselineMonths = Array.from({ length: 6 }, (_, index) => shiftMonthKey(monthKey, -(index + 1)))
+  return {
+    totalExpense: 0,
+    totalIncome: 0,
+    byCategory: [],
+    byCard: [],
+    period: { currentMonth: monthKey, previousMonth, baselineMonths },
+    spendingTrend: {
+      currentMonth: monthKey,
+      previousMonth,
+      baselineMonths,
+      total: {
+        current: 0,
+        previous: Number(MONTHLY_CATEGORIES[previousMonth] ? sumValues(MONTHLY_CATEGORIES[previousMonth]) : 0),
+        deltaFromPrevious: 0,
+        deltaFromBaseline: 0,
+        adjustedForRecommendation: 0,
+      },
+      categoryChanges: [],
+      reviewCandidates: [],
+      oneTimeCandidates: [],
+      recurringCategories: [],
+    },
+    aiAnalysis: null,
+    aiAnalysisStatus: 'empty',
+  }
+}
+
+export function demoMonthlySeries(monthCount = 5, anchorMonth = LATEST_DEMO_MONTH, latestTotal = 0) {
+  const count = Math.max(1, Math.min(Number(monthCount) || 5, 12))
+  const anchor = /^\d{4}-\d{2}$/.test(String(anchorMonth || '')) ? anchorMonth : LATEST_DEMO_MONTH
+  return Array.from({ length: count }, (_, index) => shiftMonthKey(anchor, index - count + 1))
+    .map((month) => ({
+      month,
+      spent: month === LATEST_DEMO_MONTH
+        ? Number(latestTotal || 0)
+        : Number(demoMonthSummary(month)?.totalExpense || 0),
+      budget: MONTHLY_BUDGETS[month] ?? null,
+    }))
 }
 
 // 직전 달 카테고리 맵(증감 비교용) — 데모에 있으면 그 값을, 없으면 null

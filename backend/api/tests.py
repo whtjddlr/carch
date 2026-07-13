@@ -694,6 +694,39 @@ class AuthApiTests(TestCase):
         self.assertEqual(payload['aiDecision']['reasonCodes'], ['DATA_REQUIRED'])
         ai_mock.assert_not_called()
 
+    def test_card_recommendations_use_requested_month(self):
+        token = self.signup_user('month-reco@carch.test', 'Month')
+        headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
+
+        for transaction_id, month, amount in [
+            ('may-spend', '2026-05', -12000),
+            ('june-spend', '2026-06', -34000),
+        ]:
+            response = self.client.post(
+                '/api/transactions/',
+                data=json.dumps(
+                    {
+                        'id': transaction_id,
+                        'cardId': '10029',
+                        'merchantName': f'{month} 결제',
+                        'category': '식비',
+                        'amount': amount,
+                        'approvedAt': f'{month}-15T12:00:00+09:00',
+                    }
+                ),
+                content_type='application/json',
+                **headers,
+            )
+            self.assertEqual(response.status_code, 201)
+
+        with self.patched_card_catalog():
+            response = self.client.get('/api/recommendations/cards/?month=2026-05&ai=0', **headers)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['profile']['period']['currentMonth'], '2026-05')
+        self.assertEqual(payload['profile']['totalExpense'], 12000)
+
     def test_owned_cards_are_scoped_by_user(self):
         token_a = self.signup_user('card-a@carch.test', 'A')
         token_b = self.signup_user('card-b@carch.test', 'B')

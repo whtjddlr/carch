@@ -7,6 +7,7 @@
     "build": "node scripts/build.mjs",
     "dev": "node scripts/dev.mjs",
     "dev:mock": "node scripts/dev.mjs --mode mock --host 127.0.0.1 --port 5175",
+    "test": "node --test",
     "ios:sync": "node scripts/sync-ios.mjs",
     "ios:open": "npx cap open ios",
     "preview": "vite preview"

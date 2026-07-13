@@ -3291,13 +3291,19 @@ def _is_general_benefit_label(label):
     return any(term in label for term in general_terms)
 
 
-def _build_spending_profile(request=None, adjusted_for_recommendation=False, recurring_overrides=None):
+def _build_spending_profile(
+    request=None,
+    adjusted_for_recommendation=False,
+    recurring_overrides=None,
+    current_month=None,
+):
     user = get_effective_user(request) if request is not None else (get_demo_user() if demo_features_enabled() else None)
     transactions = serialize_transactions(transaction_queryset(request, user=user), user=user)
     spending_trend = _build_spending_trend(
         transactions,
         recurring_overrides,
         _monthly_total_overrides_for_user(user),
+        current_month,
     )
     current_month = spending_trend['currentMonth']
     previous_month = spending_trend['previousMonth']
@@ -4603,6 +4609,7 @@ def card_recommendations(request):
         request,
         adjusted_for_recommendation=True,
         recurring_overrides=_parse_category_overrides(request),
+        current_month=_valid_month_key(request.GET.get('month')),
     )
     owned_ids = {str(item.card_id) for item in owned_card_queryset(request)}
     data_readiness = _recommendation_data_readiness(profile, owned_ids)
