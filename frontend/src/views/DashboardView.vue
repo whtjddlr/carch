@@ -25,7 +25,7 @@
       <div class="month-summary">
         <div class="greet">
           <div class="greet-copy">
-            <span>안녕하세요, {{ user.name }}님</span>
+            <span>안녕하세요, {{ displayUserName }}님</span>
             <strong>{{ greetingMessage }}</strong>
           </div>
         </div>
@@ -37,6 +37,14 @@
     </header>
 
     <div class="screen-scroll scrollbar-hide dashboard-body">
+
+      <div v-if="walletLoading" class="wallet-status" aria-live="polite">
+        카드와 거래내역을 불러오는 중입니다.
+      </div>
+      <div v-else-if="walletLoadError" class="wallet-status error" role="alert">
+        <span>{{ walletLoadError }}</span>
+        <button type="button" @click="retryWalletData">다시 시도</button>
+      </div>
 
       <div class="card-carousel" :class="[{ 'is-gliding': isCarouselGliding }, `glide-${carouselDirection}`]">
         <div
@@ -226,6 +234,7 @@
           <RouterLink to="/transactions">전체보기</RouterLink>
         </div>
         <article class="tx-card">
+          <p v-if="!walletLoading && transactions.length === 0" class="tx-empty-note">최근 거래가 없습니다.</p>
           <button v-for="tx in transactions.slice(0, 5)" :key="tx.id" type="button" @click="router.push(`/transactions/${tx.id}`)">
             <span>{{ tx.icon }}</span>
             <div>
@@ -310,8 +319,10 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Bell, CalendarDays, Check, CreditCard, PlusCircle, Search, User, X } from 'lucide-vue-next'
-import { cards as mockCards, krw, transactions as mockTransactions, user } from '@/data/mockData'
-import { addOwnedCard, deleteOwnedCard, fetchCardRecommendationBundle, fetchCards, fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
+import { cards as mockCards, krw, transactions as mockTransactions, user as mockUser } from '@/data/mockData'
+import { addOwnedCard, deleteOwnedCard, fetchCardRecommendationBundle, fetchCards, fetchOwnedCards, fetchTransactions, IS_DEMO_CHANNEL, normalizeCard } from '@/services/api'
+import { getStoredUser } from '@/services/auth'
+import { demoRowsForChannel } from '@/services/runtimePolicy'
 import { cardPerformance, paymentContextLabel } from '@/utils/cardPerformance'
 
 const router = useRouter()
@@ -329,8 +340,15 @@ const greetingMessages = [
 ]
 const greetingMessage = greetingMessages[Math.floor(Math.random() * greetingMessages.length)]
 
-const cards = ref(mockCards)
-const transactions = ref(mockTransactions)
+const initialCards = demoRowsForChannel(IS_DEMO_CHANNEL, mockCards)
+const initialTransactions = demoRowsForChannel(IS_DEMO_CHANNEL, mockTransactions)
+const cards = ref(initialCards)
+const transactions = ref(initialTransactions)
+const walletLoading = ref(!IS_DEMO_CHANNEL)
+const walletLoadError = ref('')
+const displayUserName = computed(() => (
+  (IS_DEMO_CHANNEL ? mockUser : getStoredUser())?.name || '고객'
+))
 
 const ACTIVE_CARD_KEY = 'carch:activeCardId'
 // 상세에서 돌아올 때 보던 카드를 복원한다. setup 시점에 한 번만 읽고 즉시 소거해서,
@@ -349,7 +367,7 @@ function cardIndexById(id, list) {
   return list.findIndex((card) => String(card.id) === String(id))
 }
 
-const activeCardIndex = ref(Math.max(0, cardIndexById(restoreCardId, mockCards)))
+const activeCardIndex = ref(Math.max(0, cardIndexById(restoreCardId, initialCards)))
 const isCarouselGliding = ref(false)
 const carouselDirection = ref('next')
 // 초기 렌더(특히 상세에서 돌아와 복원될 때)는 애니메이션 없이 즉시 해당 카드로 배치하고,
@@ -800,24 +818,48 @@ function isOwnedCandidate(card) {
 }
 
 async function loadWalletData() {
-  const [transactionResult, cardResult] = await Promise.allSettled([fetchTransactions(), fetchOwnedCards()])
-  const apiTransactions = transactionResult.status === 'fulfilled' ? transactionResult.value : transactions.value
-  const apiCards = cardResult.status === 'fulfilled' ? cardResult.value : cards.value
+  if (!IS_DEMO_CHANNEL) walletLoading.value = true
+  walletLoadError.value = ''
+  try {
+    const [transactionResult, cardResult] = await Promise.allSettled([fetchTransactions(), fetchOwnedCards()])
+    const apiTransactions = transactionResult.status === 'fulfilled'
+      ? transactionResult.value
+      : demoRowsForChannel(IS_DEMO_CHANNEL, transactions.value)
+    const apiCards = cardResult.status === 'fulfilled'
+      ? cardResult.value
+      : demoRowsForChannel(IS_DEMO_CHANNEL, cards.value)
 
-  if (transactionResult.status === 'rejected') {
-    console.warn('거래내역 API를 불러오지 못해 기존 거래 목록을 유지합니다.', transactionResult.reason)
-  }
-  if (cardResult.status === 'rejected') {
-    console.warn('보유 카드 API를 불러오지 못해 기존 카드 목록을 유지합니다.', cardResult.reason)
-  }
+    if (transactionResult.status === 'rejected') {
+      console.warn('거래내역 API를 불러오지 못했습니다.', transactionResult.reason)
+    }
+    if (cardResult.status === 'rejected') {
+      console.warn('보유 카드 API를 불러오지 못했습니다.', cardResult.reason)
+    }
+    if (!IS_DEMO_CHANNEL && (transactionResult.status === 'rejected' || cardResult.status === 'rejected')) {
+      walletLoadError.value = '일부 정보를 불러오지 못했습니다. 네트워크 상태를 확인해 주세요.'
+    }
 
-  transactions.value = apiTransactions
-  cards.value = apiCards.map((card, index) => normalizeCard(card, index, apiTransactions))
-  const restoredIndex = cardIndexById(restoreCardId, cards.value)
-  activeCardIndex.value = restoredIndex >= 0
-    ? restoredIndex
-    : Math.min(activeCardIndex.value, Math.max(cards.value.length - 1, 0))
-  await nextTick()
+    transactions.value = apiTransactions
+    cards.value = apiCards.map((card, index) => normalizeCard(card, index, apiTransactions))
+    const restoredIndex = cardIndexById(restoreCardId, cards.value)
+    activeCardIndex.value = restoredIndex >= 0
+      ? restoredIndex
+      : Math.min(activeCardIndex.value, Math.max(cards.value.length - 1, 0))
+    await nextTick()
+  } catch (error) {
+    if (!IS_DEMO_CHANNEL) {
+      cards.value = []
+      transactions.value = []
+      walletLoadError.value = '대시보드 정보를 불러오지 못했습니다. 다시 시도해 주세요.'
+    }
+    console.warn('대시보드 API를 처리하지 못했습니다.', error)
+  } finally {
+    walletLoading.value = false
+  }
+}
+
+async function retryWalletData() {
+  await Promise.all([loadWalletData(), loadRecommendationBundle()])
 }
 
 function rememberActiveCard(card) {
@@ -928,12 +970,7 @@ async function deleteActiveCardFromMenu() {
 }
 
 onMounted(async () => {
-  try {
-    await loadWalletData()
-    await loadRecommendationBundle()
-  } catch (error) {
-    console.warn('대시보드 API를 불러오지 못해 기본 데이터를 사용합니다.', error)
-  }
+  await Promise.all([loadWalletData(), loadRecommendationBundle()])
   // 복원된 카드가 화면에 그려진 다음에야 스와이프 애니메이션을 켠다 (초기 슬라이드 방지)
   await nextTick()
   requestAnimationFrame(() => {
@@ -1197,6 +1234,37 @@ onMounted(async () => {
 .dashboard-body {
   padding: 9px clamp(14px, 4.7vw, 20px) 120px;
   background: #f3f6f8;
+}
+
+.wallet-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 12px;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #e8f1ff;
+  color: #0f5fae;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.wallet-status.error {
+  background: #fff1f3;
+  color: #d92d20;
+}
+
+.wallet-status button {
+  flex: none;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #d92d20;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
 }
 
 .card-carousel {
@@ -2463,6 +2531,15 @@ onMounted(async () => {
   background: transparent;
   box-shadow: none;
   backdrop-filter: none;
+}
+
+.tx-empty-note {
+  margin: 0;
+  padding: 20px 2px;
+  color: #6e6e73;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .tx-card button {

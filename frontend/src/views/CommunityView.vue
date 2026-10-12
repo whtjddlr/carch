@@ -54,7 +54,10 @@
       </section>
 
       <div v-if="isLoading" class="notice-card">게시글을 불러오는 중입니다.</div>
-      <div v-else-if="error" class="notice-card" :class="{ subtle: isFallbackData }">{{ error }}</div>
+      <div v-else-if="error" class="notice-card" :class="{ subtle: isFallbackData, danger: !isFallbackData }">
+        <span>{{ error }}</span>
+        <button v-if="!isFallbackData" type="button" @click="loadPosts">다시 시도</button>
+      </div>
 
       <article
         v-for="post in displayPosts"
@@ -104,7 +107,7 @@
         </footer>
       </article>
 
-      <div v-if="!isLoading && !displayPosts.length" class="empty-card">
+      <div v-if="!isLoading && !error && !displayPosts.length" class="empty-card">
         <Users v-if="activeCategory !== '저장됨'" :size="32" />
         <Star v-else :size="32" />
         <strong v-if="activeCategory === '나의 글'">아직 작성한 글이 없어요</strong>
@@ -131,7 +134,8 @@ import { useRouter } from 'vue-router'
 import { ChevronUp, Heart, Info, MessageCircle, PenLine, Plus, Search, Star, Ticket, Users } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
 import { communityPosts } from '@/data/mockData'
-import { fetchCommunityPosts, toggleCommunityPostLike } from '@/services/api'
+import { fetchCommunityPosts, IS_DEMO_CHANNEL, toggleCommunityPostLike } from '@/services/api'
+import { demoRowsForChannel } from '@/services/runtimePolicy'
 
 const router = useRouter()
 const posts = ref([])
@@ -237,12 +241,17 @@ async function loadPosts() {
   try {
     posts.value = await fetchCommunityPosts(search.value ? { search: search.value } : {})
   } catch {
-    const term = search.value.trim().toLowerCase()
-    posts.value = communityPosts.filter((post) => (
-      !term || `${post.title} ${post.body} ${post.author} ${post.tags.join(' ')}`.toLowerCase().includes(term)
-    ))
-    isFallbackData.value = true
-    error.value = '저장된 게시글을 표시합니다.'
+    if (IS_DEMO_CHANNEL) {
+      const term = search.value.trim().toLowerCase()
+      posts.value = demoRowsForChannel(true, communityPosts).filter((post) => (
+        !term || `${post.title} ${post.body} ${post.author} ${post.tags.join(' ')}`.toLowerCase().includes(term)
+      ))
+      isFallbackData.value = true
+      error.value = '저장된 게시글을 표시합니다.'
+    } else {
+      posts.value = []
+      error.value = '게시글을 불러오지 못했습니다. 네트워크 상태를 확인해 주세요.'
+    }
   } finally {
     isLoading.value = false
   }
@@ -365,6 +374,25 @@ onMounted(loadPosts)
 .notice-card.subtle {
   background: rgba(232, 241, 251, 0.72);
   color: #4a5663;
+}
+
+.notice-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notice-card button {
+  flex: none;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #d92d20;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
 }
 
 .post-card {

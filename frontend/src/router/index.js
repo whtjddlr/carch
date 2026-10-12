@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { ensureDevAutoLogin, initAuthSession, isAuthenticated } from '@/services/auth'
+import { ensureDevAutoLogin, initAuthSession, isAuthenticated, setUnauthorizedHandler } from '@/services/auth'
 import { IS_DEMO_CHANNEL } from '@/services/api'
 import { isNativeRuntime } from '@/services/secureStorage'
 
@@ -69,6 +69,12 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+})
+
+setUnauthorizedHandler(async () => {
+  const current = router.currentRoute.value
+  if (!current.meta.requiresAuth) return
+  await router.replace({ name: 'Login', query: { next: current.fullPath } })
 })
 
 router.beforeEach(async (to) => {

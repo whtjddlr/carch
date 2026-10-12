@@ -7,7 +7,19 @@
       </div>
     </header>
     <div class="screen-scroll scrollbar-hide page-padding">
-      <template v-if="transactions.length">
+      <article v-if="isLoading" class="app-card tx-empty" aria-live="polite">
+        <span class="tx-empty-icon">⏳</span>
+        <strong>거래내역을 불러오는 중이에요</strong>
+      </article>
+
+      <article v-else-if="loadError" class="app-card tx-empty" role="alert">
+        <span class="tx-empty-icon">⚠️</span>
+        <strong>거래내역을 불러오지 못했어요</strong>
+        <p>{{ loadError }}</p>
+        <button class="tx-empty-add" type="button" @click="loadTransactions">다시 시도</button>
+      </article>
+
+      <template v-else-if="transactions.length">
         <section v-for="group in groupedByDate" :key="group.date" class="tx-group">
           <p class="tx-date">{{ dateLabel(group.date) }}</p>
           <article class="app-card tx-list">
@@ -52,13 +64,16 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { CreditCard, Plus } from 'lucide-vue-next'
 import AppBackButton from '@/components/AppBackButton.vue'
-import { cards as mockCards, krw, transactions as mockTransactions } from '@/data/mockData'
-import { fetchOwnedCards, fetchTransactions, normalizeCard } from '@/services/api'
+import { cards as mockCards, transactions as mockTransactions } from '@/data/mockData'
+import { fetchOwnedCards, fetchTransactions, IS_DEMO_CHANNEL, normalizeCard } from '@/services/api'
+import { demoRowsForChannel } from '@/services/runtimePolicy'
 
 const router = useRouter()
-const transactions = ref(mockTransactions)
-const cards = ref(mockCards)
+const transactions = ref(demoRowsForChannel(IS_DEMO_CHANNEL, mockTransactions))
+const cards = ref(demoRowsForChannel(IS_DEMO_CHANNEL, mockCards))
 const imageOrientations = ref({})
+const isLoading = ref(!IS_DEMO_CHANNEL)
+const loadError = ref('')
 
 // 날짜별로 묶어서 보여준다(원래 순서 유지)
 const groupedByDate = computed(() => {
@@ -101,15 +116,27 @@ function cardImageClass(card) {
   }
 }
 
-onMounted(async () => {
+async function loadTransactions() {
+  if (!IS_DEMO_CHANNEL) isLoading.value = true
+  loadError.value = ''
   try {
     const [apiTransactions, apiCards] = await Promise.all([fetchTransactions(), fetchOwnedCards()])
     transactions.value = apiTransactions
     cards.value = apiCards.map((card, index) => normalizeCard(card, index, apiTransactions))
   } catch (error) {
-    console.warn('거래내역 API를 불러오지 못해 mock 데이터를 사용합니다.', error)
+    if (IS_DEMO_CHANNEL) {
+      console.warn('거래내역 API를 불러오지 못해 데모 데이터를 유지합니다.', error)
+    } else {
+      transactions.value = []
+      cards.value = []
+      loadError.value = '네트워크 상태를 확인한 뒤 다시 시도해 주세요.'
+    }
+  } finally {
+    isLoading.value = false
   }
-})
+}
+
+onMounted(loadTransactions)
 </script>
 
 <style scoped>
@@ -280,9 +307,11 @@ onMounted(async () => {
 .tx-empty-add {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 40px;
   margin-top: 12px;
   padding: 0 20px;
+  border: 0;
   border-radius: 999px;
   background: #0f5fae;
   color: #fff;
